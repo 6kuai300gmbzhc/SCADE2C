@@ -1,0 +1,180 @@
+/* $******* SCADE Suite KCG 32-bit 6.6.1 beta (build i1) ********
+** Command: kcg661.exe -config D:/坚果云同步目录/硕士毕业设计/SCADE相关资料/wss_scade_project/examples/examples/ABC_N/Simulation/config.txt
+** Generation date: 2023-06-06T19:50:02
+*************************************************************$ */
+
+/* xscade source: D:/坚果云同步目录/硕士毕业设计/SCADE相关资料/wss_scade_project/examples/examples/ABC_N/ABC_N.xscade */
+package ABC_N
+  const n : int32 = 3;
+
+  type
+    bk_color = enum {
+      #pragma kcg C:enum_val 1 #end
+      #pragma kcg 
+											Ada:enum_val 1
+										 #end b_none,
+      #pragma kcg 
+											Ada:enum_val 2
+										 #end grey,
+      #pragma kcg 
+											Ada:enum_val 3
+										 #end yellow,
+      #pragma kcg 
+											Ada:enum_val 4
+										 #end green
+    };
+
+  type
+    fr_color = enum {
+      #pragma kcg C:enum_val 1 #end
+      #pragma kcg 
+											Ada:enum_val 1
+										 #end f_none,
+      #pragma kcg 
+											Ada:enum_val 2
+										 #end black,
+      #pragma kcg 
+											Ada:enum_val 3
+										 #end white
+    };
+
+  node Button(Button : bool; Lock : bool; Unlock : bool; Any : bool)
+    returns (background : bk_color; foreground : fr_color)
+  let
+
+    automaton StateMachine1
+      state WaitUnlock
+        var
+          _L2 : fr_color;
+          _L3 : bk_color;
+        let
+          background= _L3;
+          _L2= black;
+          foreground= _L2;
+          _L3= grey;
+        tel
+        until
+          if Unlock restart Unselected;
+
+      state Preselected
+        var
+          _L3 : fr_color;
+          _L2 : bk_color;
+        let
+          _L3= white;
+          background= _L2;
+          foreground= _L3;
+          _L2= yellow;
+        tel
+        until
+          if Lock restart Locked;
+          if Any restart Unselected;
+
+      state Locked
+        var
+          _L2 : fr_color;
+          _L3 : bk_color;
+        let
+          _L2= white;
+          background= _L3;
+          foreground= _L2;
+          _L3= green;
+        tel
+        until
+          if Unlock restart Preselected;
+
+      initial state Unselected
+        var
+          _L2 : fr_color;
+          _L1 : bk_color;
+        let
+          background= _L1;
+          foreground= _L2;
+          _L2= f_none;
+          _L1= b_none;
+        tel
+        until
+          if Lock restart WaitUnlock;
+          if Button restart Preselected;
+    returns ..;
+  tel
+
+  function Exists(T : bool^n) returns (S : bool)
+  var
+    _L1 : bool^n;
+    _L2 : bool;
+    _L3 : bool;
+  let
+    _L1= T;
+    _L2= false;
+    _L3= ( fold #1 $or$ <<n>>)(_L2, _L1);
+    S= _L3;
+  tel
+
+  node ABC_N(Lock : bool; Buttons : bool^n)
+    returns (Bg : bk_color^n; Fg : fr_color^n; LockLight : bool)
+  sig
+    lockSig, UnlockSig;
+  var
+    buttonPressed : bool;
+    lockFall : bool;
+    lockRaise : bool;
+    _L3 : bool;
+    _L5 : bool;
+    _L6 : bool^n;
+    _L7 : bool^n;
+    _L8 : bool;
+    _L9 : bool^n;
+    _L10 : bool;
+    _L12 : bool;
+    _L14 : fr_color^n;
+    _L13 : bk_color^n;
+    _L15 : bool^n;
+    _L16 : bool;
+  let
+    lockFall= _L3;
+    _L3= 'UnlockSig;
+    lockRaise= _L16;
+    Bg= _L13;
+    Fg= _L14;
+    _L5= lockRaise;
+    _L6= Buttons;
+    _L7= (_L5)#1^n;
+    _L8= lockFall;
+    _L9= (_L8)#2^n;
+    _L10= buttonPressed;
+    _L12= #3 Exists(_L6);
+    buttonPressed= _L12;
+    _L13, _L14= ( map #4 Button <<n>>)(_L6, _L7, _L9, _L15);
+    _L15= (_L10)#6^n;
+    _L16= 'lockSig;
+
+    automaton StateMachine1
+      initial state LockLow
+        var
+          _L2 : bool;
+        let
+          LockLight= _L2;
+          _L2= false;
+        tel
+        until
+          if Lock do let emit 'lockSig; tel restart LockHigh;
+
+      state LockHigh
+        var
+          _L1 : bool;
+        let
+          LockLight= _L1;
+          _L1= true;
+        tel
+        until
+          if Lock do let emit 'UnlockSig; tel restart LockLow;
+    returns ..;
+  tel
+
+end;
+
+/* $******* SCADE Suite KCG 32-bit 6.6.1 beta (build i1) ********
+** -
+** Generation date: 2023-06-06T19:50:02
+*************************************************************$ */

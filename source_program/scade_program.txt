@@ -1,0 +1,146 @@
+package ABC_N
+  const n : int32 = 3;
+
+  type
+    bk_color = enum {
+      b_none,
+      grey,
+      yellow,
+      green
+    };
+
+  type
+    fr_color = enum {
+      f_none,
+      black,
+      white
+    };
+
+  node Button(Button : bool; Lock : bool; Unlock : bool; Any : bool)
+    returns (background : bk_color; foreground : fr_color)
+  let
+
+    automaton StateMachine1
+      state WaitUnlock
+        var
+          _L2 : fr_color;
+          _L3 : bk_color;
+        let
+          background= _L3;
+          _L2= black;
+          foreground= _L2;
+          _L3= grey;
+        tel
+        until
+          if Unlock restart Unselected;
+
+      state Preselected
+        var
+          _L3 : fr_color;
+          _L2 : bk_color;
+        let
+          _L3= white;
+          background= _L2;
+          foreground= _L3;
+          _L2= yellow;
+        tel
+        until
+          if Lock restart Locked;
+          if Any restart Unselected;
+
+      state Locked
+        var
+          _L2 : fr_color;
+          _L3 : bk_color;
+        let
+          _L2= white;
+          background= _L3;
+          foreground= _L2;
+          _L3= green;
+        tel
+        until
+          if Unlock restart Preselected;
+
+      initial state Unselected
+        var
+          _L2 : fr_color;
+          _L1 : bk_color;
+        let
+          background= _L1;
+          foreground= _L2;
+          _L2= f_none;
+          _L1= b_none;
+        tel
+        until
+          if Lock restart WaitUnlock;
+          if Button restart Preselected;
+    returns ..;
+  tel
+
+  function Exists(T : bool^n) returns (S : bool)
+  var
+    _L1 : bool^n;
+    _L2 : bool;
+    _L3 : bool;
+  let
+    _L1= T;
+    _L2= false;
+    S= _L3;
+  tel
+
+  node ABC_N(Lock : bool; Buttons : bool^n)
+    returns (Bg : bk_color^n; Fg : fr_color^n; LockLight : bool)
+  sig
+    lockSig, UnlockSig;
+  var
+    buttonPressed : bool;
+    lockFall : bool;
+    lockRaise : bool;
+    _L3 : bool;
+    _L5 : bool;
+    _L6 : bool^n;
+    _L7 : bool^n;
+    _L8 : bool;
+    _L9 : bool^n;
+    _L10 : bool;
+    _L12 : bool;
+    _L14 : fr_color^n;
+    _L13 : bk_color^n;
+    _L15 : bool^n;
+    _L16 : bool;
+  let
+    lockFall= _L3;
+    _L3= 'UnlockSig;
+    lockRaise= _L16;
+    Bg= _L13;
+    Fg= _L14;
+    _L5= lockRaise;
+    _L6= Buttons;
+    _L8= lockFall;
+    buttonPressed= _L12;
+    _L16= 'lockSig;
+
+    automaton StateMachine1
+      initial state LockLow
+        var
+          _L2 : bool;
+        let
+          LockLight= _L2;
+          _L2= false;
+        tel
+        until
+          if Lock do let emit 'lockSig; tel restart LockHigh;
+
+      state LockHigh
+        var
+          _L1 : bool;
+        let
+          LockLight= _L1;
+          _L1= true;
+        tel
+        until
+          if Lock do let emit 'UnlockSig; tel restart LockLow;
+    returns ..;
+  tel
+
+end;
