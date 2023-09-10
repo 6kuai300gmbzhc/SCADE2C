@@ -1,0 +1,7 @@
+Decls ::= open Path
+       ::= Package_decl
+       ::= Group_block
+       ::= Type_block
+       ::= Const_block
+       ::= Sensor_block
+       ::= User_op_decl
