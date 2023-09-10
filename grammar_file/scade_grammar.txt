@@ -1,0 +1,506 @@
+Program ::= Decls_zero_or_more
+
+Path ::= id Path_1
+
+Path_1 ::= :: id Path_1
+        ::= $
+
+Path_id ::= id
+        ::= Path :: id
+
+Package_decl ::= package Visibility_zero_or_one id Decls_zero_or_more end ;
+
+Decls ::= open Path
+       ::= Package_decl
+       ::= Group_block
+       ::= Type_block
+       ::= Const_block
+       ::= Sensor_block
+       ::= User_op_decl
+
+Visibility ::= private
+            ::= public
+
+External ::= imported
+
+Interface_status ::= Visibility_zero_or_one External
+                  ::= Visibility_zero_or_one
+
+Type_block ::= type Type_block_1
+
+Type_block_1 ::= Type_decl ; Type_block_1
+              ::= $
+
+Type_decl ::= Interface_status id Type_decl_1 Type_decl_2
+
+Type_decl_1 ::= = Type_def
+             ::= $
+
+Type_decl_2 ::= is Numeric_kind
+             ::= $
+
+Type_def ::= Type_expr
+          ::= enum { Id_one_or_more_with_comma }
+
+Numeric_kind ::= numeric
+              ::= float
+              ::= integer
+              ::= signed
+              ::= unsigned
+
+Type_expr ::= bool Type_expr_2
+           ::= signed << Expr >> Type_expr_2
+           ::= int8 Type_expr_2
+           ::= int16 Type_expr_2
+           ::= int32 Type_expr_2
+           ::= int64 Type_expr_2
+           ::= unsigned << Expr >> Type_expr_2
+           ::= uint8 Type_expr_2
+           ::= uint16 Type_expr_2
+           ::= uint32 Type_expr_2
+           ::= uint64 Type_expr_2
+           ::= float32 Type_expr_2
+           ::= float64 Type_expr_2
+           ::= char Type_expr_2
+           ::= Path_id Type_expr_2
+           ::= Typevar Type_expr_2
+           ::= {  Field_decl Type_expr_1 } Type_expr_2
+
+Type_expr_1 ::= , Field_decl Type_expr_1
+             ::= $
+
+Type_expr_2 ::= ^ Expr Type_expr_2
+             ::= $
+
+Field_decl ::= id : Type_expr
+
+Typevar ::= name
+
+Group_block ::= group Group_block_1
+
+Group_block_1 ::= Group_decl ; Group_block_1
+               ::= $
+
+Group_decl ::= Visibility_zero_or_one id = Group_expr
+
+Group_expr ::= ( Type_expr Group_expr_1 )
+
+Group_expr_1 ::= , Type_expr Group_expr_1
+              ::= $
+
+Const_block ::= const Const_block_1
+
+Const_block_1 ::= Const_decl ; Const_block_1
+               ::= $
+
+Const_decl ::= Interface_status id : Type_expr = Expr
+            ::= Interface_status id : Type_expr
+
+Sensor_block ::= sensor Sensor_block_1
+
+Sensor_block_1 ::= Sensor_decl ; Sensor_block_1
+                ::= $
+
+Sensor_decl ::= Id_one_or_more_with_comma : Type_expr
+
+User_op_decl ::= Op_kind Interface_status id User_op_decl_1 Params returns Params User_op_decl_2 User_op_decl_3 Opt_body
+
+User_op_decl_1 ::= Size_decl
+                ::= $
+
+User_op_decl_2 ::= Where_decl
+                ::= $
+
+User_op_decl_3 ::= Spec_decl
+                ::= $
+
+Op_kind ::= function
+         ::= node
+
+Size_decl ::= << Id_one_or_more_with_comma >>
+           ::= << >>
+
+Params ::= ( Params_1 )
+
+Params_1 ::= Var_decls Params_2
+          ::= $
+
+Params_2 ::= ; Var_decls Params_2
+          ::= $
+
+Where_decl ::= where Typevar Where_decl_1 Numeric_kind
+
+Where_decl_1 ::= , Typevar Where_decl_1
+              ::= $
+
+Spec_decl ::= specialize Path_id
+
+Opt_body ::= ;
+          ::= Equation ;
+          ::= Signal_block_zero_or_one Local_block_zero_or_one let Equation_zero_or_more_with_semicolon tel ;
+          ::= Signal_block_zero_or_one Local_block_zero_or_one let Equation_zero_or_more_with_semicolon tel
+
+Var_decls ::= Var_id Var_decls_1 : Type_expr Var_decls_2 Var_decls_3 Var_decls_4
+
+Var_decls_1 ::= , Var_id Var_decls_1
+             ::= $
+
+Var_decls_2 ::= When_decl
+             ::= $
+
+Var_decls_3 ::= Default_decl
+             ::= $
+
+Var_decls_4 ::= Last_decl
+             ::= $
+
+Var_id ::= Var_id_1 Var_id_2 id
+
+Var_id_1 ::= clock
+          ::= $
+
+Var_id_2 ::= probe
+          ::= $
+
+When_decl ::= when Clock_expr
+
+Default_decl ::= default = Expr
+
+Last_decl ::= last = Expr
+
+Clock_expr ::= id
+            ::= not id
+            ::= ( id match Pattern )
+
+Data_def ::= Equation ;
+          ::= Scope
+
+Scope ::= Signal_block_zero_or_one Local_block_zero_or_one Eqs
+       ::= Signal_block_zero_or_one Local_block_zero_or_one
+
+Signal_block ::= sig Id_one_or_more_with_comma ;
+
+Local_block ::= var Local_block_1
+
+Local_block_1 ::= Var_decls ; Local_block_1
+               ::= $
+
+Eqs ::= let Equation_zero_or_more_with_semicolon tel
+
+Equation ::= Simple_equation
+          ::= Assert
+          ::= Emission
+          ::= Control_block Return
+
+Simple_equation ::= Lhs = Expr
+
+Lhs ::= ( )
+    ::= Lhs_id Lhs_1
+
+Lhs_1 ::= , Lhs_id Lhs_1
+       ::= $
+
+Lhs_id ::= id
+        ::= _
+
+Assert ::= assume id : Expr
+        ::= guarantee id : Expr
+
+Control_block ::= State_machine
+               ::= Clocked_block
+
+Emission ::= emit Emission_body
+
+Emission_body ::= name Emission_body_1
+               ::= ( name Emission_body_2 ) Emission_body_1
+
+Emission_body_1 ::= if Expr
+                 ::= $
+
+Emission_body_2 ::= , name Emission_body_2
+                 ::= $
+
+Return ::= returns Returns_var
+
+Returns_var ::= Returns_var_1 Returns_var_2
+
+Returns_var_1 ::= id , Returns_var_1
+               ::= $
+
+Returns_var_2 ::= id
+               ::= ..
+
+Clocked_block ::= activate Id_zero_or_one If_block
+               ::= activate Id_zero_or_one Match_block
+
+If_block ::= if Expr then If_block_1 else If_block_1
+
+If_block_1 ::= Data_def
+            ::= If_block
+
+Match_block ::= when Expr match Match_block_1
+
+Match_block_1 ::= | Pattern : Data_def Match_block_2
+
+Match_block_2 ::= | Pattern : Data_def Match_block_2
+              ::= $
+
+State_machine ::= automaton Id_zero_or_one State_machine_1
+
+State_machine_1 ::= State_decl State_machine_1
+                ::= $
+
+State_decl ::= State_decl_1 State_decl_2 state id State_decl_3 Data_def State_decl_4
+
+State_decl_1 ::= initial
+              ::= $
+
+State_decl_2 ::= final
+              ::= $
+
+State_decl_3 ::= unless State_decl_5
+
+State_decl_5 ::= Transition ; State_decl_6
+
+State_decl_6 ::= Transition ; State_decl_6
+              ::= $
+
+State_decl_4 ::= until State_decl_6 State_decl_7
+              ::= $
+
+State_decl_7 ::= synchro State_decl_8 Fork ;
+              ::= $
+
+State_decl_8 ::= Actions
+              ::= $
+
+Transition ::= if Expr Arrow
+
+Arrow ::= Actions Fork
+       ::= Fork
+
+Fork ::= Target
+      ::= if Expr Arrow Fork_1 Fork_2 end
+
+Fork_1 ::= Elsif_fork Fork_1
+        ::= $
+
+Fork_2 ::= Else_fork
+        ::= $
+
+Elsif_fork ::= elsif Epxr Arrow
+
+Else_fork ::= else Arrow
+
+Target ::= restart id
+        ::= resume id
+
+Actions ::= do { Actions_1 Emission_body Actions_2 }
+        ::= do Data_def
+
+Actions_1 ::= emit
+           ::= $
+
+Actions_2 ::= ; Actions_1 Emission_body Actions_2
+           ::= $
+
+Expr ::= Id_expr
+      ::= Atom
+      ::= List_expr
+      ::= Tempo_expr
+      ::= Arith_expr
+      ::= Relation_expr
+      ::= Bool_expr
+      ::= Array_expr
+      ::= Struct_expr
+      ::= Mixed_constructor
+      ::= Switch_expr
+      ::= Apply_expr
+
+Id_expr ::= Path_id
+         ::= name
+         ::= last name
+
+Atom ::= Bool_atom
+      ::= character
+      ::= integernum
+      ::= floatnum
+      ::= typed_integer
+      ::= typed_float
+
+Bool_atom ::= true
+           ::= flase
+
+List_expr ::= ( List )
+
+List ::= List_1
+      ::= $
+
+List_1 ::= Expr List_2
+
+List_2 ::= , Expr List_2
+        ::= $
+
+Tempo_expr ::= pre Expr
+            ::= Expr -> Expr
+            ::= fby ( List ; Expr ; List )
+            ::= Expr times Expr
+            ::= Expr when Clock_expr
+            ::= merge ( Expr ; List Tempo_expr_1 )
+
+Tempo_expr_1 ::= ; List Tempo_expr_1
+              ::= $
+
+Bool_expr ::= not Expr
+           ::= Expr Bin_bool_op Expr
+           ::= # ( List )
+
+Bin_bool_op ::= and
+             ::= or
+             ::= xor
+
+Arith_expr ::= Unary_arith_op Expr
+            ::= Expr Bin_arith_op Expr
+            ::= ( Expr : Type_expr )
+
+Unary_arith_op ::= -
+                 ::= +
+                 ::= lnot
+
+Bin_arith_op ::= +
+              ::= -
+              ::= *
+              ::= /
+              ::= mod
+              ::= land
+              ::= lor
+              ::= lxor
+              ::= lsl
+              ::= lsr
+
+Relation_expr ::= Expr Bin_relation_op Expr
+
+Bin_relation_op ::= =
+                 ::= <>
+                 ::= <
+                 ::= >
+                 ::= <=
+                 ::= >=
+
+Switch_expr ::= if Expr then Expr else Expr
+             ::= ( case Expr of Switch_expr_1 )
+
+Switch_expr_1 ::= Case_expr Switch_expr_2
+
+Switch_expr_2 ::= Case_expr Switch_expr_2
+               ::= $
+
+Case_expr ::= | Pattern : Expr
+
+Pattern ::= Path_id
+         ::= character
+         ::= Pattern_1 integernum
+         ::= Pattern_1 typed_integer
+         ::= Bool_atom
+         ::= _
+
+Pattern_1 ::= -
+           ::= $
+
+Array_expr ::= reverse Expr
+            ::= Expr @ Expr
+            ::= Expr Index
+            ::= Expr [ Expr .. ]
+            ::= ( Expr . Array_expr_1 default Expr )
+            ::= transpose ( Expr ; integernum ; integernum )
+            ::= Expr ^ Expr
+            ::= [ List ]
+
+Array_expr_1 ::= Label_or_index Array_expr_2
+
+Array_expr_2 ::= Label_or_index Array_expr_2
+             ::= $
+
+Struct_expr ::= Epxr . id
+             ::= { Label_expr Struct_expr_1 }
+
+Struct_expr_1 ::= , Label_expr Struct_expr_1
+               ::= $
+
+Mixed_constructor ::= ( Expr with Mixed_constructor_1 = Expr )
+
+Mixed_constructor_1 ::= Label_or_index Mixed_constructor_2
+
+Mixed_constructor_2 ::= Label_or_index Mixed_constructor_2
+                     ::= $
+
+Label_expr ::= id : Expr
+
+Index ::= Expr
+       ::= $
+
+Label_or_index ::= . id
+                ::= Index
+
+Apply_expr ::= Operator ( List )
+
+Operator ::= Prefix
+          ::= ( Prefix << Operator_1 >> )
+          ::= ( make Path_id )
+          ::= ( flatten Path_id )
+          ::= ( Iterator Operator << Expr >> )
+          ::= ( activate Operator every Clock_expr )
+          ::= ( activate Operator every Expr default Expr )
+          ::= ( activate Operator every Expr initial default Expr )
+          ::= ( restart Operator every Expr )
+          ::= ( Iterator_mw Operator << Expr >> if Expr default Expr )
+          ::= ( foldw Operator << Expr >> if Expr )
+          ::= ( foldwi Operator << Expr >> if Expr )
+
+Operator_1 ::= Expr Operator_2
+            ::= $
+
+Operator_2 ::= , Expr Operator_2
+            ::= $
+
+Prefix ::= Path_id
+        ::= prefixop
+
+Iterator ::= map
+          ::= fold
+          ::= mapi
+          ::= foldi
+          ::= mapfold
+          ::= mapfold integernum
+          ::= mapfoldi
+          ::= mapfoldi integernum
+
+Iterator_mw ::= mapw
+             ::= mapwi
+             ::= mapfoldw
+             ::= mapfoldw integernum
+             ::= mapfoldwi
+             ::= mapfoldwi integernum
+
+Decls_zero_or_more ::= Decls Decls_zero_or_more
+                   ::= $
+
+Visibility_zero_or_one ::= Visibility
+                       ::= $
+
+Id_one_or_more_with_comma ::= id Id_one_or_more_with_comma_1
+
+Id_one_or_more_with_comma_1 ::= , id Id_one_or_more_with_comma_1
+                             ::= $
+
+Signal_block_zero_or_one ::= Signal_block
+                          ::= $
+
+Local_block_zero_or_one ::= Local_block
+                         ::= $
+
+Equation_zero_or_more_with_semicolon ::= Equation ; Equation_zero_or_more_with_semicolon
+                                     ::= $
+
+Id_zero_or_one ::= id
+                ::= $
