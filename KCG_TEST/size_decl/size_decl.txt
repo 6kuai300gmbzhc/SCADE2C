@@ -1,0 +1,4 @@
+function f<<n>>(a:int32^n) returns (o:int32)
+o=if n < (3:int32) then -1 else a[0];
+function N(a1:int32^10) returns (o1:int32)
+o1=(f<<10>>)(a1);

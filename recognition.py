@@ -1,89 +1,122 @@
-import sys
 import cfg
-debug = False
-
-def token2str(token):
-    if hasattr(token, 'str'):
-        return token.str
-    else:
-        return token.value
+from scade_lex import lexer
 
 class Recognition():
 
-    def __init__(self, pda, tokens, empty):
+    def __init__(self, pda, tokens):
         self.pda = pda
         self.stack = list()
         self.tokens = tokens
-        self.used = list()
-        self.empty = empty
-        self.Code = ''
 
     # only accept final state
     def is_accept(self, cur_state, token_index):
-        if debug:
-            print("cur_state :" + cur_state)
+        print("cur_state :" + cur_state)
         if cur_state.strip() == cfg.END:
-            self.used.append(cur_state)
             return True
         if token_index == len(self.tokens):
             if cur_state.strip() == 'Q_loop' and self.stack[-1] == 'Δ':
-                self.used.append(cur_state)
                 return True
-            if self.stack[-1] in self.empty:
-                j = len(self.stack) - 1
-                while j > 0 and self.stack[j] != 'Δ' and self.stack[j] in self.empty:
-                    j -= 1
-                if self.stack[j] == 'Δ':
-                    return True
             return False
 
         cur_stack = self.stack.copy()
-        cur_Code = self.Code
-        useful_token = self.tokens[token_index]
         for state in self.pda.states[cur_state]:
-            cur_token = self.tokens[token_index].value.strs
+            cur_token = self.tokens[token_index].value
             if state.read.strip() == cur_token or state.read.strip() == cfg.EPS:
-                tmp_index = token_index if state.read.strip() == cfg.EPS else token_index + 1
                 if state.action.strip() == 'POP' and len(self.stack) and state.value.strip() == self.stack[-1].strip():
-                    if debug:
-                        print("=========pop")
-                        print(cur_state)
-                        print(state)
-                        print(self.stack)
-                        print(self.tokens[token_index])
+                    print("=========pop")
+                    print(cur_state)
+                    print(state)
+                    print(self.stack)
+                    print(self.tokens[token_index])
+                    print(str(token_index) + " " + str(len(self.tokens)))
                     self.stack.pop()
-                    if self.is_accept(state.next, tmp_index):
-                        self.used.append((cur_state, useful_token))
-                        if tmp_index != token_index:
-                            self.Code += str(useful_token.value.value) + '  '  
-                            # TODO: str()? TypeError: unsupported operand type(s) for +: 'float' and 'str'
+                    if self.is_accept(state.next, token_index if state.read.strip() == cfg.EPS else token_index + 1):
                         return True
                     else:
                         self.stack = cur_stack.copy()
-
                 elif state.action.strip() == 'PUSH':
-                    if debug:
-                        print("=========push")
-                        print(cur_state)
-                        print(state)
-                        print(self.stack)
-                        print(self.tokens[token_index])
+                    print("=========push")
+                    print(cur_state)
+                    print(state)
+                    print(self.stack)
+                    print(self.tokens[token_index])
+                    print(str(token_index) + " " + str(len(self.tokens)))
                     self.stack.append(state.value)
-                    if self.is_accept(state.next, tmp_index):
-                        self.used.append((cur_state, useful_token))
+                    if self.is_accept(state.next, token_index if state.read.strip() == cfg.EPS else token_index + 1):
                         return True
                     else:
                         self.stack = cur_stack.copy()
-
         return False
 
+def create_pda(grammarStr):
+    # Create the grammar from the string
+    grammar = cfg.ContextFreeGrammar(grammarStr)
 
-def unique_list(list_var):
-    s = set()
-    res = list()
-    for v in reversed(list_var):
-        if v not in s:
-            res.append(v)
-            s.add(v)
-    return res
+    # # Simplify the grammar (simplifies using basic rules)
+    # grammar.simplify()
+
+    # # Removes any duplicate productions from any state
+    # grammar.removeDuplicates()
+
+    # Converts the grammar to a pushdown automata object
+    pda = grammar.toPDA()
+    print(pda)
+    # Prints a textual representation of the grammar
+    return pda
+
+
+if __name__ == '__main__':
+    # grammarString = """
+    # S -> 0 S 0 | T
+    # T -> 1 T 1
+    #   -> $
+    # """
+    # grammarString = """
+    # SimpleExp -> $
+    #             -> SimpleExp - SimpleExp
+    #             -> SimpleExp + SimpleExp
+    #             -> SimpleExp / SimpleExp
+    #             -> SimpleExp * SimpleExp
+    #             -> if SimpleExp then SimpleExp else SimpleExp
+    # Constant -> true | false | IntConst | RealConst
+    # SimpleTuple -> ( SimpleExpList ) | $
+    # """
+    grammarString = ""
+    with open("scade_grammar.txt") as r_f:
+        for line in r_f.readlines():
+            grammarString += line
+    inputString = '''
+    function correct_incr (i:float64) returns (o:float64)
+        o=i+1;
+    '''
+
+    lexer.input(inputString)
+    string_tokens = list()
+    while True:
+        tok = lexer.token()
+        if not tok:
+            break
+        string_tokens.append(tok)
+    print("Tokens:")
+    for string_token in string_tokens:
+        print(string_token)
+    # print("===========")
+    # print("Pda:")
+    # pda = create_pda(grammarString)
+    # print("===========")
+    # print("Recognition:")
+    # reconigtion = Recognition(pda, string_tokens)
+    # result = reconigtion.is_accept('Start',0)
+    # print("===========")
+    #
+    # if result:
+    #     print("result : True")
+    # else:
+    #     print("result : False")
+    # String_2 = '''
+    # node r_edge (X: bool) returns (Y: bool);
+    # let
+    #  Y = false -> X and not pre(X);
+    # tel
+    # '''
 

@@ -1,0 +1,21 @@
+package package1
+const c:int32=1;
+function example1(x:int32;y:int32) returns (z:int32)
+let
+z=x+y;
+tel
+end;
+
+package package2
+function example2(x:int32) returns (y:int32)
+let
+y=package1::example1(x,x);
+tel
+end;
+
+package package3
+function example3(x:int32) returns (y:int32)
+let
+y=package1::c+1;
+tel
+end;

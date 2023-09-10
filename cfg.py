@@ -228,9 +228,9 @@ class PushdownAutomata:
 	"""
 	def __init__(self, grammar: ContextFreeGrammar):
 		self.stackSymbols = defaultdict(lambda: defaultdict(list))
-		self.names = StateCounter(2)	# 
-		self.states = defaultdict(list) # [Original state -> [Transition: _, _, _, _]]
-		self.stateNames = set()			# record every statenames that have occured
+		self.names = StateCounter(2)
+		self.states = defaultdict(list)
+		self.stateNames = set()
 
 		self.transition(START, 'Q0', EPS, PUSH, UNDERFLOW)
 		self.transition('Q0', HUB, EPS, PUSH, grammar.startName)
@@ -322,31 +322,6 @@ class Transition:
 	def __repr__(self):
 		return f'{{{self.next}, {self.read}, {self.action} {self.value}}}'
 
-def create_pda(grammarStr):
-	# Create the grammar from the string
-	grammar = ContextFreeGrammar(grammarStr)
-	# # Simplify the grammar (simplifies using basic rules)
-	# grammar.simplify()
-
-	# # Removes any duplicate productions from any state
-	# grammar.removeDuplicates()
-
-	# Converts the grammar to a pushdown automata object
-	pda = grammar.toPDA()
-	# print("------------PDA------------")
-	# print(pda)
-	# print("------------END PDA------------\n")
-	# Prints a textual representation of the grammar
-	return grammar, pda
-
-def get_may_empty_nonterminal(grammar):
-	res = set()
-	for i in grammar.productions:
-		for j in grammar.productions[i]:
-			if 'ε' in j.terms:
-				res.add(i)
-	print("May empty nonterminal: ", res)
-	return res
 
 if __name__ == '__main__':
 	# gram = ContextFreeGrammar('''
