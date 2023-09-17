@@ -26,7 +26,7 @@ def generate_head_file(op_kind_symbol):
     head_content+="#include \"kcg_types.h\"\n\n"
     head_content+="typedef struct {\n"
     #input_params
-    print(len(op_kind_symbol.Params))
+    # print(len(op_kind_symbol.Params))
     for input_name in op_kind_symbol.Params:
         symbol=thisEnv.getSymbol(input_name)
         head_content+="kcg_"+symbol.Type+" "+input_name+";"
@@ -34,7 +34,7 @@ def generate_head_file(op_kind_symbol):
     #out_params
     head_content += "\n\ntypedef struct {\n"
     # input_params
-    print(len(op_kind_symbol.Returns))
+    # print(len(op_kind_symbol.Returns))
     for output_name in op_kind_symbol.Returns:
         symbol=thisEnv.getSymbol(output_name)
         head_content += "kcg_" + symbol.Type + " " + output_name + ";"
@@ -61,6 +61,7 @@ def generate_c_file(symbol,body):
     c_content += "void " + name + "_reset(" + "outC_" + name + " *outC)\n{\n"
     c_content += "}\n"
     filename="./output/"+name+".c"
+    print(c_content)
     with open(filename,'w') as f:
         f.write(c_content)
 
@@ -80,6 +81,7 @@ def p_decls_zero_or_mode(p):
 #not finish
 def p_decls(p):
     '''Decls : Const_block
+    | Sensor_block
     | Package_decl
     | User_op_decl'''
     # p[0]=p[1]
@@ -93,10 +95,10 @@ def p_package_decl(p):
 #每一个function和node都会产生一个对应其函数名的.h和.c文件
 def p_user_op_decl(p):
     'User_op_decl : Op_kind Interface_status User_op_decl_Lv6id User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
-    print(p[3].value)
+    # print(p[3].value)
     symbol=thisEnv.getSymbol(p[3].value)
     for idx in p[5].objects:
-        print(idx.strs,idx.value)
+        # print(idx.strs,idx.value)
         symbol.Params.append(idx.value)
     for idx in p[7].objects:
         symbol.Returns.append(idx.value)
@@ -126,7 +128,7 @@ def p_opt_body(p):
         p[0].value=p[1].value
     elif len(p)==3:
         p[0].value=p[1].value+p[2].value
-    print(p[0].value)
+    # print(p[0].value)
 
 def p_equation(p):
     '''Equation : Simple_equation'''
@@ -279,7 +281,11 @@ def p_package(p):
     p[0]=p[1]
 
 def p_const_block(p):
-    '''Const_block : CONST Const_decl SEMICOLON Const_block
+    'Const_block : CONST Const_block_1'
+    pass
+
+def p_const_block_1(p):
+    '''Const_block_1 : Const_decl SEMICOLON Const_block_1
     | empty'''
     pass
 
@@ -295,7 +301,7 @@ def p_const_decl(p):
         public=False
     if len(p)==7:
         symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
-        symbol.Value=p[6].value
+        symbol.Value=("".join(map(lambda item:str(item.value),p[6].objects)))
         thisEnv.setSymbol(p[2].value,symbol)
     elif len(p)==5:
         symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
@@ -328,6 +334,40 @@ def p_visibility(p):
     '''Visibility : PRIVATE
     | PUBLIC'''
     p[0]=p[1]
+
+def p_sensor_block(p):
+    'Sensor_block : SENSOR Sensor_block_1'
+    pass
+
+def p_sensor_block_1(p):
+    '''Sensor_block_1 : Sensor_decl SEMICOLON Sensor_block_1
+    | empty'''
+    pass
+
+def p_sensor_decl(p):
+    'Sensor_decl : Id_one_or_more_with_comma COLON Type_expr'
+
+    for item in p[1].objects:
+        symbol=Symbol(item.value,'Sensor')
+        symbol.Type=p[3].value
+        thisEnv.setSymbol(item.value,symbol)
+
+
+def p_id_one_or_more_with_comma(p):
+    'Id_one_or_more_with_comma : LV6ID Id_one_or_more_with_comma_1'
+    p[0]=lex_value('Id_one_or_more_with_comma')
+    p[0].objects.append(p[1])
+    if len(p)==3:
+        p[0].objects.extend(p[2].objects)
+
+
+def p_id_one_or_more_with_comma_1(p):
+    '''Id_one_or_more_with_comma_1 : COMMA LV6ID Id_one_or_more_with_comma_1
+    | empty'''
+    p[0]=lex_value('Id_one_or_more_with_comma_1')
+    if len(p)==4:
+        p[0].objects.append(p[2])
+
 
 #not finish
 def p_type_expr(p):
@@ -418,15 +458,27 @@ def type_change(type):
         str="kcg_"+type
     return str
 
+def type_initial(type,value):
+    print("type_initial ",type,value)
+    content=""
+    if type=="bool":
+        content+="kcg_"+value
+    else:
+        content+="kcg_lit_"+type+"("+str(value)+")"
+    return content
+
 if __name__=='__main__':
     parser=yacc(debug=1)
-    # strs=str("package NoPackage\
-    #  const e:bool=true;\
-    #  const d:int32=0;\
-    #  const imported c:int32;\
-    #  const private imported f:int8;\
-    #  end;")
-    strs=str("function plus_two (x:int8) returns (y:int8) y=x+2;")
+    #define e kcg_true  define d(kcg_lit_int32(0)) extern const kcg_int32 c
+    #extern const kcg_int8 f;
+    # strs = str("package NoPackage\
+    #         const e:bool=true;\
+    #         const d:int32=0;\
+    #         const imported c:int32;\
+    #         const private imported f:int8;\
+    #         end;")
+    # strs=str("function plus_two (x:int8) returns (y:int8) y=x+2;")
+    strs = str("sensor tmp:int32;")
     string_tokens=get_tokens(strs)
     # print(string_tokens)
     scade_lexer.set_tokens(string_tokens)

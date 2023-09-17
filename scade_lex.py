@@ -400,7 +400,7 @@ lexer = lex.lex()
 
 if __name__ == '__main__':
     data = '''
-package NoPackage const d:int32=0;end;
+    sensor tmp:int32;
     '''
     toks = get_tokens(data)
     for tok in toks:
