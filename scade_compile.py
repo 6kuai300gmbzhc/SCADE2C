@@ -12,7 +12,7 @@ thisEnv=GlobalEnv
 program=None
 
 def symbol_change_name(symbol):
-    name=""
+    name=symbol.Name
     if symbol.IsInput is True:
         name="inC->"+symbol.Name
     elif symbol.IsReturn is True:
@@ -119,6 +119,11 @@ def p_op_kind(p):
     '''Op_kind : FUNCTION
     | NODE'''
     p[0]=p[1]
+    if p[1].strs=='node':
+        symbol=Symbol('init','Var','bool')
+        thisEnv.setSymbol('init',symbol)
+
+
 
 def p_opt_body(p):
     '''Opt_body : SEMICOLON
@@ -133,16 +138,13 @@ def p_opt_body(p):
 def p_equation(p):
     '''Equation : Simple_equation'''
     p[0]=lex_value("Equation")
+
+    # print("Equation",p[0].value)
     p[0].value+=p[1].value
 
 def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
     p[0]=lex_value('Simple_equation')
-    # for i in p[3].objects:
-    #     print(i.strs,i.value)
-    # print("Lhs")
-    # for j in p[1].objects:
-    #     print(j.strs)
     type=""
     for lex in p[1].objects:
         if lex.strs=='lv6id':
@@ -346,7 +348,6 @@ def p_sensor_block_1(p):
 
 def p_sensor_decl(p):
     'Sensor_decl : Id_one_or_more_with_comma COLON Type_expr'
-
     for item in p[1].objects:
         symbol=Symbol(item.value,'Sensor')
         symbol.Type=p[3].value
@@ -390,9 +391,11 @@ def p_id_expr(p):
         p[0].objects.append(p[1])
 
 #not finish
+#若是Arith_expr,则是各个object相加，否则直接赋值
 def p_expr(p):
     '''Expr : Id_expr
     | Atom
+    | Tempo_expr
     | Arith_expr'''
     # p[0]=lex_value("Expr")
     # if p[1].strs=="Id_expr" or p[1].strs=='Arith_expr':
@@ -400,6 +403,24 @@ def p_expr(p):
     # else:
     #     p[0].objects.append(p[1])
     p[0]=p[1]
+
+#arrow对应于C语言的三目运算符
+#pre：需要在output中添加一个mem
+def p_tempo_expr(p):
+    '''Tempo_expr : Expr ARROW Expr
+    | PRE Expr'''
+    if len(p)==4:
+        p[0]=lex_value("Tempo_expr")
+        p[0].objects.append(lex_value("(out->init)","(out->init)","str"))
+        p[0].objects.append(lex_value("?","?","str"))
+        p[0].objects.extend(p[1].objects)
+        p[0].objects.append(lex_value(":",":","str"))
+        p[0].objects.extend(p[3].objects)
+    elif len(p)==3:
+        pass
+
+
+
 
 def p_arith_expr(p):
     '''Arith_expr : Expr Bin_arith_op Expr'''
@@ -478,7 +499,8 @@ if __name__=='__main__':
     #         const private imported f:int8;\
     #         end;")
     # strs=str("function plus_two (x:int8) returns (y:int8) y=x+2;")
-    strs = str("sensor tmp:int32;")
+    strs = str("sensor Sensor1:int32;\
+    sensor Sensor2:int32;")
     string_tokens=get_tokens(strs)
     # print(string_tokens)
     scade_lexer.set_tokens(string_tokens)

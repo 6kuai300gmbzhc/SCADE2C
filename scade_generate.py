@@ -36,21 +36,36 @@ class Scade_generate:
         content+="\n#endif"
         print("\n\nsensor_file")
         print(content)
+        with open('./output/kcg_sensors.h','w') as f:
+            f.write(content)
+
+    def gen_types_file(self):
+        file=open('source_program/types.txt','r')
+        content=file.read()
+        writeFile=open('output/kcg_types.h','w')
+        writeFile.write(content)
 
 
 if __name__=='__main__':
     print("main")
-    strs = str("const e:bool=true;\
-        d:int32=0;\
-        imported c:int32;\
-        private imported f:int8;\
-        sensor tmp,tmp2:int32;\
-        tmp3:bool;")
-    # strs = str("function plus_two (x:int8) returns (y:int8) y=x+2;")
+    # strs = str("const e:bool=true;\
+    #     d:int32=0;\
+    #     imported c:int32;\
+    #     private imported f:int8;\
+    #     sensor tmp,tmp2:int32;\
+    #     tmp3:bool;")
+    strs = str("node init_operator(input1:int8) returns(output1:int8) output1=0->input1;")
+#     strs = str("sensor Sensor1: int32;\
+# sensor Sensor2: int32;\
+# function Operator1() returns(Output1: int32)\
+# let \
+#     Output1 = Sensor1 + Sensor2;\
+# tel")
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)
     gen.gen_const_file()
     gen.gen_sensor_file()
+    gen.gen_types_file()
 
 
 
