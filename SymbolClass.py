@@ -2,9 +2,9 @@
 # 2.使用符号表树实现作用域
 
 class Symbol:
-    def __init__(self, Name=None, Kind=None, Type=None,Public=True,External=False,isPackage=False,PackageName='') -> None:
+    def __init__(self, Name=None, Kind=None, Type=None,Public=True,External=False,isPackage=False,PackageName='',isStatemachine=False,StatemachineName='') -> None:
         self.Name = Name  # 标识符的名字
-        self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点(Node) 包(Package)
+        self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点(Node) 包(Package) 状态(State) 状态机(StateMachine)
                           # Sensor
 
         self.Type = Type  # Type类型(int , float)
@@ -13,6 +13,9 @@ class Symbol:
 
         self.IsPackage=isPackage
         self.PackageName=PackageName
+
+        self.isStatemachine=isStatemachine
+        self.StateMachineName=StatemachineName
 
         # self.VarType = VarType             #常量、变量等类型标识符的数据类型
         # self.TypeType = TypeType           #类型定义的基本类型，或者Struct、Enum
@@ -28,6 +31,7 @@ class Symbol:
         self.FieldList = dict()  # 结构体变量的成员-类型和枚举变量的名字-整数值
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
 
+        self.StateList = list()
         self.Params = list()  # 函数标识符的参数列表
         self.Returns = list()  # 函数标识符的返回值列表
         self.StaticParams = list()  # 函数的静态参数列表

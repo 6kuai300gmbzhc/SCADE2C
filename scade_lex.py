@@ -2,12 +2,23 @@ import ply.lex as lex
 import sys
 
 class lex_value:
-    def __init__(self, strs = "", value = "", Type = "") -> None:
+    def __init__(self, strs = "", value = "", Type = "", scope = "") -> None:
         self.strs = strs
         self.value = value
         self.type = Type
         self.objects = list()
         # self.values1 = list()
+        self.scope = scope
+
+        self.entity = None
+        self.syms = list()
+        self.rets = list()
+    
+    def set_value(self, value):
+        self.value = value
+
+    def set_scope(self, scope):
+        self.scope = scope
  
     def __repr__(self) -> str:
         strs = str(self.strs) + ' ' + str(self.value)
@@ -137,8 +148,9 @@ reserved = {
 tokens = [
     "INTCONST",  # ++
     "REALCONST",  # ++
-    "LV6ID",  # id
-    "LV6IDREF",  # ++
+    "LV6ID",
+    # "ID",  # id = word
+    "IDREF",  # ++
     'LBRACKET',  # [
     'RBRACKET',  # ]
     'LPARENTHESE',  # (
@@ -170,7 +182,14 @@ tokens = [
     'VERTICALBAR',  # |
     'SINGLEQUOTE',  # '
     'AT',  # @
-    'INTEGERNUM'  # ++
+
+    'INTEGERNUM',  # ++
+    "FLOATNUM",  # \d+.\d+
+    
+    "NAME", # name = 'word
+    "CHARACTER", 
+    "TYPED_INTEGER",
+    "TYPED_FLOAT"
 ] + list(reserved.values())
 
 t_BOOL = r'bool'
@@ -323,6 +342,43 @@ t_SYNCHRO = r'synchro'
 t_DO = r'do'
 t_ELSIF = r'elsif'
 
+def t_CHARACTER(t): # TODO: character can also be '\x digit16 digit16'
+    r'\'[a-zA-Z0-9_]\''
+    t.value = lex_value('character', str(t.value))
+    return t
+
+def t_FLOATNUM(t):
+    r'\d+\.\d+'
+    t.value = lex_value('floatnum', float(t.value))
+    return t
+
+def t_TYPED_INTEGER(t): # TODO: int8, int16, int32, int64 need change to int then save the value
+    r'\d+_[ui]\d+'
+    t.value = lex_value('typed_integer', str(t.value))
+
+def t_TYPED_FLOAT(t): # TODO: change the float then save the value
+    r'\d+\._f\d+'
+    t.value = lex_value('typed_float', str(t.value))
+
+# def t_ID(t):
+#     r'[a-zA-Z_][a-zA-Z0-9_]*'
+#     t.type = reserved.get(t.value, 'ID')
+#     if not reserved.get(t.value):
+#         t.value = lex_value('id', t.value)
+#     else:
+#         t.value = lex_value(t.value, t.value)
+#     return t
+
+# name = 'word, so just add a ' before the ID
+def t_NAME(t):
+    r'\'[a-zA-Z_][a-zA-Z0-9_]*'
+    t.type = reserved.get(t.value, 'NAME')
+    if not reserved.get(t.value):
+        t.value = lex_value('name', t.value)
+    else:
+        t.value = lex_value(t.value, t.value)
+    return t
+
 
 def t_REALCONST(t):
     r'\d+\.\d+'
@@ -334,11 +390,13 @@ def t_INTCONST(t):
     t.value = lex_value('intconst', int(t.value))
     return t
 
+# decimal and hexadecimal
 def t_INTEGERNUM(t):
     r'^(0b[01]+|0[0-7]+|\d+|0x[0-9a-fA-F]+)$'
     t.value=lex_value('integernum',t.value)
     return t
 
+# id in lustre v6, will be deprecated in this scade version
 def t_LV6ID(t):
     r'[a-zA-Z_][a-zA-Z0-9_]*'
     t.type = reserved.get(t.value, 'LV6ID')
@@ -356,6 +414,7 @@ def t_error(t):
     print("Illegal charactor '%s'" % t.value[0])
     t.lexer.skip(1)
 
+
 def get_tokens(inputString):
     lexer.input(inputString)
     string_tokens = list()
@@ -366,7 +425,76 @@ def get_tokens(inputString):
         if type(tok.value) == str:
             tok.value = lex_value(tok.value, tok.value)
         string_tokens.append(tok)
+    get_scope(string_tokens) # 计算出scope
+    print("------------TOKENS-------------")
+    print(string_tokens)
+    print("-----------END TOKENS----------\n")
     return string_tokens
+
+def token2string(token):
+    return "值：%10s，类型：%15s" % (token.value, token.type)
+
+def getNfadir():
+    nfa_dir = {}
+    with open("data/NFA.txt") as nfa_f:
+        nfas = list()
+        nfa = list()
+        for line in nfa_f.readlines():
+            if len(line.strip()) == 0:
+                nfas.append(nfa)
+                nfa = list()
+            else:
+                nfa.append(line)
+        if len(nfa) != 0:
+            nfas.append(nfa)
+        for n in nfas:
+            type = n[0].split(':')[1].strip()
+            nfa_dir[type] = n[1:]
+    return nfa_dir
+
+# Not sure how increase scope and get scope how to work
+def increase_scope(scope) -> str:
+    scopes = scope.split(".")
+    if len(scopes) == 1:
+        return str(int(scopes[0]) + 1)
+    else:
+        scopes[-1] = str(int(scopes[-1]) + 1)
+        return '.'.join(scopes)
+            
+def get_scope(tokens) -> bool:
+    """
+    给每一个lex_value对象的scope属性赋值
+    后续可以通过是否在一个scope判断变量名出现的合法性
+    """
+    stack = list()
+    scope = str()
+    cur_line = 0
+
+    for i, tok in enumerate(tokens):
+        if len(stack) == 0:
+            stack.append([i, "1"])
+            scope = stack[-1][1]
+        elif tok.type == "LET":
+            tmp = stack[-1][1] + ".1"
+            stack.append([i, tmp]) 
+            scope = stack[-1][1]
+        elif tok.type == "TEL":
+            scope = increase_scope(stack[-1][1])
+            if tokens[stack[-1][0]].type == "LET":
+                stack.pop()
+            else:
+                print("Error let/tel at " + str(tok.lineno) + "," + str(tok.lexpos))
+                return False
+        elif tok.lineno != cur_line:
+            stack[-1][1] = increase_scope(stack[-1][1])
+            scope = stack[-1][1]
+        
+        cur_line = tokens[i].lineno
+        tokens[i].value.scope = scope   
+    return True        
+
+def get_raw_lexer():
+    return lexer
 
 class scade_lex:
     def __init__(self):
@@ -388,19 +516,43 @@ class scade_lex:
         pass
 
     def output_program(self, f):
+        scope = ""
         cur_line = self.toks[0].lineno
         f.write("--------------program----------------\n")
         for tok in self.toks:
             if cur_line != tok.lineno:
+                f.write("{0:>10}\n".format("#" + scope))
                 cur_line = tok.lineno
             f.write(str(tok.value.value) + " ")
+            scope = tok.value.scope
+        f.write("{0:>10}\n".format("#" + scope))
         f.write("--------------------------------------\n")
 
 lexer = lex.lex()
 
 if __name__ == '__main__':
     data = '''
-    sensor tmp:int32;
+    node simple_automaton(i: int32; c: bool) returns (o: int32)
+    let
+    automaton
+    initial state ADD1
+    let
+        o = i + 1 ;
+    tel
+    until if c restart MINUS1;
+
+    state MINUS1
+    let
+        o = i - 1;
+    tel
+    until if c restart ADD1;
+    returns o;
+    tel
+
+    node edge (X: bool) returns (Y: bool);
+    let
+     Y = r_edge (X) or r_edge (not(X));
+    tel
     '''
     toks = get_tokens(data)
     for tok in toks:

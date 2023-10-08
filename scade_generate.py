@@ -62,6 +62,9 @@ if __name__=='__main__':
 #     Output1 = Sensor1 + Sensor2;\
 # tel")
     program,symboltable=scade_compile.get_parse(strs)
+    print("*************************************")
+    print(program)
+    print("*************************************")
     gen=Scade_generate(program,symboltable)
     gen.gen_const_file()
     gen.gen_sensor_file()

@@ -322,6 +322,21 @@ class Transition:
 	def __repr__(self):
 		return f'{{{self.next}, {self.read}, {self.action} {self.value}}}'
 
+def create_pda(grammarStr):
+    # Create the grammar from the string
+    grammar = ContextFreeGrammar(grammarStr)
+
+    # # Simplify the grammar (simplifies using basic rules)
+    # grammar.simplify()
+
+    # # Removes any duplicate productions from any state
+    # grammar.removeDuplicates()
+
+    # Converts the grammar to a pushdown automata object
+    pda = grammar.toPDA()
+    print(pda)
+    # Prints a textual representation of the grammar
+    return pda
 
 if __name__ == '__main__':
 	# gram = ContextFreeGrammar('''
