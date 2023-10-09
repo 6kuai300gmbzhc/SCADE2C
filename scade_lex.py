@@ -404,7 +404,7 @@ if __name__ == '__main__':
     '''
     toks = get_tokens(data)
     for tok in toks:
-        print(tok, tok.value.strs)
+        print(tok, tok.value.strs,tok.value.value,tok.value.type)
     lex_ = scade_lex()
     lex_.set_tokens(toks)
     lex_.output_program(sys.stdout)

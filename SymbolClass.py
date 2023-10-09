@@ -4,8 +4,8 @@
 class Symbol:
     def __init__(self, Name=None, Kind=None, Type=None,Public=True,External=False,isPackage=False,PackageName='') -> None:
         self.Name = Name  # 标识符的名字
-        self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点(Node) 包(Package)
-                          # Sensor
+        self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点或函数(OpKind) 包(Package)
+                          # Sensor Pre
 
         self.Type = Type  # Type类型(int , float)
         self.Public=Public
@@ -22,6 +22,11 @@ class Symbol:
 
         self.IsInput=False
         self.IsReturn = False
+
+        self.IsInit=False
+        self.InitName=""
+
+        self.preIdx=0
 
         self.Value = None  # 常量、变量等的值
 

@@ -4,7 +4,9 @@ from SymbolClass import *
 
 isPackage=0
 packageName=""
-operator_flag=""
+op_kind_id=""
+intArr=["int8","int16","int32","int64","uint8","uint16","uint32","uint64"]
+floatArr=["float32","float64"]
 
 scade_lexer=scade_lex()
 GlobalEnv=SymbolTable('Global')
@@ -19,7 +21,8 @@ def symbol_change_name(symbol):
         name="outC->"+symbol.Name
     return name
 
-def generate_head_file(op_kind_symbol):
+def generate_head_file():
+    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     name=op_kind_symbol.Name
     head_content=""
     head_content+="_"+name+"_H_\n"+"#define _"+name+"_H_\n"
@@ -29,21 +32,25 @@ def generate_head_file(op_kind_symbol):
     # print(len(op_kind_symbol.Params))
     for input_name in op_kind_symbol.Params:
         symbol=thisEnv.getSymbol(input_name)
-        head_content+="kcg_"+symbol.Type+" "+input_name+";"
-    head_content+="\n} inC_"+name+";\n"
+        head_content+="kcg_"+symbol.Type+" "+input_name+";\n"
+    head_content+="} inC_"+name+";\n"
+
     #out_params
     head_content += "\n\ntypedef struct {\n"
-    # input_params
-    # print(len(op_kind_symbol.Returns))
     for output_name in op_kind_symbol.Returns:
         symbol=thisEnv.getSymbol(output_name)
-        head_content += "kcg_" + symbol.Type + " " + output_name + ";"
-    head_content += "\n} outC_" + name + ";\n"
+        head_content += "kcg_" + symbol.Type + " " + output_name + ";"+"\n"
+    if op_kind_symbol.IsInit==True:
+        head_content+="kcg_bool "+op_kind_symbol.InitName+";"+"\n"
+    head_content += "} outC_" + name + ";\n"
+
     #function
-    head_content+="\n\nextern void "+name+"(inC_"+name+" *inC, outC_"+name+" *outC);\n"
-    head_content+="\n\nextern void "+name+"_reset(outC_"+name+" *outC);\n"
-    head_content += "\n\nextern void " + name + "_init(outC_" + name + " *outC);\n"
+    head_content+="\nextern void "+name+"(inC_"+name+" *inC, outC_"+name+" *outC);\n"
+    head_content+="\nextern void "+name+"_reset(outC_"+name+" *outC);\n"
+    head_content += "\nextern void " + name + "_init(outC_" + name + " *outC);\n"
     filename="./output/"+name+".h"
+    print("head_content")
+    print(head_content)
     with open(filename,'w') as f:
         f.write(head_content)
 
@@ -56,15 +63,65 @@ def generate_c_file(symbol,body):
     c_content+="\n}\n"
 
     c_content += "void " + name + "_init("+"outC_" + name + " *outC)\n{\n"
+    for para in symbol.Returns:
+        c_content+="outC->"+para+"="+getParamsInitValue(thisEnv.getSymbol(para))+";"+"\n"
+    if symbol.IsInit==True:
+        c_content+="outC->"+symbol.InitName+"=kcg_true;\n"
     c_content += "}\n"
 
     c_content += "void " + name + "_reset(" + "outC_" + name + " *outC)\n{\n"
+    if symbol.IsInit == True:
+        c_content += "outC->" + symbol.InitName + "=kcg_true;\n"
+    for para in thisEnv.SymbolTable.values():
+        if para.Kind=="Pre":
+            c_content += "outC->" + para.Name + "=" + getParamsInitValue(thisEnv.getSymbol(para.Name)) + ";" + "\n"
     c_content += "}\n"
     filename="./output/"+name+".c"
     print(c_content)
     with open(filename,'w') as f:
         f.write(c_content)
 
+def getInit():
+    symbol=thisEnv.getSymbol(op_kind_id)
+    for i in range(100):
+        target="init"
+        if i!=0:
+            target+=str(i)
+        if target in symbol.Params or target in symbol.Returns or target in symbol.StaticParams:
+            continue
+        else:
+            return target
+    return "init"
+def getPreName():
+    symbol=thisEnv.getSymbol(op_kind_id)
+    preName="mem_pre"
+    if symbol.preIdx!=0:
+        preName+=str(symbol.preIdx)
+    while preName in symbol.Returns:
+        preName="mem_"+preName
+    return preName
+def getParamsInitValue(symbol):
+    if symbol.Type in intArr:
+        return "kcg_lit_"+symbol.Type+"(0)"
+    elif symbol.Type in floatArr:
+        return "kcg_lit_"+symbol.Type+"(0.0)"
+    elif symbol.Type=="bool":
+        return "kcg_true"
+
+def objectsToString(objects):
+    type=""
+    sstr=""
+    for elem in objects:
+        if elem.strs=='lv6id':
+            symbol=thisEnv.getSymbol(elem.value)
+            print(elem.value)
+            type=symbol.Type
+            sstr+=symbol_change_name(symbol)
+        elif elem.strs=='intconst':
+            sstr+="kcg_lit_"+type+"("+str(elem.value)+")"
+        else:
+            sstr+=" "+elem.value+" "
+    return sstr
 
 def p_program(p):
     'Program : Decls_zero_or_mode'
@@ -102,7 +159,7 @@ def p_user_op_decl(p):
         symbol.Params.append(idx.value)
     for idx in p[7].objects:
         symbol.Returns.append(idx.value)
-    generate_head_file(symbol)
+    generate_head_file()
     generate_c_file(symbol,p[10].value)
 
 def p_pack_lv6id(p):
@@ -112,54 +169,83 @@ def p_pack_lv6id(p):
 def p_Lv6id(p):
     'User_op_decl_Lv6id : LV6ID'
     p[0]=p[1]
-    symbol=Symbol(p[1].value,'Package')
+    symbol=Symbol(p[1].value,'OpKind')
     thisEnv.setSymbol(p[1].value,symbol)
+    global op_kind_id
+    op_kind_id=p[1].value
 
 def p_op_kind(p):
     '''Op_kind : FUNCTION
     | NODE'''
     p[0]=p[1]
-    if p[1].strs=='node':
-        symbol=Symbol('init','Var','bool')
-        thisEnv.setSymbol('init',symbol)
 
-
+# def equationToString(objects):
+#     sstr = ""
+#     sstr+=objectsToString(objects)
+#     sstr+=";\n"
+#     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
+#     if op_kind_symbol.IsInit == True:
+#         sstr += "outC->" + op_kind_symbol.InitName + "=kcg_false;\n"
+#     for elem in thisEnv.SymbolTable.values():
+#         if elem.Kind == "Pre":
+#             sstr += "OutC->" + elem.Name + "="
+#             sstr += objectsToString(elem.Code) + ";\n"
+#     return sstr
 
 def p_opt_body(p):
     '''Opt_body : SEMICOLON
-    | Equation SEMICOLON'''
+    | Equation SEMICOLON
+    | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL SEMICOLON
+    | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL'''
     p[0]=lex_value("Opt_body")
     if len(p)==2:
-        p[0].value=p[1].value
+        pass
     elif len(p)==3:
-        p[0].value=p[1].value+p[2].value
-    # print(p[0].value)
+        # p[0].value=equationToString(p[1].objects)
+        p[0].value= objectsToString(p[1].objects)
+        p[0].value+=p[2].value+"\n"
+    else:
+        p[0].value = p[4].value
+    #pre，init操作符使用
+    op_kind_symbol = thisEnv.getSymbol(op_kind_id)
+    if op_kind_symbol.IsInit == True:
+        p[0].value += "outC->" + op_kind_symbol.InitName + "=kcg_false;\n"
+    for elem in thisEnv.SymbolTable.values():
+        if elem.Kind == "Pre":
+            p[0].value += "OutC->" + elem.Name + "="
+            p[0].value += objectsToString(elem.Code) + ";\n"
+
+def p_signal_block_zero_or_one(p):
+    '''Signal_block_zero_or_one : empty'''
+    pass
+
+def p_local_block_zero_or_one(p):
+    '''Local_block_zero_or_one : empty'''
+    pass
+
+def p_equation_zero_or_more_with_semicolon(p):
+    '''Equation_zero_or_more_with_semicolon : Equation SEMICOLON Equation_zero_or_more_with_semicolon
+    | empty'''
+    p[0]=lex_value("Equation_zero_or_more_with_semicolon")
+    if len(p)==4:
+        p[0].value+=objectsToString(p[1].objects)
+        p[0].value+=p[2].value+"\n"
+        p[0].value+=p[3].value
 
 def p_equation(p):
     '''Equation : Simple_equation'''
     p[0]=lex_value("Equation")
 
     # print("Equation",p[0].value)
-    p[0].value+=p[1].value
+    p[0].objects.extend(p[1].objects)
+    # p[0].value+=p[1].value
 
 def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
     p[0]=lex_value('Simple_equation')
-    type=""
-    for lex in p[1].objects:
-        if lex.strs=='lv6id':
-            symbol=thisEnv.getSymbol(lex.value)
-            type=symbol.Type
-            p[0].value+=symbol_change_name(symbol)
-    p[0].value+=" "+p[2].value+" "
-    for lex in p[3].objects:
-        if lex.strs=='lv6id':
-            symbol=thisEnv.getSymbol(lex.value)
-            p[0].value+=symbol_change_name(symbol)
-        elif lex.strs=='intconst':
-            p[0].value+="kcg_lit_"+type+"("+str(lex.value)+")"
-        else:
-            p[0].value+=" "+lex.value+" "
+    p[0].objects.extend(p[1].objects)
+    p[0].objects.append(p[2])
+    p[0].objects.extend(p[3].objects)
 
 def p_lhs(p):
     '''Lhs : LPARENTHESE RPARENTHESE
@@ -373,8 +459,11 @@ def p_id_one_or_more_with_comma_1(p):
 #not finish
 def p_type_expr(p):
     '''Type_expr : BOOL
+    | INT8
+    | INT16
     | INT32
-    | INT8'''
+    | FLOAT32
+    | FLOAT64'''
     p[0]=lex_value('Type_expr')
     p[0].value=p[1].value
 
@@ -396,7 +485,8 @@ def p_expr(p):
     '''Expr : Id_expr
     | Atom
     | Tempo_expr
-    | Arith_expr'''
+    | Arith_expr
+    | List_expr'''
     # p[0]=lex_value("Expr")
     # if p[1].strs=="Id_expr" or p[1].strs=='Arith_expr':
     #     p[0].objects.extend(p[1].objects)
@@ -409,17 +499,32 @@ def p_expr(p):
 def p_tempo_expr(p):
     '''Tempo_expr : Expr ARROW Expr
     | PRE Expr'''
+    #若是init操作符，则需要向out结构体中添加init。若有重名，则使用init1（依此递增）
+    symbol = thisEnv.getSymbol(op_kind_id)
+    p[0] = lex_value("Tempo_expr")
     if len(p)==4:
-        p[0]=lex_value("Tempo_expr")
-        p[0].objects.append(lex_value("(out->init)","(out->init)","str"))
+        if symbol.IsInit==False:
+            symbol.InitName=getInit()
+            symbol.IsInit=True
+        p[0].objects.append(lex_value("(out->"+symbol.InitName+")","(out->"+symbol.InitName+")","str"))
         p[0].objects.append(lex_value("?","?","str"))
         p[0].objects.extend(p[1].objects)
         p[0].objects.append(lex_value(":",":","str"))
         p[0].objects.extend(p[3].objects)
     elif len(p)==3:
-        pass
-
-
+        #若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre
+        preName=getPreName()
+        preType=""
+        for elem in p[2].objects:
+            if elem.strs=="lv6id":
+                preType=thisEnv.getSymbol(elem.value).Type
+                break
+        if preType!="":
+            symbol.Returns.append(preName)
+        preSymbol=Symbol(preName,"Pre",preType)
+        preSymbol.Code.extend(p[2].objects)
+        thisEnv.setSymbol(preName,preSymbol)
+        p[0].objects.append(lex_value("outC->"+preName,"outC->"+preName))
 
 
 def p_arith_expr(p):
@@ -430,6 +535,30 @@ def p_arith_expr(p):
         p[0].objects.append(p[2])
         p[0].objects.extend(p[3].objects)
 
+def p_list_expr(p):
+    '''List_expr : LPARENTHESE List RPARENTHESE'''
+    p[0]=lex_value("List_expr")
+    p[0].objects.append(p[1])
+    p[0].objects.extend(p[2].objects)
+    p[0].objects.append(p[3])
+def p_list(p):
+    '''List : List_1
+    | empty'''
+    p[0] = lex_value("List")
+    if p[1].strs=="List_1":
+        p[0].objects.extend(p[1].objects)
+
+def p_list_1(p):
+    '''List_1 : Expr List_2'''
+    p[0]=lex_value("List_1")
+    if p[2].strs=="Empty":
+        p[0].objects.extend(p[1].objects)
+
+def p_list_2(p):
+    '''List_2 : COMMA Expr List_2
+    | empty'''
+    if len(p)==2:
+        p[0]=p[1]
 
 def p_bin_arith_op(p):
     '''Bin_arith_op : PLUS

@@ -23,8 +23,6 @@ class Scade_generate:
                     content+="#define "+k+" ("+type_initial(v.Type,v.Value)+")"
                     content+="\n"
         content+="\n\n#endif"
-        print("const_file\n")
-        print(content)
         with open('./output/kcg_const.h','w') as f:
             f.write(content)
 
@@ -34,8 +32,6 @@ class Scade_generate:
             if v.Kind=="Sensor":
                 content+="extern "+type_change(v.Type)+" "+k+";\n"
         content+="\n#endif"
-        print("\n\nsensor_file")
-        print(content)
         with open('./output/kcg_sensors.h','w') as f:
             f.write(content)
 
@@ -54,13 +50,12 @@ if __name__=='__main__':
     #     private imported f:int8;\
     #     sensor tmp,tmp2:int32;\
     #     tmp3:bool;")
-    strs = str("node init_operator(input1:int8) returns(output1:int8) output1=0->input1;")
-#     strs = str("sensor Sensor1: int32;\
-# sensor Sensor2: int32;\
-# function Operator1() returns(Output1: int32)\
-# let \
-#     Output1 = Sensor1 + Sensor2;\
-# tel")
+    # strs = str("node init_operator(input1:int8) returns(output1:int8) output1=0->input1;")
+    strs=str("node pre_example(input1,input2:int32) returns (output1,output2 : int32)\
+             let\
+    output2=input1+input2;\
+	output1=1-> (pre input1+input2+3);\
+	tel")
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)
     gen.gen_const_file()
