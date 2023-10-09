@@ -31,6 +31,7 @@ def generate_head_file(op_kind_symbol):
     # print(len(op_kind_symbol.Params))
     for input_name in op_kind_symbol.Params:
         symbol=thisEnv.getSymbol(input_name)
+        print('正在生成head file, 当前op_kind_symbol的input_name:', input_name, '当前作用域: ', thisEnv.EnvName)
         head_content+="kcg_"+symbol.Type+" "+input_name+";"
     head_content+="\n} inC_"+name+";\n"
     #out_params
@@ -102,7 +103,8 @@ def p_package_decl(p):
 def p_user_op_decl(p):
     'User_op_decl : Op_kind Interface_status User_op_decl_Lv6id User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
     # print(p[3].value)
-    symbol=thisEnv.getSymbol(p[3].value)
+    global thisEnv
+    symbol=thisEnv.getSymbol(p[3].value) # 该symbol名字在 User_op_decl_Lv6id已经被set
     if isStatemachine==1:
         symbol.isStatemachine==True # 该node name为状态机名字
         print('状态机', p[3].value, '的状态列表: ', symbol.StateList)
@@ -115,6 +117,10 @@ def p_user_op_decl(p):
     generate_head_file(symbol)
     generate_c_file(symbol,p[10].value)  # TODO: 加入 init, reset 函数 body
 
+    # TODO: 恢复上层作用域
+    thisEnv = thisEnv.PrevTable
+    print('恢复上层作用域: ', thisEnv.EnvName)
+
 def p_pack_lv6id(p):
     'Pack_Lv6id : LV6ID'
     p[0]=p[1]
@@ -122,14 +128,30 @@ def p_pack_lv6id(p):
 def p_user_op_decl_Lv6id(p):
     'User_op_decl_Lv6id : LV6ID'
     p[0]=p[1]
+    # 上层作用域将该 id 加入自己的符号表，以备后续使用 PrevTable.getSymbol(id) 获取该符号
+    global thisEnv
     symbol=Symbol(p[1].value,'Package')
     thisEnv.setSymbol(p[1].value,symbol)
+    # TODO: 进入新的作用域
+    
+    newEnv = SymbolTable(p[1].value, thisEnv)
+    thisEnv.ChildTableList.append(newEnv)
+    thisEnv = newEnv
+    print('进入新的作用域: ', thisEnv.EnvName)
+    
 
 def p_state_lv6id(p):
     'State_Lv6id : LV6ID'
     p[0]=p[1]
     symbol=Symbol(p[1].value,'State')
     thisEnv.setSymbol(p[1].value,symbol)
+    # TODO: 获取当前作用域的EnvName, 是当前状态机所属node的名字
+    # 通过 thisEnv.getSymbol(thisEnv.EnvName) 得到当前状态机所属node的symbol类
+    # 向该symbol中的 StateList 添加当前状态的名字
+    print("即将向当前作用域的 StateList中添加状态，This EnvName: ", thisEnv.EnvName)
+    thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
+    print("type of this node symbol: ", type(thisNode))
+    thisNode.StateList.append(p[1].value)
 
 
 def p_op_kind(p):
@@ -139,8 +161,8 @@ def p_op_kind(p):
     if p[1].strs=='node':
         symbol=Symbol('init','Var','bool')
         thisEnv.setSymbol('init',symbol)
-
-
+    # TODO: function和node的区别？这里为什么要新建一个名为 'init' 的变量
+    # TODO: 合并到 User_op_decl 生成式中
 
 def p_opt_body(p):
     '''Opt_body : SEMICOLON
@@ -183,6 +205,8 @@ def p_returns_var(p):
 def p_state_machine(p):
     '''State_machine : AUTOMATON State_machine_1'''
     # 原来应当为 Id_zero_or_one 省略状态机名字为空的情况，默认没有ID
+    print('定义状态机, 默认名字为当前node name, 即thisEnv: ', thisEnv.EnvName)
+    # TODO: 增加状态机有名称的情况，状态机隶属于一个node，且单独创建 状态机名称_node名称.c .h文件
     p[0]=lex_value("State_machine")
     # switch (state_sel)
     p[0].value+="SSM_ST state_sel = outC->state_nxt;\n"

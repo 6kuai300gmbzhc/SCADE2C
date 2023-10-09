@@ -1,6 +1,6 @@
 # 1.使用一个符号表存储变量、函数、类型
 # 2.使用符号表树实现作用域
-
+# TODO：Symbol创建子类，Var, Package, Node, Function, Statemachine, 实例化具体的子类
 class Symbol:
     def __init__(self, Name=None, Kind=None, Type=None,Public=True,External=False,isPackage=False,PackageName='',isStatemachine=False,StatemachineName='') -> None:
         self.Name = Name  # 标识符的名字
