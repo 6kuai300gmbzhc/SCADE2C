@@ -55,56 +55,58 @@ def generate_head_file():
         f.write(head_content)
 
 def generate_c_file(symbol,body):
-    c_content="#include\"kcg_consts.h\"\n"+"#include\"kcg_sensors.h\"\n"
+    c_content="#include \"kcg_consts.h\"\n#include \"kcg_sensors.h\"\n"
     name=symbol.Name
-    c_content+="#include \""+name+".h\"\n"
-    c_content+="void "+name+"(inC_"+name+" *inC, "+"outC_"+name+" *outC)\n{\n"
+    c_content+="#include \"%s.h\"\n" % name
+    c_content+="void %s(inC_%s *inC, outC_%s *outC)\n{\n" % (name,name,name)
     c_content+=body
     c_content+="\n}\n"
 
-    c_content += "void " + name + "_init("+"outC_" + name + " *outC)\n{\n"
+    c_content += "void %s_init(outC_%s *outC)\n{\n" % (name,name)
     for para in symbol.Returns:
-        c_content+="outC->"+para+"="+getParamsInitValue(thisEnv.getSymbol(para))+";"+"\n"
+        print("para=",para)
+        c_content+="outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para)))
     if symbol.IsInit==True:
-        c_content+="outC->"+symbol.InitName+"=kcg_true;\n"
+        c_content+="outC->%s=kcg_true;\n" % (symbol.InitName)
     c_content += "}\n"
 
-    c_content += "void " + name + "_reset(" + "outC_" + name + " *outC)\n{\n"
+    c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name,name)
     if symbol.IsInit == True:
-        c_content += "outC->" + symbol.InitName + "=kcg_true;\n"
+        c_content += "outC->%s=kcg_true;\n" % (symbol.InitName)
     for para in thisEnv.SymbolTable.values():
         if para.Kind=="Pre":
-            c_content += "outC->" + para.Name + "=" + getParamsInitValue(thisEnv.getSymbol(para.Name)) + ";" + "\n"
+            c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name)))
     c_content += "}\n"
-    filename="./output/"+name+".c"
+    filename="./output/%s.c" %(name)
     print(c_content)
     with open(filename,'w') as f:
         f.write(c_content)
 
-def getInit():
+def getName(initStr):
     symbol=thisEnv.getSymbol(op_kind_id)
     for i in range(100):
-        target="init"
+        target=initStr
         if i!=0:
             target+=str(i)
         if target in symbol.Params or target in symbol.Returns or target in symbol.StaticParams:
             continue
         else:
             return target
-    return "init"
+    return initStr
 def getPreName():
     symbol=thisEnv.getSymbol(op_kind_id)
     preName="mem_pre"
-    if symbol.preIdx!=0:
-        preName+=str(symbol.preIdx)
+    idx=len(symbol.preList)
+    if idx!=0:
+        preName+=str(idx)
     while preName in symbol.Returns:
         preName="mem_"+preName
     return preName
 def getParamsInitValue(symbol):
     if symbol.Type in intArr:
-        return "kcg_lit_"+symbol.Type+"(0)"
+        return "kcg_lit_%s(0)" % symbol.Type
     elif symbol.Type in floatArr:
-        return "kcg_lit_"+symbol.Type+"(0.0)"
+        return "kcg_lit_%s(0.0)" % symbol.Type
     elif symbol.Type=="bool":
         return "kcg_true"
 
@@ -114,15 +116,25 @@ def objectsToString(objects):
     for elem in objects:
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
-            print(elem.value)
             type=symbol.Type
             sstr+=symbol_change_name(symbol)
         elif elem.strs=='intconst':
-            sstr+="kcg_lit_"+type+"("+str(elem.value)+")"
+            sstr+="kcg_lit_%s(%s)" % (type,str(elem.value))
+        elif elem.strs=='Pre':
+            symbol=thisEnv.getSymbol(elem.value)
+            symbol.Type=type
+            sstr+=symbol_change_name(symbol)
         else:
             sstr+=" "+elem.value+" "
     return sstr
-
+def getTypefromObjects(objects):
+    type=""
+    for obj in objects:
+        if obj.strs=='lv6id':
+            symbol=thisEnv.getSymbol(obj.value)
+            type=symbol.Type
+            break
+    return type
 def p_program(p):
     'Program : Decls_zero_or_mode'
     # p[0]=p[1]
@@ -169,10 +181,15 @@ def p_pack_lv6id(p):
 def p_Lv6id(p):
     'User_op_decl_Lv6id : LV6ID'
     p[0]=p[1]
+    global thisEnv
     symbol=Symbol(p[1].value,'OpKind')
     thisEnv.setSymbol(p[1].value,symbol)
     global op_kind_id
     op_kind_id=p[1].value
+
+    newEnv=SymbolTable(p[1].value,thisEnv)
+    thisEnv.ChildTableList.append(newEnv)
+    thisEnv=newEnv
 
 def p_op_kind(p):
     '''Op_kind : FUNCTION
@@ -202,18 +219,18 @@ def p_opt_body(p):
         pass
     elif len(p)==3:
         # p[0].value=equationToString(p[1].objects)
-        p[0].value= objectsToString(p[1].objects)
-        p[0].value+=p[2].value+"\n"
+        p[0].value= p[1].value
     else:
         p[0].value = p[4].value
     #pre，init操作符使用
     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
     if op_kind_symbol.IsInit == True:
         p[0].value += "outC->" + op_kind_symbol.InitName + "=kcg_false;\n"
-    for elem in thisEnv.SymbolTable.values():
-        if elem.Kind == "Pre":
-            p[0].value += "OutC->" + elem.Name + "="
-            p[0].value += objectsToString(elem.Code) + ";\n"
+    if len(op_kind_symbol.preList)!=0:
+        for key in op_kind_symbol.preList.keys():
+            p[0].value+="outC->"+key+"="+objectsToString(op_kind_symbol.preList[key].Code)+";\n"
+
+
 
 def p_signal_block_zero_or_one(p):
     '''Signal_block_zero_or_one : empty'''
@@ -228,24 +245,32 @@ def p_equation_zero_or_more_with_semicolon(p):
     | empty'''
     p[0]=lex_value("Equation_zero_or_more_with_semicolon")
     if len(p)==4:
-        p[0].value+=objectsToString(p[1].objects)
-        p[0].value+=p[2].value+"\n"
-        p[0].value+=p[3].value
+        p[0].value=p[1].value+p[3].value
 
 def p_equation(p):
     '''Equation : Simple_equation'''
-    p[0]=lex_value("Equation")
-
-    # print("Equation",p[0].value)
-    p[0].objects.extend(p[1].objects)
-    # p[0].value+=p[1].value
+    p[0]=p[1]
 
 def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
+    #若出现input1=1->pre(2)。2作为mem_pre加进符号表，此时的类型未知，初始化会出现错误。因此需要找到lhs的类型
+    #先去Expr找是否存在类型为Pre的符号
     p[0]=lex_value('Simple_equation')
+
+    symbol = thisEnv.getSymbol(op_kind_id)
+    for elem in symbol.fbyList:
+        if elem.Array.type == '':
+            elem.Array.type = getTypefromObjects(p[1].objects)
+
+
     p[0].objects.extend(p[1].objects)
     p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects)
+    p[0].value=objectsToString(p[0].objects)+";\n"
+
+
+
+
 
 def p_lhs(p):
     '''Lhs : LPARENTHESE RPARENTHESE
@@ -389,7 +414,7 @@ def p_const_decl(p):
         public=False
     if len(p)==7:
         symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
-        symbol.Value=("".join(map(lambda item:str(item.value),p[6].objects)))
+        symbol.Value=objectsToString(p[6].objects)
         thisEnv.setSymbol(p[2].value,symbol)
     elif len(p)==5:
         symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
@@ -498,33 +523,57 @@ def p_expr(p):
 #pre：需要在output中添加一个mem
 def p_tempo_expr(p):
     '''Tempo_expr : Expr ARROW Expr
-    | PRE Expr'''
+    | PRE Expr
+    | FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE'''
     #若是init操作符，则需要向out结构体中添加init。若有重名，则使用init1（依此递增）
     symbol = thisEnv.getSymbol(op_kind_id)
     p[0] = lex_value("Tempo_expr")
     if len(p)==4:
         if symbol.IsInit==False:
-            symbol.InitName=getInit()
+            symbol.InitName=getName("init")
             symbol.IsInit=True
-        p[0].objects.append(lex_value("(out->"+symbol.InitName+")","(out->"+symbol.InitName+")","str"))
+        p[0].objects.append(lex_value('(outC-> %s )'%symbol.InitName,'(outC-> %s )'%symbol.InitName,"str"))
         p[0].objects.append(lex_value("?","?","str"))
         p[0].objects.extend(p[1].objects)
         p[0].objects.append(lex_value(":",":","str"))
         p[0].objects.extend(p[3].objects)
     elif len(p)==3:
         #若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre
+        #则此时只需要输出上一个周期的值。可能出现pre(2)
+        #向symbolTable添加一个字典，保存pre对应的值，还有fby对应的值
         preName=getPreName()
         preType=""
         for elem in p[2].objects:
             if elem.strs=="lv6id":
                 preType=thisEnv.getSymbol(elem.value).Type
                 break
-        if preType!="":
-            symbol.Returns.append(preName)
+        symbol.Returns.append(preName)
         preSymbol=Symbol(preName,"Pre",preType)
         preSymbol.Code.extend(p[2].objects)
         thisEnv.setSymbol(preName,preSymbol)
-        p[0].objects.append(lex_value("outC->"+preName,"outC->"+preName))
+        symbol.preList[preName]=preSymbol
+        p[0].objects.append(lex_value("Pre",preName))
+    elif len(p)==9:
+        #若是fby操作符，首先在outC结构体中添加一个idx和数组
+        #fby(input1;cycle;input2) cycle必须是静态表达式
+        if symbol.IsInit==False:
+            symbol.InitName=getName("init")
+            symbol.IsInit=True
+
+        fbyIdx=getName("fbyIdx")
+        fbyArr=getName("fbyArray")
+        p[0].objects.append(lex_value("%s[%s]"%(fbyArr,fbyIdx),"%s[%s]"%(fbyArr,fbyIdx),"str"))
+
+        idxLex=lex_value("fbyIdx",fbyIdx,"int32")
+        idxLex.objects.extend(p[5].objects)
+        type=getTypefromObjects(p[3].objects)
+        if type=="":
+            type=getTypefromObjects(p[7].objects)
+        arrayLex=lex_value("fbyArray",fbyArr,type)
+        fbyClass=FbyClass(idxLex,arrayLex)
+        fbyClass.first.extend(p[3].objects)
+        fbyClass.last.extend(p[7].objects)
+        symbol.fbyList.append(fbyClass)
 
 
 def p_arith_expr(p):
@@ -631,7 +680,6 @@ if __name__=='__main__':
     strs = str("sensor Sensor1:int32;\
     sensor Sensor2:int32;")
     string_tokens=get_tokens(strs)
-    # print(string_tokens)
     scade_lexer.set_tokens(string_tokens)
     nodes=parser.parse(strs,lexer=scade_lexer)
     # print(nodes)

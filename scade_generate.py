@@ -52,10 +52,10 @@ if __name__=='__main__':
     #     tmp3:bool;")
     # strs = str("node init_operator(input1:int8) returns(output1:int8) output1=0->input1;")
     strs=str("node pre_example(input1,input2:int32) returns (output1,output2 : int32)\
-             let\
+let\
     output2=input1+input2;\
-	output1=1-> (pre input1+input2+3);\
-	tel")
+	output1=1-> (pre 3);\
+tel")
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)
     gen.gen_const_file()
