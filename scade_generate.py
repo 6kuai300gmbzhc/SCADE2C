@@ -56,10 +56,15 @@ if __name__=='__main__':
 #     output2=input1+input2;\
 # 	output1=1-> (pre 3);\
 # tel")
-    strs=str("node fby_operator(input1,input2:int8) returns(output1,output2:int8)\
-let \
-output2=1->fby(input1+2;6;input2+2);\
-output1=output2+2;\
+    strs=str("node local_block_operator(input1:int8;input2:bool) returns(output1:int8;output2:bool)\
+var\
+	tmp1:bool;\
+	tmp2:int8;\
+let\
+	tmp1=input2;\
+	tmp2=input1+1;\
+	output2=tmp1;\
+	output1=input1+tmp2+2;\
 tel")
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)

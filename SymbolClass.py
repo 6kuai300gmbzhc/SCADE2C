@@ -16,7 +16,7 @@ class Symbol:
     def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='') -> None:
         self.Name = Name  # 标识符的名字
         self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点或函数(OpKind) 包(Package)
-                          # Sensor Pre Init
+                          # Sensor Pre Init LocalVar
 
         self.Type = Type  # Type类型(int , float)
         self.Public=Public
@@ -56,6 +56,8 @@ class Symbol:
             return "inC->"+self.Name
         elif self.IsReturn==True:
             return "outC->"+self.Name
+        else:
+            return self.Name
     #为类指定输出格式
     def __repr__(self) -> str:
         strs = '#' + self.Name + '(' + self.Kind + ')'

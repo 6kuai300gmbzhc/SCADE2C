@@ -101,6 +101,15 @@ def getParamsInitValue(symbol):
         return "kcg_lit_%s(0.0)" % symbol.Type
     elif symbol.Type=="bool":
         return "kcg_true"
+def type_initial(type,value):
+    print("type_initial ",type,value)
+    content=""
+    if type=="bool":
+        content+="kcg_"+value
+    else:
+        content+="kcg_lit_"+type+"("+str(value)+")"
+    return content
+
 
 def objectsToString(objects,num=0):
     # type=""
@@ -174,6 +183,7 @@ def p_package_decl(p):
 def p_user_op_decl(p):
     'User_op_decl : Op_kind Interface_status User_op_decl_Lv6id User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
     # print(p[3].value)
+    global thisEnv
     symbol=thisEnv.getSymbol(p[3].value)
     for idx in p[5].objects:
         # print(idx.strs,idx.value)
@@ -182,6 +192,8 @@ def p_user_op_decl(p):
         symbol.Returns.append(idx.value)
     generate_head_file()
     generate_c_file(p[10].value)
+
+    thisEnv=thisEnv.PrevTable
 
 def p_pack_lv6id(p):
     'Pack_Lv6id : LV6ID'
@@ -228,6 +240,10 @@ def p_opt_body(p):
     if len(p)==2:
         pass
     else:
+        if len(p)==6 or len(p)==7:
+            for elem in p[2].objects:
+                symbol=thisEnv.getSymbol(elem.value)
+                p[0].value+="kcg_%s %s;\n"%(symbol.Type,symbol.Name)
         #fby和init的if(outC->init)
         if len(op_kind_symbol.initDict)!=0 or len(op_kind_symbol.fbyList)!=0:
             initSymbol = thisEnv.getSymbol(op_kind_symbol.InitName)
@@ -268,8 +284,24 @@ def p_signal_block_zero_or_one(p):
     pass
 
 def p_local_block_zero_or_one(p):
-    '''Local_block_zero_or_one : empty'''
-    pass
+    '''Local_block_zero_or_one : Local_block
+    | empty'''
+    p[0]=p[1]
+
+def p_local_block(p):
+    '''Local_block : VAR Local_block_1'''
+    p[0]=p[2]
+    for elem in p[2].objects:
+        print(elem.value)
+
+def p_local_block_1(p):
+    '''Local_block_1 : Var_decls SEMICOLON Local_block_1
+    | empty'''
+    p[0]=lex_value("Local_block_1")
+    if len(p)==4:
+        p[0].objects.extend(p[1].objects)
+        p[0].objects.extend(p[3].objects)
+
 
 def p_equation_zero_or_more_with_semicolon(p):
     '''Equation_zero_or_more_with_semicolon : Equation SEMICOLON Equation_zero_or_more_with_semicolon
@@ -303,7 +335,6 @@ def p_simple_equation(p):
             break
 
     if init!=None:
-        print("setObjectsType4")
         setObjectsType(op_kind_symbol.initDict[init.value].myList[0],type)
         setObjectsType(op_kind_symbol.initDict[init.value].myList[1], type)
         op_kind_symbol.initDict[init.value].firstStr=objectsToString(p[1].objects)+p[2].value+objectsToString(p[3].objects)+";\n"
@@ -541,8 +572,14 @@ def p_type_expr(p):
     | INT8
     | INT16
     | INT32
+    | INT64
+    | UINT8
+    | UINT16
+    | UINT32
+    | UINT64
     | FLOAT32
-    | FLOAT64'''
+    | FLOAT64
+    | CHAR'''
     p[0]=lex_value('Type_expr')
     p[0].value=p[1].value
 
@@ -731,15 +768,6 @@ def type_change(type):
     if type in list:
         str="kcg_"+type
     return str
-
-def type_initial(type,value):
-    # print("type_initial ",type,value)
-    content=""
-    if type=="bool":
-        content+="kcg_"+value
-    else:
-        content+="kcg_lit_"+type+"("+str(value)+")"
-    return content
 
 if __name__=='__main__':
     parser=yacc(debug=1)
