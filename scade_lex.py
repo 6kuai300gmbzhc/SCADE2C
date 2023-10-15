@@ -400,7 +400,11 @@ lexer = lex.lex()
 
 if __name__ == '__main__':
     data = '''
-    sensor tmp:int32;
+        strs=str("node fby_operator(input1,input2:int8) returns(output1,output2:int8)\
+let \
+output2=fby(input1+2;6;input2+2)+2;\
+output1=output2+2;\
+tel")
     '''
     toks = get_tokens(data)
     for tok in toks:

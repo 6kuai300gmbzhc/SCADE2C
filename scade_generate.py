@@ -51,10 +51,15 @@ if __name__=='__main__':
     #     sensor tmp,tmp2:int32;\
     #     tmp3:bool;")
     # strs = str("node init_operator(input1:int8) returns(output1:int8) output1=0->input1;")
-    strs=str("node pre_example(input1,input2:int32) returns (output1,output2 : int32)\
-let\
-    output2=input1+input2;\
-	output1=1-> (pre 3);\
+#     strs=str("node pre_example(input1,input2:int32) returns (output1,output2 : int32)\
+# let\
+#     output2=input1+input2;\
+# 	output1=1-> (pre 3);\
+# tel")
+    strs=str("node fby_operator(input1,input2:int8) returns(output1,output2:int8)\
+let \
+output2=1->fby(input1+2;6;input2+2);\
+output1=output2+2;\
 tel")
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)

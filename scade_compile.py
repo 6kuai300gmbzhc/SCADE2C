@@ -13,14 +13,6 @@ GlobalEnv=SymbolTable('Global')
 thisEnv=GlobalEnv
 program=None
 
-def symbol_change_name(symbol):
-    name=symbol.Name
-    if symbol.IsInput is True:
-        name="inC->"+symbol.Name
-    elif symbol.IsReturn is True:
-        name="outC->"+symbol.Name
-    return name
-
 def generate_head_file():
     op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     name=op_kind_symbol.Name
@@ -32,6 +24,7 @@ def generate_head_file():
     # print(len(op_kind_symbol.Params))
     for input_name in op_kind_symbol.Params:
         symbol=thisEnv.getSymbol(input_name)
+        print(symbol.Name,symbol.Kind,symbol.Type)
         head_content+="kcg_"+symbol.Type+" "+input_name+";\n"
     head_content+="} inC_"+name+";\n"
 
@@ -39,9 +32,8 @@ def generate_head_file():
     head_content += "\n\ntypedef struct {\n"
     for output_name in op_kind_symbol.Returns:
         symbol=thisEnv.getSymbol(output_name)
+        print(symbol.Name, symbol.Kind, symbol.Type)
         head_content += "kcg_" + symbol.Type + " " + output_name + ";"+"\n"
-    if op_kind_symbol.IsInit==True:
-        head_content+="kcg_bool "+op_kind_symbol.InitName+";"+"\n"
     head_content += "} outC_" + name + ";\n"
 
     #function
@@ -49,30 +41,30 @@ def generate_head_file():
     head_content+="\nextern void "+name+"_reset(outC_"+name+" *outC);\n"
     head_content += "\nextern void " + name + "_init(outC_" + name + " *outC);\n"
     filename="./output/"+name+".h"
-    print("head_content")
+    # print("head_content")
     print(head_content)
     with open(filename,'w') as f:
         f.write(head_content)
 
-def generate_c_file(symbol,body):
+def generate_c_file(body):
+    op_kind_symbol = thisEnv.getSymbol(op_kind_id)
     c_content="#include \"kcg_consts.h\"\n#include \"kcg_sensors.h\"\n"
-    name=symbol.Name
+    name=op_kind_symbol.Name
     c_content+="#include \"%s.h\"\n" % name
     c_content+="void %s(inC_%s *inC, outC_%s *outC)\n{\n" % (name,name,name)
     c_content+=body
     c_content+="\n}\n"
 
     c_content += "void %s_init(outC_%s *outC)\n{\n" % (name,name)
-    for para in symbol.Returns:
-        print("para=",para)
-        c_content+="outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para)))
-    if symbol.IsInit==True:
-        c_content+="outC->%s=kcg_true;\n" % (symbol.InitName)
+    for para in op_kind_symbol.Returns:
+        symbol=thisEnv.getSymbol(para)
+        if symbol.IsArray==False:
+            c_content+="outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para)))
+    for elem in op_kind_symbol.fbyList:
+        c_content+="for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.Idx).Code),thisEnv.getSymbol(elem.Array).changeName(),getParamsInitValue(thisEnv.getSymbol(elem.Array)))
     c_content += "}\n"
 
     c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name,name)
-    if symbol.IsInit == True:
-        c_content += "outC->%s=kcg_true;\n" % (symbol.InitName)
     for para in thisEnv.SymbolTable.values():
         if para.Kind=="Pre":
             c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name)))
@@ -110,31 +102,48 @@ def getParamsInitValue(symbol):
     elif symbol.Type=="bool":
         return "kcg_true"
 
-def objectsToString(objects):
-    type=""
+def objectsToString(objects,num=0):
+    # type=""
     sstr=""
+    # print("objectsToString")
+    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     for elem in objects:
+        # print(elem.strs,elem.value)
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
-            type=symbol.Type
-            sstr+=symbol_change_name(symbol)
+            # type=symbol.Type
+            sstr+=symbol.changeName()
         elif elem.strs=='intconst':
-            sstr+="kcg_lit_%s(%s)" % (type,str(elem.value))
-        elif elem.strs=='Pre':
-            symbol=thisEnv.getSymbol(elem.value)
-            symbol.Type=type
-            sstr+=symbol_change_name(symbol)
+            sstr+="kcg_lit_%s(%s)" % (elem.type,str(elem.value))
+        # elif elem.strs=='Pre':
+        #     symbol=thisEnv.getSymbol(elem.value)
+        #     symbol.Type=type
+        #     sstr+=symbol.changeName()
+        elif elem.strs=='initElem':
+            sstr+=objectsToString(op_kind_symbol.initDict[elem.value].myList[num])
         else:
-            sstr+=" "+elem.value+" "
+            sstr+=elem.value
     return sstr
 def getTypefromObjects(objects):
     type=""
     for obj in objects:
+        # print(obj.strs,obj.value)
         if obj.strs=='lv6id':
             symbol=thisEnv.getSymbol(obj.value)
             type=symbol.Type
             break
     return type
+
+def setObjectsType(objects,type):
+    for elem in objects:
+        symbol=thisEnv.getSymbol(elem.value)
+        if symbol==None:
+            if elem.type=='':
+                elem.type=type
+        else:
+            if symbol.Type=='':
+                symbol.Type=type
+
 def p_program(p):
     'Program : Decls_zero_or_mode'
     # p[0]=p[1]
@@ -172,7 +181,7 @@ def p_user_op_decl(p):
     for idx in p[7].objects:
         symbol.Returns.append(idx.value)
     generate_head_file()
-    generate_c_file(symbol,p[10].value)
+    generate_c_file(p[10].value)
 
 def p_pack_lv6id(p):
     'Pack_Lv6id : LV6ID'
@@ -215,20 +224,42 @@ def p_opt_body(p):
     | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL SEMICOLON
     | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL'''
     p[0]=lex_value("Opt_body")
+    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     if len(p)==2:
         pass
-    elif len(p)==3:
-        # p[0].value=equationToString(p[1].objects)
-        p[0].value= p[1].value
     else:
-        p[0].value = p[4].value
-    #pre，init操作符使用
-    op_kind_symbol = thisEnv.getSymbol(op_kind_id)
-    if op_kind_symbol.IsInit == True:
-        p[0].value += "outC->" + op_kind_symbol.InitName + "=kcg_false;\n"
-    if len(op_kind_symbol.preList)!=0:
-        for key in op_kind_symbol.preList.keys():
-            p[0].value+="outC->"+key+"="+objectsToString(op_kind_symbol.preList[key].Code)+";\n"
+        #fby和init的if(outC->init)
+        if len(op_kind_symbol.initDict)!=0 or len(op_kind_symbol.fbyList)!=0:
+            initSymbol = thisEnv.getSymbol(op_kind_symbol.InitName)
+            p[0].value+="if(%s){\n %s=false;\n"%(initSymbol.changeName(),initSymbol.changeName())
+            for elem in op_kind_symbol.fbyList:
+                fbyIdxSymbol=thisEnv.getSymbol(elem.Idx)
+                fbyArrSymbol=thisEnv.getSymbol(elem.Array)
+                print("setObjectsType1",fbyArrSymbol.Name,fbyArrSymbol.Type)
+                setObjectsType(elem.last,fbyArrSymbol.Type)
+                p[0].value+="for(int tmp=0;tmp<%s;tmp++){\n\
+        %s[tmp]=%s;\n}\n\
+        %s=0;\n"%(objectsToString(fbyIdxSymbol.Code),fbyArrSymbol.changeName(),objectsToString(elem.last),fbyIdxSymbol.changeName())
+            for elem in op_kind_symbol.initDict.values():
+                p[0].value+=elem.firstStr
+            p[0].value+="}\n"
+        if len(op_kind_symbol.initDict)!=0:
+            p[0].value+="else{\n"
+            for elem in op_kind_symbol.initDict.values():
+                p[0].value+=elem.secondStr
+            p[0].value+="}\n"
+        if len(p)==3:
+            p[0].value+=p[1].value
+        else:
+            p[0].value+=p[4].value
+        #fby的++
+        if len(op_kind_symbol.fbyList)!=0:
+            for elem in op_kind_symbol.fbyList:
+                fbyIdxSymbol = thisEnv.getSymbol(elem.Idx)
+                fbyArrSymbol = thisEnv.getSymbol(elem.Array)
+                setObjectsType(elem.first,fbyArrSymbol.Type)
+                p[0].value+="%s[%s]=%s;\n%s=(%s+1)%%(%s);\n"%(fbyArrSymbol.changeName(),fbyIdxSymbol.changeName(),objectsToString(elem.first),fbyIdxSymbol.changeName(),fbyIdxSymbol.changeName(),objectsToString(fbyIdxSymbol.Code))
+
 
 
 
@@ -256,17 +287,37 @@ def p_simple_equation(p):
     #若出现input1=1->pre(2)。2作为mem_pre加进符号表，此时的类型未知，初始化会出现错误。因此需要找到lhs的类型
     #先去Expr找是否存在类型为Pre的符号
     p[0]=lex_value('Simple_equation')
+    op_kind_symbol = thisEnv.getSymbol(op_kind_id)
+    type=getTypefromObjects(p[1].objects)
 
-    symbol = thisEnv.getSymbol(op_kind_id)
-    for elem in symbol.fbyList:
-        if elem.Array.type == '':
-            elem.Array.type = getTypefromObjects(p[1].objects)
+    # print("type=",type)
+    print("setObjectsType3")
+    setObjectsType(p[1].objects,type)
+    setObjectsType(p[3].objects,type)
 
+    init=None
+    #查找是否存在->符号。 一个node最后只写一个if(out->Init){处理fby和init内容}
+    for elem in p[3].objects:
+        if elem.strs=="initElem":
+            init=elem
+            break
 
-    p[0].objects.extend(p[1].objects)
-    p[0].objects.append(p[2])
-    p[0].objects.extend(p[3].objects)
-    p[0].value=objectsToString(p[0].objects)+";\n"
+    if init!=None:
+        print("setObjectsType4")
+        setObjectsType(op_kind_symbol.initDict[init.value].myList[0],type)
+        setObjectsType(op_kind_symbol.initDict[init.value].myList[1], type)
+        op_kind_symbol.initDict[init.value].firstStr=objectsToString(p[1].objects)+p[2].value+objectsToString(p[3].objects)+";\n"
+        op_kind_symbol.initDict[init.value].secondStr=objectsToString(p[1].objects)+p[2].value+objectsToString(p[3].objects,1)+";\n"
+    else:
+        p[0].value=objectsToString(p[1].objects)+p[2].value+objectsToString(p[3].objects)+";\n"
+
+    if len(op_kind_symbol.preList) != 0:
+        for elem in op_kind_symbol.preList:
+            symbol=thisEnv.getSymbol(elem)
+            setObjectsType(symbol.Code,type)
+            p[0].value+="%s = %s;\n" % (symbol.changeName(),objectsToString(symbol.Code))
+
+    op_kind_symbol.preList.clear()
 
 
 
@@ -347,9 +398,11 @@ def p_var_decls(p):
     p[0]=lex_value('Var_decls')
     symbol=thisEnv.getSymbol(p[1].value)
     symbol.Type=p[4].value
+    print("p_var_decls", symbol.Name, symbol.Type)
     for i in range(len(p[2].objects)):
         symbol=thisEnv.getSymbol(p[2].objects[i].value)
         symbol.Type=p[4].value
+        print("p_var_decls",symbol.Name, symbol.Type)
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
 
@@ -363,6 +416,7 @@ def p_var_decls_1(p):
 def p_var_id(p):
     'Var_id : Var_id_1 Var_id_2 LV6ID'
     p[0]=p[3]
+    # print("Var_id",p[3].value)
     symbol=Symbol(p[3].value,'Var','')
     thisEnv.setSymbol(p[3].value,symbol)
 
@@ -527,53 +581,74 @@ def p_tempo_expr(p):
     | FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE'''
     #若是init操作符，则需要向out结构体中添加init。若有重名，则使用init1（依此递增）
     symbol = thisEnv.getSymbol(op_kind_id)
+    initName=""
     p[0] = lex_value("Tempo_expr")
     if len(p)==4:
-        if symbol.IsInit==False:
-            symbol.InitName=getName("init")
-            symbol.IsInit=True
-        p[0].objects.append(lex_value('(outC-> %s )'%symbol.InitName,'(outC-> %s )'%symbol.InitName,"str"))
-        p[0].objects.append(lex_value("?","?","str"))
-        p[0].objects.extend(p[1].objects)
-        p[0].objects.append(lex_value(":",":","str"))
-        p[0].objects.extend(p[3].objects)
+        if symbol.InitName=="":
+            initName=getName("init")
+            symbol.InitName=initName
+            initSymbol=Symbol(initName,"Init","bool")
+            initSymbol.IsReturn=True
+            thisEnv.setSymbol(initName,initSymbol)
+            symbol.Returns.append(initName)
+        # p[0].objects.append(lex_value('lv6id',initName,'bool'))
+        # p[0].objects.append(lex_value("?","?","str"))
+        initElem=getName("initElem")
+        initClass=InitClass(initElem)
+        initClass.myList.append(p[1].objects)
+        initClass.myList.append(p[3].objects)
+        symbol.initDict[initElem]=initClass
+        p[0].objects.append(lex_value("initElem", initElem))
     elif len(p)==3:
         #若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre
         #则此时只需要输出上一个周期的值。可能出现pre(2)
         #向symbolTable添加一个字典，保存pre对应的值，还有fby对应的值
         preName=getPreName()
-        preType=""
-        for elem in p[2].objects:
-            if elem.strs=="lv6id":
-                preType=thisEnv.getSymbol(elem.value).Type
-                break
         symbol.Returns.append(preName)
-        preSymbol=Symbol(preName,"Pre",preType)
+        preSymbol=Symbol(preName,"Pre","")
+        preSymbol.IsReturn=True
         preSymbol.Code.extend(p[2].objects)
         thisEnv.setSymbol(preName,preSymbol)
-        symbol.preList[preName]=preSymbol
-        p[0].objects.append(lex_value("Pre",preName))
+        symbol.preList.append(preName)
+        p[0].objects.append(lex_value("lv6id",preName,""))
     elif len(p)==9:
         #若是fby操作符，首先在outC结构体中添加一个idx和数组
         #fby(input1;cycle;input2) cycle必须是静态表达式
-        if symbol.IsInit==False:
-            symbol.InitName=getName("init")
+        if symbol.InitName=="":
+            initName=getName("init")
+            symbol.InitName=initName
             symbol.IsInit=True
-
+            initSymbol=Symbol(initName,"Init","bool")
+            initSymbol.IsReturn=True
+            thisEnv.setSymbol(initName,initSymbol)
+            symbol.Returns.append(initName)
         fbyIdx=getName("fbyIdx")
         fbyArr=getName("fbyArray")
-        p[0].objects.append(lex_value("%s[%s]"%(fbyArr,fbyIdx),"%s[%s]"%(fbyArr,fbyIdx),"str"))
 
-        idxLex=lex_value("fbyIdx",fbyIdx,"int32")
-        idxLex.objects.extend(p[5].objects)
-        type=getTypefromObjects(p[3].objects)
+        type=getTypefromObjects(p[5].objects)
         if type=="":
-            type=getTypefromObjects(p[7].objects)
-        arrayLex=lex_value("fbyArray",fbyArr,type)
-        fbyClass=FbyClass(idxLex,arrayLex)
+            type="int32"
+        fbyIdxSymbol=Symbol(fbyIdx,"FbyIdx",type)
+        fbyIdxSymbol.IsReturn=True
+        fbyArrSymbol=Symbol(fbyArr,"FbyArr")
+        fbyArrSymbol.IsReturn=True
+        fbyArrSymbol.IsArray=True
+        thisEnv.setSymbol(fbyIdx,fbyIdxSymbol)
+        thisEnv.setSymbol(fbyArr,fbyArrSymbol)
+        fbyIdxSymbol.Code.extend(p[5].objects)
+        print("setObjects",type)
+        setObjectsType(fbyIdxSymbol.Code,type)
+        fbyClass=FbyClass(fbyIdx,fbyArr)
         fbyClass.first.extend(p[3].objects)
         fbyClass.last.extend(p[7].objects)
         symbol.fbyList.append(fbyClass)
+        symbol.Returns.append(fbyIdx)
+        symbol.Returns.append(fbyArr)
+
+        p[0].objects.append(lex_value("lv6id",fbyArr,""))
+        p[0].objects.append(lex_value("[","[","str"))
+        p[0].objects.append(lex_value("lv6id",fbyIdx,"int32"))
+        p[0].objects.append(lex_value("]","]","str"))
 
 
 def p_arith_expr(p):
@@ -658,7 +733,7 @@ def type_change(type):
     return str
 
 def type_initial(type,value):
-    print("type_initial ",type,value)
+    # print("type_initial ",type,value)
     content=""
     if type=="bool":
         content+="kcg_"+value

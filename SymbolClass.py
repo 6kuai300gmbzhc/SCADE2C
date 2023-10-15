@@ -6,11 +6,17 @@ class FbyClass:
         self.Array=array
         self.first=list()
         self.last=list()
+class InitClass:
+    def __init__(self,init):
+        self.Init=init
+        self.myList = list()
+        self.firstStr = ""
+        self.secondStr = ""
 class Symbol:
-    def __init__(self, Name=None, Kind=None, Type=None,Public=True,External=False,isPackage=False,PackageName='') -> None:
+    def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='') -> None:
         self.Name = Name  # 标识符的名字
         self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点或函数(OpKind) 包(Package)
-                          # Sensor Pre
+                          # Sensor Pre Init
 
         self.Type = Type  # Type类型(int , float)
         self.Public=Public
@@ -21,17 +27,17 @@ class Symbol:
 
         # self.VarType = VarType             #常量、变量等类型标识符的数据类型
         # self.TypeType = TypeType           #类型定义的基本类型，或者Struct、Enum
-        # self.IsArray = IsArray
+        self.IsArray = False
         # self.Size = Size                   #数组类型的大小
         # self.Clock = Clock                 #变量的时钟
 
         self.IsInput=False
         self.IsReturn = False
 
-        self.IsInit=False
         self.InitName=""
 
-        self.preList=dict()
+        self.initDict=dict()
+        self.preList=list()
         self.fbyList=list()
 
         self.Value = None  # 常量、变量等的值
@@ -45,6 +51,11 @@ class Symbol:
         self.StaticArgs = list()
         self.Code = list()  # 函数标识符的代码
 
+    def changeName(self):
+        if self.IsInput==True:
+            return "inC->"+self.Name
+        elif self.IsReturn==True:
+            return "outC->"+self.Name
     #为类指定输出格式
     def __repr__(self) -> str:
         strs = '#' + self.Name + '(' + self.Kind + ')'
