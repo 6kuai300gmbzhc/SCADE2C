@@ -80,7 +80,11 @@ def getName(initStr):
         target=initStr
         if i!=0:
             target+=str(i)
-        if target in symbol.Params or target in symbol.Returns or target in symbol.StaticParams:
+        # if target in symbol.Params or target in symbol.Returns or target in symbol.StaticParams:
+        #     continue
+        # else:
+        #     return target
+        if target in thisEnv.SymbolTable:
             continue
         else:
             return target
@@ -602,7 +606,8 @@ def p_expr(p):
     | Atom
     | Tempo_expr
     | Arith_expr
-    | List_expr'''
+    | List_expr
+    | Switch_expr'''
     # p[0]=lex_value("Expr")
     # if p[1].strs=="Id_expr" or p[1].strs=='Arith_expr':
     #     p[0].objects.extend(p[1].objects)
@@ -686,6 +691,12 @@ def p_tempo_expr(p):
         p[0].objects.append(lex_value("[","[","str"))
         p[0].objects.append(lex_value("lv6id",fbyIdx,"int32"))
         p[0].objects.append(lex_value("]","]","str"))
+
+#往符号表添加一个局部变量存储if表达式的结果。if (boolExpr){ localVar=Expr1;}else{ localVar=Expr2;}
+def p_switch_expr(p):
+    '''Switch_expr : IF Expr THEN Expr ELSE Expr'''
+
+    pass
 
 
 def p_arith_expr(p):

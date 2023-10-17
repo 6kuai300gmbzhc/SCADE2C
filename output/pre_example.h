@@ -9,7 +9,7 @@ kcg_int32 input2;
 
 
 typedef struct {
-kcg_ mem_pre;
+kcg_int32 mem_pre;
 kcg_bool init;
 kcg_int32 output1;
 kcg_int32 output2;

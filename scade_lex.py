@@ -400,10 +400,10 @@ lexer = lex.lex()
 
 if __name__ == '__main__':
     data = '''
-        strs=str("node fby_operator(input1,input2:int8) returns(output1,output2:int8)\
-let \
-output2=fby(input1+2;6;input2+2)+2;\
-output1=output2+2;\
+        strs=str("node fby_operator(input1,input2:int8;tmp,tmp2,tmp3:bool) returns(output1,output2:int8)\
+let\
+output2=1->fby(input1+2;4;input2+2);\
+output1=if (if tmp then true else false) then input1+1 else input2+3;\ 
 tel")
     '''
     toks = get_tokens(data)

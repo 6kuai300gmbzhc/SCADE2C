@@ -39,10 +39,15 @@ outC->idx=(outC->idx+1)%3;
 #添加type_block
 #_L52= ( map Derivate <<3>>)(_L1);  (pilot的第426行)
 
+node fby_operator(input1,input2:int8;tmp:bool) returns(output1,output2:int8)
+let
+output2=1->fby(input1+2;4;input2+2);
+output1=if tmp then input1+1 else input2+3;
+tel
 node fby_operator(input1,input2:int8;tmp,tmp2,tmp3:bool) returns(output1,output2:int8)
 let
 output2=1->fby(input1+2;4;input2+2);
-output1=if (if tmp then tmp2 else tmp3) then input1+1 else input2+2;
+output1=if (if tmp then true else false) then input1+1 else input2+3;
 tel
 创建一个临时变量tmp1,tmp必须是bool类型
 if(inC->tmp)
@@ -59,3 +64,38 @@ output1=input1+1;
 {
 output1=input2+2;
 }
+
+node expression_list(input1:bool;input2,input3:int) returns(output1,output2,output3:int)
+let
+    output1,output2=if input1 then (input2+1,1->(input2+2)) else (input3+2,input3+1);
+    output3=1->(if input1 then input2 else input3);
+tel
+
+
+
+type_block
+type public imported tblock1;
+type tblock2=int8;
+type tblock3=enum{Blue,Red,Yellow};
+type imported tblock4 is integer;
+type tblock5 = bool ^ 3;
+type imported tblock6=bool ^ 3;
+type tblock7={id1:bool,id2:int64};
+type imported tblock8;
+
+const_block
+const imported cblock1:int32;
+const cblock2:bool ^ 2;
+const cblock3:int32=5*2;
+const cblock4:int32^3=[1,2,3];
+
+Sensor block
+sensor sblock1:float32;
+sensor sblock2:int32^2^3;
+sensor sblock3:P1::t1;
+sensor sblock4:tblock2;
+
+
+sensor_block
+
+
