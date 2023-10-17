@@ -7,6 +7,8 @@ class lex_value:
         self.value = value
         self.type = Type
         self.objects = list()
+        self.initObjects=list()
+        self.afterObjects=list()
         # self.values1 = list()
  
     def __repr__(self) -> str:

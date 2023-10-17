@@ -1,17 +1,5 @@
 # 1.使用一个符号表存储变量、函数、类型
 # 2.使用符号表树实现作用域
-class FbyClass:
-    def __init__(self,idx=None,array=None):
-        self.Idx=idx
-        self.Array=array
-        self.first=list()
-        self.last=list()
-class InitClass:
-    def __init__(self,init):
-        self.Init=init
-        self.myList = list()
-        self.firstStr = ""
-        self.secondStr = ""
 class Symbol:
     def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='') -> None:
         self.Name = Name  # 标识符的名字
@@ -35,10 +23,6 @@ class Symbol:
         self.IsReturn = False
 
         self.InitName=""
-
-        self.initDict=dict()
-        self.preList=list()
-        self.fbyList=list()
 
         self.Value = None  # 常量、变量等的值
 
