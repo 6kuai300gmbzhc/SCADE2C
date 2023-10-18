@@ -48,20 +48,20 @@ def generate_head_file():
 
 def generate_c_file(body):
     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
-    c_content="#include \"kcg_consts.h\"\n#include \"kcg_sensors.h\"\n"
-    name=op_kind_symbol.Name
-    c_content+="#include \"%s.h\"\n" % name
-    c_content+="void %s(inC_%s *inC, outC_%s *outC)\n{\n" % (name,name,name)
-    c_content+=body
-    c_content+="\n}\n"
+    c_content = "#include \"kcg_consts.h\"\n#include \"kcg_sensors.h\"\n"
+    name = op_kind_symbol.Name
+    c_content += "#include \"%s.h\"\n" % name
+    c_content += "void %s(inC_%s *inC, outC_%s *outC)\n{\n" % (name,name,name)
+    c_content += body
+    c_content += "\n}\n"
 
     c_content += "void %s_init(outC_%s *outC)\n{\n" % (name,name)
     for para in op_kind_symbol.Returns:
-        symbol=thisEnv.getSymbol(para)
+        symbol = thisEnv.getSymbol(para)
         if symbol.IsArray==False:
-            c_content+="outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para)))
+            c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para)))
     for elem in op_kind_symbol.fbyList:
-        c_content+="for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.Idx).Code),thisEnv.getSymbol(elem.Array).changeName(),getParamsInitValue(thisEnv.getSymbol(elem.Array)))
+        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(),getParamsInitValue(thisEnv.getSymbol(elem.fbyArr)))
     c_content += "}\n"
 
     c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name,name)
@@ -69,7 +69,7 @@ def generate_c_file(body):
         if para.Kind=="Pre":
             c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name)))
     c_content += "}\n"
-    filename="./output/%s.c" %(name)
+    filename = "./output/%s.c" %(name)
     print(c_content)
     with open(filename,'w') as f:
         f.write(c_content)
@@ -106,7 +106,6 @@ def getParamsInitValue(symbol):
     elif symbol.Type=="bool":
         return "kcg_true"
 def type_initial(type,value):
-    print("type_initial ",type,value)
     content=""
     if type=="bool":
         content+="kcg_"+value
@@ -121,7 +120,6 @@ def objectsToString(objects,num=0):
     # print("objectsToString")
     op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     for elem in objects:
-        # print(elem.strs,elem.value)
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
             # type=symbol.Type
@@ -138,7 +136,6 @@ def objectsToString(objects,num=0):
 def getTypefromObjects(objects):
     type=""
     for obj in objects:
-        # print(obj.strs,obj.value)
         if obj.strs=='lv6id':
             symbol=thisEnv.getSymbol(obj.value)
             type=symbol.Type
@@ -246,6 +243,9 @@ def p_opt_body(p):
             for elem in p[2].objects:
                 symbol=thisEnv.getSymbol(elem.value)
                 p[0].value+="kcg_%s %s;\n"%(symbol.Type,symbol.Name)
+        for elem in thisEnv.SymbolTable.values():
+            if elem.Kind=="TmpVar":
+                p[0].value+="kcg_%s %s;\n"%(elem.Type,elem.Name)
         if len(p)==3:
             p[0].value+=p[1].value
         else:
@@ -267,8 +267,6 @@ def p_local_block_zero_or_one(p):
 def p_local_block(p):
     '''Local_block : VAR Local_block_1'''
     p[0]=p[2]
-    for elem in p[2].objects:
-        print(elem.value)
 
 def p_local_block_1(p):
     '''Local_block_1 : Var_decls SEMICOLON Local_block_1
@@ -299,15 +297,16 @@ def p_simple_equation(p):
     type=getTypefromObjects(p[1].objects)
 
     # print("type=",type)
-    print("setObjectsType3")
     setObjectsType(p[1].objects,type)
     setObjectsType(p[3].objects,type)
     setObjectsType(p[1].initObjects,type)
     setObjectsType(p[3].initObjects,type)
+    setObjectsType(p[1].afterObjects,type)
+    setObjectsType(p[1].afterObjects,type)
 
     p[0].value=objectsToString(p[3].initObjects);
     #查找是否存在->符号。 一个node最后只写一个if(out->Init){处理fby和init内容}
-    p[0].value+="%s %s %s;"%(objectsToString(p[1].objects),p[2].value,objectsToString(p[3].objects))
+    p[0].value+="%s %s %s;\n"%(objectsToString(p[1].objects),p[2].value,objectsToString(p[3].objects))
 
     p[0].value+=objectsToString(p[3].afterObjects)
 
@@ -390,11 +389,9 @@ def p_var_decls(p):
     p[0]=lex_value('Var_decls')
     symbol=thisEnv.getSymbol(p[1].value)
     symbol.Type=p[4].value
-    print("p_var_decls", symbol.Name, symbol.Type)
     for i in range(len(p[2].objects)):
         symbol=thisEnv.getSymbol(p[2].objects[i].value)
         symbol.Type=p[4].value
-        print("p_var_decls",symbol.Name, symbol.Type)
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
 
@@ -577,10 +574,10 @@ def p_expr(p):
 def p_tempo_expr(p):
     '''Tempo_expr : Expr ARROW Expr
     | PRE Expr
-    | FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE'''
+    | FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE
+    | Expr TIMES Expr'''
     #若是init操作符，则需要向out结构体中添加init。若有重名，则使用init1（依此递增）
     symbol = thisEnv.getSymbol(op_kind_id)
-    initName=""
     p[0] = lex_value("Tempo_expr")
     if len(p)==4:
         if symbol.InitName=="":
@@ -592,9 +589,10 @@ def p_tempo_expr(p):
             symbol.Returns.append(initName)
         # p[0].objects.append(lex_value('lv6id',initName,'bool'))
         # p[0].objects.append(lex_value("?","?","str"))
+        initName=symbol.InitName
         initElem=getName("initElem")
         initLex=lex_value("initElem",initElem)
-        thisEnv.setSymbol(initElem,Symbol(initElem,"LocalVar"))
+        thisEnv.setSymbol(initElem,Symbol(initElem,"TmpVar"))
         p[0].initObjects.extend(p[1].initObjects)
         p[0].initObjects.extend(p[3].initObjects)
         p[0].initObjects.extend([lex_value("if(","if(","str"),lex_value("lv6id",initName),lex_value("){\n","){\n")])
@@ -603,10 +601,12 @@ def p_tempo_expr(p):
         p[0].initObjects.append(lex_value("",";\n}else{\n"))
         p[0].initObjects.extend([lex_value("lv6id",initElem),lex_value("=","=")])
         p[0].initObjects.extend(p[3].objects)
-        p[0].initObjects.append(lex_value(";\n}",";\n}"))
+        p[0].initObjects.append(lex_value(";\n}\n",";\n}\n"))
         p[0].objects.append(initLex)
         p[0].afterObjects.extend(p[1].afterObjects)
         p[0].afterObjects.extend(p[3].afterObjects)
+        # for elem in p[0].initObjects:
+        #     print("elem=",elem)
     elif len(p)==3:
         #若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre
         #则此时只需要输出上一个周期的值。可能出现pre(2)
@@ -650,22 +650,27 @@ def p_tempo_expr(p):
         setObjectsType(fbyIdxSymbol.Code,type)
         symbol.Returns.append(fbyIdx)
         symbol.Returns.append(fbyArr)
+        symbol.fbyList.append(fbyClass(fbyIdx,fbyArr))
 
         p[0].objects.append(lex_value("lv6id",fbyArr,""))
         p[0].objects.append(lex_value("[","[","str"))
         p[0].objects.append(lex_value("lv6id",fbyIdx,"int32"))
         p[0].objects.append(lex_value("]","]","str"))
-        p[0].initObjects.extend([p[3].initObjects,p[5].initObjects,p[7].initObjects])
+        p[0].initObjects += p[3].initObjects+p[5].initObjects+p[7].initObjects
         p[0].initObjects.extend([lex_value("","if("),lex_value("lv6id",thisEnv.getSymbol(op_kind_id).InitName),lex_value(")\n{",")\n{")])
+        p[0].initObjects.append(lex_value("","for(int idx=0;idx<%s;idx++){\n"%objectsToString(p[5].objects)))
         p[0].initObjects.extend([lex_value("lv6id",fbyArr),lex_value("","["),lex_value("lv6id",fbyIdx),lex_value("","]=")])
         p[0].initObjects.extend(p[7].objects)
         p[0].initObjects.append(lex_value("",";\n}\n}"))
-        p[0].afterObjects+=p[3].afterObjects+p[5].afterObjects+p[7].afterObjects
+        p[0].afterObjects += p[3].afterObjects+p[5].afterObjects+p[7].afterObjects
         p[0].afterObjects.extend([lex_value("lv6id",fbyArr),lex_value("","["),lex_value("lv6id",fbyIdx),lex_value("","]=")])
         p[0].afterObjects.extend(p[3].objects)
+        p[0].afterObjects.append(lex_value("",";\n"))
         p[0].afterObjects.extend([lex_value("lv6id",fbyIdx),lex_value("","=("),lex_value("lv6id",fbyIdx),lex_value("","+1)%(")])
         p[0].afterObjects.extend(p[5].objects)
-        p[0].afterObjects.extend(lex_value("",");\n"))
+        p[0].afterObjects.append(lex_value("",");\n"))
+        # for elem in p[0].initObjects:
+        #     print("fby",elem)
 
 
 
@@ -675,7 +680,24 @@ def p_tempo_expr(p):
 #往符号表添加一个局部变量存储if表达式的结果。if (boolExpr){ localVar=Expr1;}else{ localVar=Expr2;}
 def p_switch_expr(p):
     '''Switch_expr : IF Expr THEN Expr ELSE Expr'''
+    p[0] = lex_value("Switch_expr")
+    p[0].initObjects += p[2].initObjects+p[4].initObjects+p[6].initObjects
+    ifTmp = getName("ifTmp")
+    ifSymbol = Symbol(ifTmp,"TmpVar")
+    thisEnv.setSymbol(ifTmp,ifSymbol)
+    p[0].initObjects.append(lex_value("","if("))
+    p[0].initObjects.extend(p[2].objects)
+    p[0].initObjects.extend([lex_value("","){\n"),lex_value("lv6id",ifTmp),lex_value("","=")])
+    p[0].initObjects.extend(p[4].objects)
+    p[0].initObjects.append(lex_value("",";\n}else{\n"))
+    p[0].initObjects.append(lex_value("lv6id",ifTmp))
+    p[0].initObjects.append(lex_value("","="))
+    p[0].initObjects.extend(p[6].objects)
+    p[0].initObjects.append(lex_value("",";\n}\n"))
 
+    p[0].objects.append(lex_value("lv6id",ifTmp))
+
+    p[0].afterObjects += p[2].afterObjects+p[4].afterObjects+p[6].afterObjects
     pass
 
 
@@ -734,6 +756,7 @@ def p_bin_arith_op(p):
     | LSL
     | LSR'''
     p[0]=p[1]
+    #当操作符是除了+-*/以外的，需要转化成C对应的操作符
 
 #not finish
 def p_atom(p):

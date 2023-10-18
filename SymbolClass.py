@@ -1,17 +1,21 @@
 # 1.使用一个符号表存储变量、函数、类型
 # 2.使用符号表树实现作用域
+class fbyClass:
+    def __init__(self, idx='', arr=''):
+        self.fbyIdx = idx
+        self.fbyArr = arr
 class Symbol:
     def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='') -> None:
         self.Name = Name  # 标识符的名字
         self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点或函数(OpKind) 包(Package)
-                          # Sensor Pre Init LocalVar
+                          # Sensor Pre Init LocalVar(在local_block中定义的变量) TmpVar(if和init操作符使用的局部变量)
 
         self.Type = Type  # Type类型(int , float)
-        self.Public=Public
-        self.External=External
+        self.Public = Public
+        self.External = External
 
-        self.IsPackage=isPackage
-        self.PackageName=PackageName
+        self.IsPackage = isPackage
+        self.PackageName = PackageName
 
         # self.VarType = VarType             #常量、变量等类型标识符的数据类型
         # self.TypeType = TypeType           #类型定义的基本类型，或者Struct、Enum
@@ -19,12 +23,14 @@ class Symbol:
         # self.Size = Size                   #数组类型的大小
         # self.Clock = Clock                 #变量的时钟
 
-        self.IsInput=False
+        self.IsInput = False
         self.IsReturn = False
 
-        self.InitName=""
+        self.InitName = ""
 
         self.Value = None  # 常量、变量等的值
+
+        self.fbyList = list()
 
         self.FieldList = dict()  # 结构体变量的成员-类型和枚举变量的名字-整数值
         self.FieldValueList = dict()  # 结构体变量的成员-默认值

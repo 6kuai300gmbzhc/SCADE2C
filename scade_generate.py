@@ -51,21 +51,15 @@ if __name__=='__main__':
     #     sensor tmp,tmp2:int32;\
     #     tmp3:bool;")
     # strs = str("node init_operator(input1:int8) returns(output1:int8) output1=0->input1;")
-    strs=str("node pre_example(input1,input2:int32) returns (output1,output2 : int32)\
-let\
-    output2=input1+input2;\
-	output1=1-> (pre input1);\
-tel")
-#     strs=str("node local_block_operator(input1:int8;input2:bool) returns(output1:int8;output2:bool)\
-# var\
-# 	tmp1:bool;\
-# 	tmp2:int8;\
+#     strs=str("node pre_example(input1,input2:int32) returns (output1,output2 : int32)\
 # let\
-# 	tmp1=input2;\
-# 	tmp2=input1+1;\
-# 	output2=tmp1;\
-# 	output1=input1+tmp2+2;\
+#     output2=input1+input2;\
+# 	output1=1-> (pre input1);\
 # tel")
+    strs=str("node fby_operator(input1,input2:int8;tmp:bool) returns(output1,output2:int8)\
+let \
+output1= 1->(if tmp then input1 else input2);\
+tel")
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)
     gen.gen_const_file()
