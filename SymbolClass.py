@@ -20,7 +20,7 @@ class Symbol:
         # self.VarType = VarType             #常量、变量等类型标识符的数据类型
         # self.TypeType = TypeType           #类型定义的基本类型，或者Struct、Enum
         self.IsArray = False
-        # self.Size = Size                   #数组类型的大小
+        self.Size = 0                        #数组类型的大小
         # self.Clock = Clock                 #变量的时钟
 
         self.IsInput = False

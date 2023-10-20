@@ -125,7 +125,9 @@ def objectsToString(objects,num=0):
             # type=symbol.Type
             sstr+=symbol.changeName()
         elif elem.strs=='intconst':
-            sstr+="kcg_lit_%s(%s)" % (elem.type,str(elem.value))
+            sstr += "kcg_lit_%s(%s)" % (elem.type,str(elem.value))
+        elif elem.strs=='lnot_lv6id':
+            sstr += "kcg_knot_%s" % elem.type
         # elif elem.strs=='Pre':
         #     symbol=thisEnv.getSymbol(elem.value)
         #     symbol.Type=type
@@ -151,6 +153,11 @@ def setObjectsType(objects,type):
         else:
             if symbol.Type=='':
                 symbol.Type=type
+
+def exprToNum(objects):
+    #逆波兰表达式得到值
+    num=0
+    return num
 
 def p_program(p):
     'Program : Decls_zero_or_mode'
@@ -527,10 +534,12 @@ def p_id_one_or_more_with_comma_1(p):
 #not finish
 def p_type_expr(p):
     '''Type_expr : BOOL
+    | SIGNED LSHIFT Expr RSHIFT
     | INT8
     | INT16
     | INT32
     | INT64
+    | UNSIGNED LSHIFT Expr RSHIFT
     | UINT8
     | UINT16
     | UINT32
@@ -539,7 +548,19 @@ def p_type_expr(p):
     | FLOAT64
     | CHAR'''
     p[0]=lex_value('Type_expr')
-    p[0].value=p[1].value
+    if len(p)==2:
+        p[0].value=p[1].value
+    else:
+        #需要计算出Expr表达式代表的值，Expr可能是静态数组，结构体。
+        #若是整数或者常量，直接获取其值
+        #若是arithmetic，则需计算出其值
+        num=exprToNum(p[3].objects)
+        if p[1].strs=='signed':
+            type="int"+str(num)
+        elif p[1].strs=='unsigned':
+            type="uint"+str(num)
+        p[0].value=type
+        pass
 
 def p_path_id(p):
     'Path_id : LV6ID'
@@ -560,6 +581,7 @@ def p_expr(p):
     | Atom
     | Tempo_expr
     | Arith_expr
+    | Relation_expr
     | List_expr
     | Switch_expr'''
     # p[0]=lex_value("Expr")
@@ -672,9 +694,29 @@ def p_tempo_expr(p):
         # for elem in p[0].initObjects:
         #     print("fby",elem)
 
+def p_relation_expr(p):
+    '''Relation_expr : Expr Bin_relation_op Expr'''
+    p[0]=lex_value("Relation_expr")
+    p[0].initObjects.extend(p[1].initObjects)
+    p[0].initObjects.extend(p[3].initObjects)
 
+    p[0].objects.extend(p[1].objects)
+    p[0].objects.append(p[2])
+    p[0].objects.extend(p[3].objects)
 
+    p[0].afterObjects.extend(p[1].afterObjects)
+    p[0].afterObjects.extend(p[3].afterObjects)
 
+def p_bin_relation_op(p):
+    '''Bin_relation_op : EQU
+    | NOEQU
+    | LESS
+    | GREATER
+    | LESSEQU
+    | GREATEREQU'''
+    p[0]=p[1]
+    if p[1].strs=='NOEQU':
+        p[1].value='!='
 
 
 #往符号表添加一个局部变量存储if表达式的结果。if (boolExpr){ localVar=Expr1;}else{ localVar=Expr2;}
@@ -702,7 +744,8 @@ def p_switch_expr(p):
 
 
 def p_arith_expr(p):
-    '''Arith_expr : Expr Bin_arith_op Expr'''
+    '''Arith_expr : Unary_arith_op Expr
+    | Expr Bin_arith_op Expr'''
     p[0]=lex_value("Arith_expr")
     if len(p)==4:
         p[0].objects.extend(p[1].objects)
@@ -712,6 +755,17 @@ def p_arith_expr(p):
         p[0].initObjects.extend(p[3].initObjects)
         p[0].afterObjects.extend(p[1].afterObjects)
         p[0].afterObjects.extend(p[3].afterObjects)
+    elif len(p)==3:
+        p[0].initObjects.extend(p[2].initObjects)
+        if p[1].strs=='-':
+            p[0].objects.extend(p[1])
+        elif p[1].strs=='lnot':
+            #新增一个变量，将其strs设置为lnot_lv6id。当遍历到这个变量时，将其转化为kcg_lnot_type
+            p[0].objects.extend([lex_value("lnot_lv6id"),lex_value("(","(")])
+            p[0].objects.extend(p[2].objects)
+            p[0].objects.append(lex_value(")",")"))
+        p[0].afterObjects.extend(p[2].afterObjects)
+
 
 def p_list_expr(p):
     '''List_expr : LPARENTHESE List RPARENTHESE'''
@@ -744,6 +798,12 @@ def p_list_2(p):
     if len(p)==2:
         p[0]=p[1]
 
+def p_unary_arith_op(p):
+    '''Unary_arith_op : MINUS
+    | PLUS
+    | LNOT'''
+    p[0]=p[1]
+
 def p_bin_arith_op(p):
     '''Bin_arith_op : PLUS
     | MINUS
@@ -757,6 +817,18 @@ def p_bin_arith_op(p):
     | LSR'''
     p[0]=p[1]
     #当操作符是除了+-*/以外的，需要转化成C对应的操作符
+    if p[1].strs=='MOD':
+        p[0].value='%'
+    elif p[1].strs=='LAND':
+        p[0].value='&'
+    elif p[1].strs=='LOR':
+        p[0].value='|'
+    elif p[1].strs=='LXOR':
+        p[0].value='^'
+    elif p[1].strs=='LSL':
+        p[0].value='<<'
+    elif p[1].strs=='LSR':
+        p[0].value='>>'
 
 #not finish
 def p_atom(p):

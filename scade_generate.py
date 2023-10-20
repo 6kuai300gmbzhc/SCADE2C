@@ -56,10 +56,15 @@ if __name__=='__main__':
 #     output2=input1+input2;\
 # 	output1=1-> (pre input1);\
 # tel")
-    strs=str("node fby_operator(input1,input2:int8;tmp:bool) returns(output1,output2:int8)\
-let \
-output1= 1->(if tmp then input1 else input2);\
-tel")
+#     strs=str("node fby_operator(input1,input2:int8;tmp:bool) returns(output1,output2:int8)\
+# let \
+# output1= 1->(if tmp then input1 else input2);\
+# tel")
+    strs=str("node lnot_test(input1:unsigned<<2+8>>) returns(output1:uint8)\
+     let \
+    output1=lnot input1;\
+             tel\
+     ")
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)
     gen.gen_const_file()

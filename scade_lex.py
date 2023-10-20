@@ -401,12 +401,10 @@ class scade_lex:
 lexer = lex.lex()
 
 if __name__ == '__main__':
-    data = '''
-        strs=str("node fby_operator(input1,input2:int8;tmp,tmp2,tmp3:bool) returns(output1,output2:int8)\
-let\
-output2=1->fby(input1+0b0001;4;input2+2);\
-output1=if (if tmp then true else false) then input1+1 else input2+3;\ 
-tel")
+    data = ''' node lnot_test(input1,input2:int8;) returns(output1:uint8)\
+     let \
+    output1=if input1 <>s input2 them input1 else input2;\
+             tel\
     '''
     toks = get_tokens(data)
     for tok in toks:
