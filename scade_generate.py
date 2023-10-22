@@ -1,7 +1,7 @@
 import os
 import copy
 import scade_compile
-from scade_compile import type_change,type_initial
+from scade_compile import type_change,type_initial,objectsToString,getArrSize
 
 class Scade_generate:
     def __init__(self,program=None,symboltable=None,ctx_table=None):
@@ -18,11 +18,12 @@ class Scade_generate:
         for k,v in self.symboltable.SymbolTable.items():
             if v.Kind=="Const":
                 if v.External==True:
-                    content+="extern const "+type_change(v.Type)+" "+k+";"+"\n"
+                    content+="extern const %s %s%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize))
                 else:
-                    content+="#define "+k+" ("+type_initial(v.Type,v.Value)+")"
-                    content+="\n"
+                    content+="const %s %s=%s;\n"%(type_change(v.Type),k,objectsToString(v.Code))
         content+="\n\n#endif"
+        print("====const")
+        print(content)
         with open('./output/kcg_const.h','w') as f:
             f.write(content)
 
@@ -30,14 +31,27 @@ class Scade_generate:
         content="#ifndef _KCG_SENSORS_H_\n#define _KCG_SENSORS_H_\n#include \"kcg_types.h\"\n\n"
         for k, v in self.symboltable.SymbolTable.items():
             if v.Kind=="Sensor":
-                content+="extern "+type_change(v.Type)+" "+k+";\n"
+                content+="extern %s %s%s;\n"%(type_change(v.Type),k,getArrSize(v.Code))
         content+="\n#endif"
+        print("====sensor")
+        print(content)
         with open('./output/kcg_sensors.h','w') as f:
             f.write(content)
 
     def gen_types_file(self):
         file=open('source_program/types.txt','r')
         content=file.read()
+        content+="\n"
+        typeContent=""
+        for k,v in self.symboltable.SymbolTable.items():
+            if v.Kind=="Type":
+                if len(v.Code)==0: #不是数组
+                    typeContent+="typedef %s %s;\n"%(type_change(v.Type),v.changeName())
+                else:
+                    typeContent+="typedef %s %s%s;\n"%(type_change(v.Type),v.changeName(),getArrSize(v.Code))
+        content+=typeContent
+        print("====types_file")
+        print(typeContent)
         writeFile=open('output/kcg_types.h','w')
         writeFile.write(content)
 
@@ -46,7 +60,7 @@ if __name__=='__main__':
     print("main")
     # strs = str("const e:bool=true;\
     #     d:int32=0;\
-    #     imported c:int32;\
+    #     imported c:int32^2;\
     #     private imported f:int8;\
     #     sensor tmp,tmp2:int32;\
     #     tmp3:bool;")
@@ -55,16 +69,27 @@ if __name__=='__main__':
 # let\
 #     output2=input1+input2;\
 # 	output1=1-> (pre input1);\
-# tel")
+# tel")tet
 #     strs=str("node fby_operator(input1,input2:int8;tmp:bool) returns(output1,output2:int8)\
 # let \
 # output1= 1->(if tmp then input1 else input2);\
 # tel")
-    strs=str("node lnot_test(input1:unsigned<<2+8>>) returns(output1:uint8)\
-     let \
-    output1=lnot input1;\
-             tel\
-     ")
+    strs=str("type type1=float32^2;\
+type2=int32;\
+typ3=int8^(1+1)^3;\
+type6=int8^2^3^4;\
+const e : bool = true;\
+const d: int32 = 0;\
+const imported c: int32^2;\
+const private imported f: int8;\
+    sensor sensor1:float32;\
+    sensor2: float32 ^ 2;\
+node fby_operator(input1,input2:int8) returns(output1,output2:int8)\
+let \
+output2=1->fby(input1+2;6;input2+2);\
+output1=output2+2;\
+tel\
+")
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)
     gen.gen_const_file()

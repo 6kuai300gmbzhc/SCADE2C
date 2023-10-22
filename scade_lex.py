@@ -137,8 +137,9 @@ reserved = {
 }
 
 tokens = [
-    "INTCONST",  # ++
-    "REALCONST",  # ++
+    "INTEGERNUM",  # ++
+    "FLOATNUM",  # ++
+    "CHARACTER", #++
     "LV6ID",  # id
     "LV6IDREF",  # ++
     'LBRACKET',  # [
@@ -152,6 +153,7 @@ tokens = [
     'COMMA',  # ,
     'SEMICOLON',  # ;
     'COLON',  # :
+    'DOUBLECOLON', # ::
     'EQU',  # =
     'LESS',  # <
     'GREATER',  # >
@@ -171,9 +173,9 @@ tokens = [
     'TPOINT',  # ..
     'VERTICALBAR',  # |
     'SINGLEQUOTE',  # '
-    'AT',  # @
-    'INTEGERNUM'  # ++
+    'AT'  # @
 ] + list(reserved.values())
+
 
 t_BOOL = r'bool'
 t_REAL = r'real'
@@ -252,6 +254,7 @@ t_RBPARENTHESE = r'}'
 t_HASHTAG = r'\#'
 t_EQU = r'='
 t_COLON = r':'
+t_DOUBLECOLON = r'::'
 t_DIVIDE = r'/'
 t_SURPLUS = r'%'
 t_LESS = r'<'
@@ -325,21 +328,30 @@ t_SYNCHRO = r'synchro'
 t_DO = r'do'
 t_ELSIF = r'elsif'
 
-
-def t_REALCONST(t):
-    r'\d+\.\d+'
-    t.value = lex_value('realconst', float(t.value))
+def t_CHARACTER(t):
+    r"'[^']'"
+    t.value = lex_value('character', t.value)
     return t
 
-def t_INTCONST(t):
-    r'\d+'
-    t.value = lex_value('intconst', int(t.value))
+
+def t_FLOATNUM(t):
+    r'((\d+\.\d*)|(\.\d+))([eE][+-]?\d+)?'
+    t.value = lex_value('floatnum', float(t.value))
     return t
 
 def t_INTEGERNUM(t):
-    r'^(0b[01]+|0[0-7]+|\d+|0x[0-9a-fA-F]+)$'
-    t.value=lex_value('integernum',t.value)
+    r'(0x[0-9a-fA-F]+)|(0b[01]+)|(0[0-7]+)|0|([1-9][0-9]*)'
+    if len(t.value)>1 and t.value[1]=='x':
+        num=int(t.value,16)
+    elif len(t.value)>1 and t.value[1]=='b':
+        num=int(t.value,1)
+    elif t.value[0]=='0' and len(t.value)>1 :
+        num=int(t.value,8)
+    else:
+        num=int(t.value)
+    t.value = lex_value('integernum', t.value)
     return t
+
 
 def t_LV6ID(t):
     r'[a-zA-Z_][a-zA-Z0-9_]*'
@@ -401,11 +413,10 @@ class scade_lex:
 lexer = lex.lex()
 
 if __name__ == '__main__':
-    data = ''' node lnot_test(input1,input2:int8;) returns(output1:uint8)\
-     let \
-    output1=if input1 <>s input2 them input1 else input2;\
-             tel\
-    '''
+    data = '''node lnot_test(input1:char) returns(output1,output2:char)\
+let \
+	output2='a';\
+tel'''
     toks = get_tokens(data)
     for tok in toks:
         print(tok, tok.value.strs,tok.value.value,tok.value.type)

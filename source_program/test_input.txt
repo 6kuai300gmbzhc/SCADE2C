@@ -14,6 +14,12 @@ let
 	output1=1-> (pre input1+input2+3);
 tel
 
+node pre_if3(input1,input2:int8;tmp:bool) returns(output1,output2:int8)
+let
+	output1=if tmp then (1->input1) else input2;
+	output2=output1->(input1+5);
+tel
+
 node fby_operator(input1,input2:int8) returns(output1,output2:int8)
 let
 output2=1->fby(input1+2;6;input2+2);
@@ -36,7 +42,6 @@ outC->array[outC->idx]=input1;
 outC->idx=(outC->idx+1)%3;
 
 #添加switch_expr ^表示数组
-#添加type_block
 #_L52= ( map Derivate <<3>>)(_L1);  (pilot的第426行)
 
 node fby_operator(input1,input2:int8;tmp:bool) returns(output1,output2:int8)
@@ -84,6 +89,11 @@ type tblock7={id1:bool,id2:int64};
 type imported tblock8;
 
 const_block
+const e : bool = true;
+const d : int32 = 0;
+const imported c : int32;
+const tt : t = 0;
+const private imported f : int8;
 const imported cblock1:int32;
 const cblock2:bool ^ 2;
 const cblock3:int32=5*2;
@@ -95,7 +105,32 @@ sensor sblock2:int32^2^3;
 sensor sblock3:P1::t1;
 sensor sblock4:tblock2;
 
+type type1=float32^2;
+type2=int32;
+typ3=int8^(1+1)^3;
+type6=int8^arr_num^3^4;
 
-sensor_block
+
+#Id_expr里面的和name相关的未完成
+#Atom里面的type_integer未完成
+#Tempo_expr里面的times，when，merge未完成
+#Arith_expr里面的( Expr : Type_expr )未完成
+#Bool_expr，Array_expr,Struct_expr,Mixed_constructor,Apply_expr未完成
+#Switch_expr里面的case未完成
+
+
+type type1=float32^2;
+type2=int32;
+typ3=int8^(1+1)^3;
+type6=int8^2^3^4;
+const e : bool = true;
+const d: int32 = 0;
+const imported c: int32^2;
+const private imported f: int8;
+sensor sensor1:float32;
+sensor2: float32 ^ 2;
+node lnot_test(input1:unsigned<<8>>) returns(output1,output2:uint8)
+    output1=0->pre input1;
+
 
 

@@ -24,16 +24,14 @@ def generate_head_file():
     # print(len(op_kind_symbol.Params))
     for input_name in op_kind_symbol.Params:
         symbol=thisEnv.getSymbol(input_name)
-        print(symbol.Name,symbol.Kind,symbol.Type)
-        head_content+="kcg_"+symbol.Type+" "+input_name+";\n"
+        head_content+=type_change(symbol.Type)+" "+input_name+";\n"
     head_content+="} inC_"+name+";\n"
 
     #out_params
     head_content += "\n\ntypedef struct {\n"
     for output_name in op_kind_symbol.Returns:
         symbol=thisEnv.getSymbol(output_name)
-        print(symbol.Name, symbol.Kind, symbol.Type)
-        head_content += "kcg_" + symbol.Type + " " + output_name + ";"+"\n"
+        head_content += type_change(symbol.Type) + " " + output_name + ";"+"\n"
     head_content += "} outC_" + name + ";\n"
 
     #function
@@ -59,15 +57,15 @@ def generate_c_file(body):
     for para in op_kind_symbol.Returns:
         symbol = thisEnv.getSymbol(para)
         if symbol.IsArray==False:
-            c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para)))
+            c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para).Type))
     for elem in op_kind_symbol.fbyList:
-        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(),getParamsInitValue(thisEnv.getSymbol(elem.fbyArr)))
+        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(),getParamsInitValue(thisEnv.getSymbol(elem.fbyArr).Type))
     c_content += "}\n"
 
     c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name,name)
     for para in thisEnv.SymbolTable.values():
         if para.Kind=="Pre":
-            c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name)))
+            c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name)).Type)
     c_content += "}\n"
     filename = "./output/%s.c" %(name)
     print(c_content)
@@ -89,22 +87,19 @@ def getName(initStr):
         else:
             return target
     return initStr
-def getPreName():
-    symbol=thisEnv.getSymbol(op_kind_id)
-    preName="mem_pre"
-    idx=0
-    if idx!=0:
-        preName+=str(idx)
-    while preName in symbol.Returns:
-        preName="mem_"+preName
-    return preName
-def getParamsInitValue(symbol):
-    if symbol.Type in intArr:
-        return "kcg_lit_%s(0)" % symbol.Type
-    elif symbol.Type in floatArr:
-        return "kcg_lit_%s(0.0)" % symbol.Type
-    elif symbol.Type=="bool":
+def getParamsInitValue(type):
+    if type in intArr:
+        return "kcg_lit_%s(0)" % type
+    elif type in floatArr:
+        return "kcg_lit_%s(0.0)" % type
+    elif type=="bool":
         return "kcg_true"
+    else:
+        print("InitValue",type)
+        typeSymbol=thisEnv.getSymbol(type)
+        if typeSymbol!=None:
+            return getParamsInitValue(typeSymbol.Type)
+
 def type_initial(type,value):
     content=""
     if type=="bool":
@@ -117,17 +112,20 @@ def type_initial(type,value):
 def objectsToString(objects,num=0):
     # type=""
     sstr=""
-    # print("objectsToString")
     op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     for elem in objects:
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
             # type=symbol.Type
             sstr+=symbol.changeName()
-        elif elem.strs=='intconst':
+        elif elem.strs=='integernum':
             sstr += "kcg_lit_%s(%s)" % (elem.type,str(elem.value))
         elif elem.strs=='lnot_lv6id':
-            sstr += "kcg_knot_%s" % elem.type
+            sstr += "kcg_lnot_%s" % elem.type
+        elif elem.strs=='true':
+            sstr+="kcg_true"
+        elif elem.strs=='false':
+            sstr+="kcg_false"
         # elif elem.strs=='Pre':
         #     symbol=thisEnv.getSymbol(elem.value)
         #     symbol.Type=type
@@ -157,8 +155,25 @@ def setObjectsType(objects,type):
 def exprToNum(objects):
     #逆波兰表达式得到值
     num=0
+    for elem in objects:
+        if elem.strs=='lv6id':
+            symbol=thisEnv.getSymbol(elem.value)
+            print("symbol.Code=",symbol.Code)
+        print("exprToNum:",elem.strs,elem.value)
     return num
 
+def getArrSize(objects):
+    str=""
+    for elem in reversed(objects):
+        if len(elem) == 1:
+            if elem[0].strs == 'integernum':
+                str += "[%s]" % elem[0].value
+        else:
+            str += "["
+            for subElem in elem:
+                str += subElem.value
+            str += "]"
+    return str
 def p_program(p):
     'Program : Decls_zero_or_mode'
     # p[0]=p[1]
@@ -174,10 +189,58 @@ def p_decls_zero_or_mode(p):
 #not finish
 def p_decls(p):
     '''Decls : Const_block
+    | Type_block
     | Sensor_block
     | Package_decl
     | User_op_decl'''
     # p[0]=p[1]
+    pass
+def p_type_block(p):
+    'Type_block : TYPE Type_block_1'
+    pass
+
+def p_type_block_1(p):
+    '''Type_block_1 : Type_decl SEMICOLON Type_block_1
+                    | empty'''
+    pass
+
+def p_Type_decl(p):
+    'Type_decl : Interface_status LV6ID Type_decl_1 Type_decl_2'
+    external=True
+    public=True
+    if len(p[1].objects)==1:
+        external=False
+    if p[1].objects[0].value=="private":
+        public=False
+    typeSymbol=Symbol(p[2].value,"Type",public,external)
+    thisEnv.setSymbol(p[2].value,typeSymbol)
+    if p[3].strs=='Type_expr':
+        typeSymbol.Type=p[3].value
+        typeSymbol.Code.extend(p[3].objects)
+
+
+def p_Type_decl_1(p):
+    '''Type_decl_1 : EQU Type_def
+                    | empty'''
+    if len(p)==3:
+        p[0]=p[2]
+def p_type_decl_2(p):
+    '''Type_decl_2 : IS Numeric_kind
+                   | empty'''
+    pass
+
+def p_type_def(p):
+    '''Type_def : Type_expr
+                | ENUM LBPARENTHESE Id_one_or_more_with_comma RBPARENTHESE'''
+    if len(p)==2:
+        p[0]=p[1]
+
+def p_numeric_kind(p):
+    '''Numeric_kind : NUMERIC
+    | FLOAT
+    | INTEGER
+    | SIGNED
+    | UNSIGNED'''
     pass
 
 #将LV6ID写成Lv6id是为了提前知道包的名字
@@ -396,9 +459,11 @@ def p_var_decls(p):
     p[0]=lex_value('Var_decls')
     symbol=thisEnv.getSymbol(p[1].value)
     symbol.Type=p[4].value
+    symbol.Code.extend(p[4].objects)
     for i in range(len(p[2].objects)):
         symbol=thisEnv.getSymbol(p[2].objects[i].value)
         symbol.Type=p[4].value
+        symbol.Code.extend(p[4].value)
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
 
@@ -464,12 +529,15 @@ def p_const_decl(p):
         public=False
     if len(p)==7:
         symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
-        symbol.Value=objectsToString(p[6].objects)
+        type=p[4].value
+        symbol.arrSize.extend(p[4].objects)
+        setObjectsType(p[6].objects,type)
+        symbol.Code=p[6].objects
         thisEnv.setSymbol(p[2].value,symbol)
     elif len(p)==5:
         symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
+        symbol.arrSize.extend(p[4].objects)
         thisEnv.setSymbol(p[2].value,symbol)
-    pass
 
 
 def p_interface_status(p):
@@ -513,6 +581,7 @@ def p_sensor_decl(p):
         symbol=Symbol(item.value,'Sensor')
         symbol.Type=p[3].value
         thisEnv.setSymbol(item.value,symbol)
+        symbol.Code.extend(p[3].objects);
 
 
 def p_id_one_or_more_with_comma(p):
@@ -533,46 +602,83 @@ def p_id_one_or_more_with_comma_1(p):
 
 #not finish
 def p_type_expr(p):
-    '''Type_expr : BOOL
-    | SIGNED LSHIFT Expr RSHIFT
-    | INT8
-    | INT16
-    | INT32
-    | INT64
-    | UNSIGNED LSHIFT Expr RSHIFT
-    | UINT8
-    | UINT16
-    | UINT32
-    | UINT64
-    | FLOAT32
-    | FLOAT64
-    | CHAR'''
+    '''Type_expr : BOOL Type_expr_2
+    | SIGNED LSHIFT INTEGERNUM RSHIFT Type_expr_2
+    | INT8 Type_expr_2
+    | INT16 Type_expr_2
+    | INT32 Type_expr_2
+    | INT64 Type_expr_2
+    | UNSIGNED LSHIFT INTEGERNUM RSHIFT Type_expr_2
+    | UINT8 Type_expr_2
+    | UINT16 Type_expr_2
+    | UINT32 Type_expr_2
+    | UINT64 Type_expr_2
+    | FLOAT32 Type_expr_2
+    | FLOAT64 Type_expr_2
+    | CHAR Type_expr_2
+    | Path_id Type_expr_2'''
     p[0]=lex_value('Type_expr')
-    if len(p)==2:
+    if len(p)==3:
         p[0].value=p[1].value
+        if len(p[2].objects)!=0:
+            p[0].objects.extend(p[2].objects)
     else:
+        #没写完，需要将INTCONST改为Expr
         #需要计算出Expr表达式代表的值，Expr可能是静态数组，结构体。
-        #若是整数或者常量，直接获取其值
-        #若是arithmetic，则需计算出其值
-        num=exprToNum(p[3].objects)
+        # num=exprToNum(p[3].objects)
         if p[1].strs=='signed':
-            type="int"+str(num)
+            type="int"+str(p[3].value)
         elif p[1].strs=='unsigned':
-            type="uint"+str(num)
+            type="uint"+str(p[3].value)
         p[0].value=type
         pass
 
+def p_type_expr_2(p):
+    '''Type_expr_2 : EXPONENT Expr Type_expr_2
+    | empty'''
+    p[0]=lex_value("Type_expr_2")
+    if len(p)==4:
+        p[0].objects.append(p[2].objects)
+        p[0].objects.extend(p[3].objects)
+def p_path_1(p):
+    '''Path_1 : DOUBLECOLON LV6ID Path_1
+    | empty '''
+    if len(p)!=2:
+        p[0]=lex_value("Path_1")
+        p[0].objects.append(p[2])
+        p[0].objects.extend(p[3].objects)
+    else:
+        p[0]=p[1]
+
 def p_path_id(p):
-    'Path_id : LV6ID'
-    p[0]=p[1]
+    '''Path_id : LV6ID Path_1'''
+    if len(p[2].objects)!=0:
+        elem=p[2].objects[-1]
+        symbol=Symbol(elem.value,"PathId")
+        symbol.Kind="PathId"
+        symbol.Code.append(p[1])
+        symbol.Code.extend(p[2].objects[:-1])
+        thisEnv.setSymbol(elem.value, symbol)
+        p[0]=lex_value("lv6id",elem.value)
+    else:
+        p[0]=p[1]
+
 
 def p_id_expr(p):
     '''Id_expr : Path_id
     | SINGLEQUOTE LV6ID
     | LAST SINGLEQUOTE LV6ID'''
+    symbol=thisEnv.getSymbol(op_kind_id)
     p[0]=lex_value("Id_expr")
     if len(p)==2:
         p[0].objects.append(p[1])
+    elif len(p)==4:
+        pass
+    elif len(p)==3:
+        pass
+
+
+
 
 #not finish
 #若是Arith_expr,则是各个object相加，否则直接赋值
@@ -630,10 +736,9 @@ def p_tempo_expr(p):
         # for elem in p[0].initObjects:
         #     print("elem=",elem)
     elif len(p)==3:
-        #若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre
+        #若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre。
         #则此时只需要输出上一个周期的值。可能出现pre(2)
-        #向symbolTable添加一个字典，保存pre对应的值，还有fby对应的值
-        preName=getPreName()
+        preName=getName("mem_pre")
         symbol.Returns.append(preName)
         preSymbol=Symbol(preName,"Pre","")
         preSymbol.IsReturn=True
@@ -833,7 +938,9 @@ def p_bin_arith_op(p):
 #not finish
 def p_atom(p):
     '''Atom : Bool_atom
-    | INTCONST'''
+    | INTEGERNUM
+    | FLOATNUM
+    | CHARACTER'''
     p[0]=lex_value("Atom")
     p[0].objects.append(p[1])
 
@@ -861,6 +968,7 @@ def get_parse(strs):
 
 def type_change(type):
     list=["char","bool","float32","float64","size","uint64","uint32","uint16","uint8","int64","int32","int16","int8"]
+    str=type
     if type in list:
         str="kcg_"+type
     return str
