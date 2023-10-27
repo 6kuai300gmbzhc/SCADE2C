@@ -65,7 +65,7 @@ def generate_c_file(body):
     c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name,name)
     for para in thisEnv.SymbolTable.values():
         if para.Kind=="Pre":
-            c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name)).Type)
+            c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name).Type))
     c_content += "}\n"
     filename = "./output/%s.c" %(name)
     print(c_content)
@@ -673,7 +673,15 @@ def p_id_expr(p):
     if len(p)==2:
         p[0].objects.append(p[1])
     elif len(p)==4:
-        pass
+        lastName = getName("mem_last")
+        symbol.Returns.append(lastName)
+        lastSymbol = Symbol(lastName, "Last", "")
+        lastSymbol.IsReturn = True
+        thisEnv.setSymbol(lastName, lastSymbol)
+        p[0].objects.append(lex_value("lv6id", lastName))
+        p[0].afterObjects.extend([lex_value("lv6id",lastName),lex_value("=","=")])
+        p[0].afterObjects.append(p[3])
+        p[0].afterObjects.append(lex_value("",";\n"))
     elif len(p)==3:
         pass
 
@@ -689,7 +697,8 @@ def p_expr(p):
     | Arith_expr
     | Relation_expr
     | List_expr
-    | Switch_expr'''
+    | Switch_expr
+    | Bool_expr'''
     # p[0]=lex_value("Expr")
     # if p[1].strs=="Id_expr" or p[1].strs=='Arith_expr':
     #     p[0].objects.extend(p[1].objects)
@@ -950,6 +959,27 @@ def p_bool_atom(p):
     | FALSE'''
     p[0]=p[1]
 
+def p_bool_expr(p):
+    '''Bool_expr : Expr Bin_bool_op Expr'''
+    if len(p)==4:
+        p[0].initObjects.extend(p[1].initObjects)
+        p[0].initObjects.extend(p[3].initObjects)
+        p[0].objects.extend(p[1].objects)
+        p[0].objects.append(p[2])
+        p[0].objects.extend(p[3].objects)
+        p[0].afterObjects.extend(p[1].afterObjects)
+        p[0].afterObjects.extend(p[3].afterObjects)
+
+def p_bin_bool_op(p):
+    '''Bin_bool_op : AND
+    | OR
+    | XOR'''
+    if p[1].value=='and':
+        p[1].value='&&'
+    elif p[1].value=='or':
+        p[1].value='||'
+    elif p[1].value=='xor':
+        p[1].value='^'
 def p_error(p):
     print("Syntax error in input!")
 

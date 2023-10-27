@@ -85,9 +85,12 @@ const private imported f: int8;\
     sensor sensor1:float32;\
     sensor2: float32 ^ 2;\
 node fby_operator(input1,input2:int8) returns(output1,output2:int8)\
+var \
+tmp:int8;\
 let \
-output2=1->fby(input1+2;6;input2+2);\
-output1=output2+2;\
+tmp=input1+2;\
+output2=tmp+2;\
+output2=1->last 'tmp;\
 tel\
 ")
     program,symboltable=scade_compile.get_parse(strs)
