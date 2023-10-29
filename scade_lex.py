@@ -7,7 +7,7 @@ class lex_value:
         self.value = value
         self.type = Type
         self.objects = list()
-        self.initObjects = list()
+        self.beforeObjects = list()
         self.afterObjects = list()
         # self.values1 = list()
  
@@ -173,7 +173,8 @@ tokens = [
     'TPOINT',  # ..
     'VERTICALBAR',  # |
     'SINGLEQUOTE',  # '
-    'AT'  # @
+    'AT',  # @
+    'UNDERLINE' #_
 ] + list(reserved.values())
 
 
@@ -327,6 +328,7 @@ t_EMIT = r'emit'
 t_SYNCHRO = r'synchro'
 t_DO = r'do'
 t_ELSIF = r'elsif'
+t_UNDERLINE = r'_'
 
 def t_CHARACTER(t):
     r"'[^']'"

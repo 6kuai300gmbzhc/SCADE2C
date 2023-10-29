@@ -184,7 +184,3 @@ typedef enum kcg_tag_TruthTableValues_truthtables {
 
 
 
-typedef kcg_float32 type1[2];
-typedef kcg_int32 type2;
-typedef kcg_int8 typ3[3][(1+1)];
-typedef kcg_int8 type6[4][3][2];

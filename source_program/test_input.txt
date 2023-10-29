@@ -133,4 +133,4 @@ node lnot_test(input1:unsigned<<8>>) returns(output1,output2:uint8)
     output1=0->pre input1;
 
 
-
+测试函数调用

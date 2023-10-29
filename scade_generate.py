@@ -57,39 +57,8 @@ class Scade_generate:
 
 
 if __name__=='__main__':
-    print("main")
-    # strs = str("const e:bool=true;\
-    #     d:int32=0;\
-    #     imported c:int32^2;\
-    #     private imported f:int8;\
-    #     sensor tmp,tmp2:int32;\
-    #     tmp3:bool;")
-    # strs = str("node init_operator(input1:int8) returns(output1:int8) output1=0->input1;")
-#     strs=str("node pre_example(input1,input2:int32) returns (output1,output2 : int32)\
-# let\
-#     output2=input1+input2;\
-# 	output1=1-> (pre input1);\
-# tel")tet
-#     strs=str("node fby_operator(input1,input2:int8;tmp:bool) returns(output1,output2:int8)\
-# let \
-# output1= 1->(if tmp then input1 else input2);\
-# tel")
-    strs=str("type type1=float32^2;\
-type2=int32;\
-typ3=int8^(1+1)^3;\
-type6=int8^2^3^4;\
-const e : bool = true;\
-const d: int32 = 0;\
-const imported c: int32^2;\
-const private imported f: int8;\
-    sensor sensor1:float32;\
-    sensor2: float32 ^ 2;\
-node fby_operator(input1,input2:int8) returns(output1,output2:int8)\
-let \
-output2=1->fby(input1+2;6;input2+2);\
-output1=output2+2;\
-tel\
-")
+    file=open('test.txt','r')
+    strs=file.read()
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)
     gen.gen_const_file()

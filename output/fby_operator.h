@@ -5,6 +5,7 @@ _fby_operator_H_
 typedef struct {
 kcg_int8 input1;
 kcg_int8 input2;
+kcg_bool tmp;
 } inC_fby_operator;
 
 

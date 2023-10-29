@@ -65,7 +65,7 @@ def generate_c_file(body):
     c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name,name)
     for para in thisEnv.SymbolTable.values():
         if para.Kind=="Pre":
-            c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name)).Type)
+            c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name).Type))
     c_content += "}\n"
     filename = "./output/%s.c" %(name)
     print(c_content)
@@ -95,7 +95,6 @@ def getParamsInitValue(type):
     elif type=="bool":
         return "kcg_true"
     else:
-        print("InitValue",type)
         typeSymbol=thisEnv.getSymbol(type)
         if typeSymbol!=None:
             return getParamsInitValue(typeSymbol.Type)
@@ -112,7 +111,6 @@ def type_initial(type,value):
 def objectsToString(objects,num=0):
     # type=""
     sstr=""
-    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     for elem in objects:
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
@@ -174,6 +172,13 @@ def getArrSize(objects):
                 str += subElem.value
             str += "]"
     return str
+
+def defToString(defList):
+    content=""
+    for elem in defList:
+        content+=objectsToString(elem[1])
+    return content
+
 def p_program(p):
     'Program : Decls_zero_or_mode'
     # p[0]=p[1]
@@ -264,6 +269,7 @@ def p_user_op_decl(p):
 
     thisEnv=thisEnv.PrevTable
 
+
 def p_pack_lv6id(p):
     'Pack_Lv6id : LV6ID'
     p[0]=p[1]
@@ -313,13 +319,17 @@ def p_opt_body(p):
             for elem in p[2].objects:
                 symbol=thisEnv.getSymbol(elem.value)
                 p[0].value+="kcg_%s %s;\n"%(symbol.Type,symbol.Name)
-        for elem in thisEnv.SymbolTable.values():
+        for elem in thisEnv.SymbolTable.values():#在程序中使用到的临时变量
             if elem.Kind=="TmpVar":
                 p[0].value+="kcg_%s %s;\n"%(elem.Type,elem.Name)
         if len(p)==3:
-            p[0].value+=p[1].value
+            p[0].value+=defToString(p[1].beforeObjects)
+            p[0].value+=defToString(p[1].objects)
+            p[0].value+=defToString(p[1].afterObjects)
         else:
-            p[0].value+=p[4].value
+            p[0].value+=defToString(p[4].beforeObjects)
+            p[0].value+=defToString(p[4].objects)
+            p[0].value+=defToString(p[4].afterObjects)
         if op_kind_symbol.InitName!="":
             initSymbol=thisEnv.getSymbol(op_kind_symbol.InitName)
             p[0].value+="if(%s){%s=kcg_false;}"%(initSymbol.changeName(),initSymbol.changeName())
@@ -352,11 +362,19 @@ def p_equation_zero_or_more_with_semicolon(p):
     | empty'''
     p[0]=lex_value("Equation_zero_or_more_with_semicolon")
     if len(p)==4:
-        p[0].value=p[1].value+p[3].value
+        p[0].objects.extend(p[1].objects)
+        p[0].beforeObjects.extend(p[1].beforeObjects)
+        p[0].afterObjects.extend(p[1].afterObjects)
+        p[0].objects.extend(p[3].objects)
+        p[0].beforeObjects.extend(p[3].beforeObjects)
+        p[0].afterObjects.extend(p[3].afterObjects)
 
 def p_equation(p):
     '''Equation : Simple_equation'''
-    p[0]=p[1]
+    p[0]=lex_value("Equation")
+    p[0].objects.extend(p[1].objects)
+    p[0].beforeObjects.extend(p[1].beforeObjects)
+    p[0].afterObjects.extend(p[1].afterObjects)
 
 def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
@@ -366,20 +384,25 @@ def p_simple_equation(p):
     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
     type=getTypefromObjects(p[1].objects)
 
-    # print("type=",type)
-    setObjectsType(p[1].objects,type)
-    setObjectsType(p[3].objects,type)
-    setObjectsType(p[1].initObjects,type)
-    setObjectsType(p[3].initObjects,type)
-    setObjectsType(p[1].afterObjects,type)
-    setObjectsType(p[1].afterObjects,type)
+    p[3].objects=[p[3].objects]
+#objects [["expr"]]
+#beforeObjects[["lhs",“lhs=expr”]]
+    for elem in p[3].objects:
+        setObjectsType(elem,type)
+    for elem in p[3].beforeObjects:
+        setObjectsType(elem[1],type)
+    for elem in p[3].afterObjects:
+        setObjectsType(elem[1],type)
 
-    p[0].value=objectsToString(p[3].initObjects);
-    #查找是否存在->符号。 一个node最后只写一个if(out->Init){处理fby和init内容}
-    p[0].value+="%s %s %s;\n"%(objectsToString(p[1].objects),p[2].value,objectsToString(p[3].objects))
+    for idx in range(len(p[1].objects)):
+        defList=list()
+        defList.extend([p[1].objects[idx],p[2]])
+        defList.extend(p[3].objects[idx])
+        defList.append(lex_value("",";\n"))
+        p[0].objects.append([p[1].objects[idx].value,defList])
 
-    p[0].value+=objectsToString(p[3].afterObjects)
-
+    p[0].beforeObjects.extend(p[3].beforeObjects)
+    p[0].afterObjects.extend(p[3].afterObjects)
 
 
 
@@ -452,6 +475,7 @@ def p_params_2(p):
     p[0]=lex_value('params_2')
     if len(p)==4:
         p[0].objects.extend(p[2].objects)
+        p[0].objects.extend(p[3].objects)
 
 def p_var_decls(p):
     'Var_decls : Var_id Var_decls_1 COLON Type_expr Var_decls_2 Var_decls_3 Var_decls_4'
@@ -473,6 +497,7 @@ def p_var_decls_1(p):
     p[0]=lex_value("var_decls_1")
     if len(p)==4:
         p[0].objects.append(p[2])
+        p[0].objects.extend(p[3].objects)
 
 def p_var_id(p):
     'Var_id : Var_id_1 Var_id_2 LV6ID'
@@ -689,7 +714,8 @@ def p_expr(p):
     | Arith_expr
     | Relation_expr
     | List_expr
-    | Switch_expr'''
+    | Switch_expr
+    | Bool_expr '''
     # p[0]=lex_value("Expr")
     # if p[1].strs=="Id_expr" or p[1].strs=='Arith_expr':
     #     p[0].objects.extend(p[1].objects)
@@ -707,7 +733,7 @@ def p_tempo_expr(p):
     #若是init操作符，则需要向out结构体中添加init。若有重名，则使用init1（依此递增）
     symbol = thisEnv.getSymbol(op_kind_id)
     p[0] = lex_value("Tempo_expr")
-    if len(p)==4:
+    if len(p)==4 and p[2].value=='->':
         if symbol.InitName=="":
             initName=getName("init")
             symbol.InitName=initName
@@ -721,19 +747,25 @@ def p_tempo_expr(p):
         initElem=getName("initElem")
         initLex=lex_value("initElem",initElem)
         thisEnv.setSymbol(initElem,Symbol(initElem,"TmpVar"))
-        p[0].initObjects.extend(p[1].initObjects)
-        p[0].initObjects.extend(p[3].initObjects)
-        p[0].initObjects.extend([lex_value("if(","if(","str"),lex_value("lv6id",initName),lex_value("){\n","){\n")])
-        p[0].initObjects.extend([lex_value("lv6id",initElem),lex_value("=","=")])
-        p[0].initObjects.extend(p[1].objects)
-        p[0].initObjects.append(lex_value("",";\n}else{\n"))
-        p[0].initObjects.extend([lex_value("lv6id",initElem),lex_value("=","=")])
-        p[0].initObjects.extend(p[3].objects)
-        p[0].initObjects.append(lex_value(";\n}\n",";\n}\n"))
+
+        p[0].beforeObjects.extend(p[1].beforeObjects)
+        p[0].beforeObjects.extend(p[3].beforeObjects)
+
+        befDefList = list()
+        befDefList.extend([lex_value("if(","if(","str"),lex_value("lv6id",initName),lex_value("){\n","){\n")])
+        befDefList.extend([lex_value("lv6id",initElem),lex_value("=","=")])
+        befDefList.extend(p[1].objects)
+        befDefList.append(lex_value("",";\n}else{\n"))
+        befDefList.extend([lex_value("lv6id",initElem),lex_value("=","=")])
+        befDefList.extend(p[3].objects)
+        befDefList.append(lex_value(";\n}\n",";\n}\n"))
+        p[0].beforeObjects.append([initElem,befDefList])
+
         p[0].objects.append(initLex)
+
         p[0].afterObjects.extend(p[1].afterObjects)
         p[0].afterObjects.extend(p[3].afterObjects)
-        # for elem in p[0].initObjects:
+        # for elem in p[0].beforeObjects:
         #     print("elem=",elem)
     elif len(p)==3:
         #若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre。
@@ -743,12 +775,14 @@ def p_tempo_expr(p):
         preSymbol=Symbol(preName,"Pre","")
         preSymbol.IsReturn=True
         thisEnv.setSymbol(preName,preSymbol)
-        p[0].initObjects.extend(p[2].initObjects)
+        p[0].beforeObjects.extend(p[2].beforeObjects)
         p[0].objects.append(lex_value("lv6id",preName,""))
+        afterDefList=list()
+        afterDefList.extend([lex_value("lv6id",preName),lex_value("=","=")])
+        afterDefList.extend(p[2].objects)
+        afterDefList.append(lex_value("",";\n"))
         p[0].afterObjects.extend(p[2].afterObjects)
-        p[0].afterObjects.extend([lex_value("lv6id",preName),lex_value("=","=")])
-        p[0].afterObjects.extend(p[2].objects)
-        p[0].afterObjects.append(lex_value("",";\n"))
+        p[0].afterObjects.append([preName,afterDefList])
     elif len(p)==9:
         #若是fby操作符，首先在outC结构体中添加一个idx和数组
         #fby(input1;cycle;input2) cycle必须是静态表达式
@@ -779,31 +813,34 @@ def p_tempo_expr(p):
         symbol.Returns.append(fbyArr)
         symbol.fbyList.append(fbyClass(fbyIdx,fbyArr))
 
-        p[0].objects.append(lex_value("lv6id",fbyArr,""))
-        p[0].objects.append(lex_value("[","[","str"))
-        p[0].objects.append(lex_value("lv6id",fbyIdx,"int32"))
-        p[0].objects.append(lex_value("]","]","str"))
-        p[0].initObjects += p[3].initObjects+p[5].initObjects+p[7].initObjects
-        p[0].initObjects.extend([lex_value("","if("),lex_value("lv6id",thisEnv.getSymbol(op_kind_id).InitName),lex_value(")\n{",")\n{")])
-        p[0].initObjects.append(lex_value("","for(int idx=0;idx<%s;idx++){\n"%objectsToString(p[5].objects)))
-        p[0].initObjects.extend([lex_value("lv6id",fbyArr),lex_value("","["),lex_value("lv6id",fbyIdx),lex_value("","]=")])
-        p[0].initObjects.extend(p[7].objects)
-        p[0].initObjects.append(lex_value("",";\n}\n}"))
+        p[0].objects.extend([lex_value("lv6id",fbyArr,""),lex_value("[","[","str"),lex_value("lv6id",fbyIdx,"int32"),lex_value("]","]","str")])
+
+        befDefList=list()
+        p[0].beforeObjects += p[3].beforeObjects+p[5].beforeObjects+p[7].beforeObjects
+        befDefList.extend([lex_value("","if("),lex_value("lv6id",thisEnv.getSymbol(op_kind_id).InitName),lex_value(")\n{",")\n{")])
+        befDefList.append(lex_value("","for(int idx=0;idx<%s;idx++){\n"%objectsToString(p[5].objects)))
+        befDefList.extend([lex_value("lv6id",fbyArr),lex_value("","["),lex_value("lv6id",fbyIdx),lex_value("","]=")])
+        befDefList.extend(p[7].objects)
+        befDefList.append(lex_value("",";\n}\n}"))
+        p[0].beforeObjects.append(["",befDefList])
+
         p[0].afterObjects += p[3].afterObjects+p[5].afterObjects+p[7].afterObjects
-        p[0].afterObjects.extend([lex_value("lv6id",fbyArr),lex_value("","["),lex_value("lv6id",fbyIdx),lex_value("","]=")])
-        p[0].afterObjects.extend(p[3].objects)
-        p[0].afterObjects.append(lex_value("",";\n"))
-        p[0].afterObjects.extend([lex_value("lv6id",fbyIdx),lex_value("","=("),lex_value("lv6id",fbyIdx),lex_value("","+1)%(")])
-        p[0].afterObjects.extend(p[5].objects)
-        p[0].afterObjects.append(lex_value("",");\n"))
-        # for elem in p[0].initObjects:
+        aftDefList=list()
+        aftDefList.extend([lex_value("lv6id",fbyArr),lex_value("","["),lex_value("lv6id",fbyIdx),lex_value("","]=")])
+        aftDefList.extend(p[3].objects)
+        aftDefList.append(lex_value("",";\n"))
+        aftDefList.extend([lex_value("lv6id",fbyIdx),lex_value("","=("),lex_value("lv6id",fbyIdx),lex_value("","+1)%(")])
+        aftDefList.extend(p[5].objects)
+        aftDefList.append(lex_value("",");\n"))
+        p[0].afterObjects.append(["",aftDefList])
+        # for elem in p[0].beforeObjects:
         #     print("fby",elem)
 
 def p_relation_expr(p):
     '''Relation_expr : Expr Bin_relation_op Expr'''
     p[0]=lex_value("Relation_expr")
-    p[0].initObjects.extend(p[1].initObjects)
-    p[0].initObjects.extend(p[3].initObjects)
+    p[0].beforeObjects.extend(p[1].beforeObjects)
+    p[0].beforeObjects.extend(p[3].beforeObjects)
 
     p[0].objects.extend(p[1].objects)
     p[0].objects.append(p[2])
@@ -826,28 +863,50 @@ def p_bin_relation_op(p):
 
 #往符号表添加一个局部变量存储if表达式的结果。if (boolExpr){ localVar=Expr1;}else{ localVar=Expr2;}
 def p_switch_expr(p):
-    '''Switch_expr : IF Expr THEN Expr ELSE Expr'''
+    '''Switch_expr : IF Expr THEN Expr ELSE Expr
+    | LPARENTHESE CASE Expr OF Switch_expr_1 RPARENTHESE'''
     p[0] = lex_value("Switch_expr")
-    p[0].initObjects += p[2].initObjects+p[4].initObjects+p[6].initObjects
-    ifTmp = getName("ifTmp")
-    ifSymbol = Symbol(ifTmp,"TmpVar")
-    thisEnv.setSymbol(ifTmp,ifSymbol)
-    p[0].initObjects.append(lex_value("","if("))
-    p[0].initObjects.extend(p[2].objects)
-    p[0].initObjects.extend([lex_value("","){\n"),lex_value("lv6id",ifTmp),lex_value("","=")])
-    p[0].initObjects.extend(p[4].objects)
-    p[0].initObjects.append(lex_value("",";\n}else{\n"))
-    p[0].initObjects.append(lex_value("lv6id",ifTmp))
-    p[0].initObjects.append(lex_value("","="))
-    p[0].initObjects.extend(p[6].objects)
-    p[0].initObjects.append(lex_value("",";\n}\n"))
+    if p[1].value=='if':
+        p[0].beforeObjects += p[2].beforeObjects + p[4].beforeObjects + p[6].beforeObjects
+        ifTmp = getName("ifTmp")
+        ifSymbol = Symbol(ifTmp, "TmpVar")
+        thisEnv.setSymbol(ifTmp, ifSymbol)
+        p[0].beforeObjects.append(lex_value("", "if("))
+        p[0].beforeObjects.extend(p[2].objects)
+        p[0].beforeObjects.extend([lex_value("", "){\n"), lex_value("lv6id", ifTmp), lex_value("", "=")])
+        p[0].beforeObjects.extend(p[4].objects)
+        p[0].beforeObjects.append(lex_value("", ";\n}else{\n"))
+        p[0].beforeObjects.append(lex_value("lv6id", ifTmp))
+        p[0].beforeObjects.append(lex_value("", "="))
+        p[0].beforeObjects.extend(p[6].objects)
+        p[0].beforeObjects.append(lex_value("", ";\n}\n"))
 
-    p[0].objects.append(lex_value("lv6id",ifTmp))
+        p[0].objects.append(lex_value("lv6id", ifTmp))
 
-    p[0].afterObjects += p[2].afterObjects+p[4].afterObjects+p[6].afterObjects
+        p[0].afterObjects += p[2].afterObjects + p[4].afterObjects + p[6].afterObjects
+    else:
+        pass
+
+def p_switch_expr_1(p):
+    'Switch_expr_1 : Case_expr Switch_expr_2'
     pass
-
-
+def p_switch_expr_2(p):
+    '''Switch_expr_2 : Case_expr Switch_expr_2
+    | empty'''
+    pass
+def p_case_expr(p):
+    'Case_expr : VERTICALBAR Pattern COLON Expr'
+    pass
+def p_pattern(p):
+    '''Pattern : Path_id
+    | CHARACTER
+    | Pattern_1 INTEGERNUM
+    | Bool_atom
+    | UNDERLINE'''
+    pass
+def p_pattern_1(p):
+    '''Pattern_1 : UNDERLINE
+    | empty'''
 def p_arith_expr(p):
     '''Arith_expr : Unary_arith_op Expr
     | Expr Bin_arith_op Expr'''
@@ -856,12 +915,12 @@ def p_arith_expr(p):
         p[0].objects.extend(p[1].objects)
         p[0].objects.append(p[2])
         p[0].objects.extend(p[3].objects)
-        p[0].initObjects.extend(p[1].initObjects)
-        p[0].initObjects.extend(p[3].initObjects)
+        p[0].beforeObjects.extend(p[1].beforeObjects)
+        p[0].beforeObjects.extend(p[3].beforeObjects)
         p[0].afterObjects.extend(p[1].afterObjects)
         p[0].afterObjects.extend(p[3].afterObjects)
     elif len(p)==3:
-        p[0].initObjects.extend(p[2].initObjects)
+        p[0].beforeObjects.extend(p[2].beforeObjects)
         if p[1].strs=='-':
             p[0].objects.extend(p[1])
         elif p[1].strs=='lnot':
@@ -875,33 +934,41 @@ def p_arith_expr(p):
 def p_list_expr(p):
     '''List_expr : LPARENTHESE List RPARENTHESE'''
     p[0]=lex_value("List_expr")
-    p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
-    p[0].objects.append(p[3])
-    p[0].initObjects.extend(p[2].initObjects)
+    p[0].beforeObjects.extend(p[2].beforeObjects)
     p[0].afterObjects.extend(p[2].afterObjects)
+
 def p_list(p):
     '''List : List_1
     | empty'''
     p[0] = lex_value("List")
     if p[1].strs=="List_1":
         p[0].objects.extend(p[1].objects)
-        p[0].initObjects.extend(p[1].initObjects)
+        p[0].beforeObjects.extend(p[1].beforeObjects)
         p[0].afterObjects.extend(p[1].afterObjects)
 
 def p_list_1(p):
     '''List_1 : Expr List_2'''
     p[0]=lex_value("List_1")
-    if p[2].strs=="Empty":
-        p[0].objects.extend(p[1].objects)
-        p[0].initObjects.extend(p[1].initObjects)
-        p[0].afterObjects.extend(p[1].afterObjects)
+    p[0].objects.append(p[1].objects)
+    p[0].beforeObjects.extend(p[1].beforeObjects)
+    p[0].afterObjects.extend(p[1].afterObjects)
+    p[0].objects.extend(p[2].objects)
+    p[0].beforeObjects.extend(p[2].beforeObjects)
+    p[0].afterObjects.extend(p[2].afterObjects)
 
 def p_list_2(p):
     '''List_2 : COMMA Expr List_2
     | empty'''
-    if len(p)==2:
-        p[0]=p[1]
+    p[0]=lex_value("List_2")
+    if len(p)==4:
+        p[0].objects.append(p[2].objects)
+        p[0].beforeObjects.extend(p[2].beforeObjects)
+        p[0].afterObjects.extend(p[2].afterObjects)
+        p[0].objects.extend(p[3].objects)
+        p[0].beforeObjects.extend(p[3].beforeObjects)
+        p[0].afterObjects.extend(p[3].afterObjects)
+
 
 def p_unary_arith_op(p):
     '''Unary_arith_op : MINUS
@@ -923,17 +990,17 @@ def p_bin_arith_op(p):
     p[0]=p[1]
     #当操作符是除了+-*/以外的，需要转化成C对应的操作符
     if p[1].strs=='MOD':
-        p[0].value='%'
-    elif p[1].strs=='LAND':
+        p[0].value=' % '
+    elif p[1].strs==' LAND ':
         p[0].value='&'
     elif p[1].strs=='LOR':
-        p[0].value='|'
+        p[0].value=' | '
     elif p[1].strs=='LXOR':
-        p[0].value='^'
+        p[0].value=' ^ '
     elif p[1].strs=='LSL':
-        p[0].value='<<'
+        p[0].value=' << '
     elif p[1].strs=='LSR':
-        p[0].value='>>'
+        p[0].value=' >> '
 
 #not finish
 def p_atom(p):
@@ -948,6 +1015,45 @@ def p_atom(p):
 def p_bool_atom(p):
     '''Bool_atom : TRUE
     | FALSE'''
+    p[0]=p[1]
+
+
+def p_bool_expr(p):
+    '''Bool_expr : NOT Expr
+    | Expr Bin_bool_op Expr
+    | HASHTAG LPARENTHESE List RPARENTHESE'''
+    p[0]=lex_value("Bool_expr")
+    if len(p)==3:
+        p[1].value='!'
+        p[0].objects.append(p[1])
+        p[0].objects.extend(p[2].objects)
+        p[0].beforeObjects.extend(p[2].beforeObjects)
+        p[0].afterObjects.extend(p[2].afterObjects)
+    elif len(p)==4:
+        p[0].objects+=p[1].objects
+        p[0].objects.append(p[2])
+        p[0].objects+=p[3].objects
+        p[0].beforeObjects+=p[1].beforeObjects+p[3].beforeObjects
+        p[0].afterObjects+=p[1].afterObjects+p[3].afterObjects
+    elif len(p)==5:
+        for idx in range(len(p[3].objects)):
+            p[0].objects.append(lex_value("","("))
+            p[0].objects.extend(p[3].objects[idx])
+            p[0].objects.append(lex_value("", ")"))
+            if idx!=len(p[3].objects)-1:
+                p[0].objects.append(lex_value("","+"))
+        p[0].objects.append(lex_value("","<=1"))
+
+def p_bin_bool_op(p):
+    '''Bin_bool_op : AND
+    | OR
+    | XOR'''
+    if p[1].strs=='and':
+        p[1].value=' & '
+    elif p[1].strs=='or':
+        p[1].value=' | '
+    elif p[1].strs=='xor':
+        p[1].value=' ^ '
     p[0]=p[1]
 
 def p_error(p):

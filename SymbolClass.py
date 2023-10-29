@@ -13,11 +13,13 @@ class Symbol:
                          #Type(用于Type_block)
 
         self.Type = Type  # Type类型(int , float)
+                            #Node还是function
         self.Public = Public
         self.External = External
 
         self.IsPackage = isPackage
         self.PackageName = PackageName
+        self.isCalled=False   #用于标识一个node是否被调用
 
         # self.VarType = VarType             #常量、变量等类型标识符的数据类型
         # self.TypeType = TypeType           #类型定义的基本类型，或者Struct、Enum
