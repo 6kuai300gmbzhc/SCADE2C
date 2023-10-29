@@ -10,9 +10,8 @@ kcg_bool tmp;
 
 
 typedef struct {
+kcg_int8 mem_last;
 kcg_bool init;
-kcg_int32 fbyIdx;
-kcg_int8 fbyArray;
 kcg_int8 output1;
 kcg_int8 output2;
 } outC_fby_operator;

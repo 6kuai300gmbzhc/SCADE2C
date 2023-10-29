@@ -698,7 +698,15 @@ def p_id_expr(p):
     if len(p)==2:
         p[0].objects.append(p[1])
     elif len(p)==4:
-        pass
+        lastName = getName("mem_last")
+        symbol.Returns.append(lastName)
+        lastSymbol = Symbol(lastName, "Last", "")
+        lastSymbol.IsReturn = True
+        thisEnv.setSymbol(lastName, lastSymbol)
+        p[0].objects.append(lex_value("lv6id", lastName))
+        p[0].afterObjects.extend([lex_value("lv6id",lastName),lex_value("=","=")])
+        p[0].afterObjects.append(p[3])
+        p[0].afterObjects.append(lex_value("",";\n"))
     elif len(p)==3:
         pass
 
@@ -715,7 +723,7 @@ def p_expr(p):
     | Relation_expr
     | List_expr
     | Switch_expr
-    | Bool_expr '''
+    | Bool_expr'''
     # p[0]=lex_value("Expr")
     # if p[1].strs=="Id_expr" or p[1].strs=='Arith_expr':
     #     p[0].objects.extend(p[1].objects)
