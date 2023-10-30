@@ -142,6 +142,7 @@ def getTypefromObjects(objects):
 
 def setObjectsType(objects,type):
     for elem in objects:
+        print("set",elem.value)
         symbol=thisEnv.getSymbol(elem.value)
         if symbol==None:
             if elem.type=='':
@@ -384,9 +385,10 @@ def p_simple_equation(p):
     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
     type=getTypefromObjects(p[1].objects)
 
-    p[3].objects=[p[3].objects]
 #objects [["expr"]]
 #beforeObjects[["lhs",“lhs=expr”]]
+    print("before",p[3].beforeObjects)
+    print("after",p[3].afterObjects)
     for elem in p[3].objects:
         setObjectsType(elem,type)
     for elem in p[3].beforeObjects:
@@ -556,8 +558,8 @@ def p_const_decl(p):
         symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
         type=p[4].value
         symbol.arrSize.extend(p[4].objects)
-        setObjectsType(p[6].objects,type)
-        symbol.Code=p[6].objects
+        setObjectsType(p[6].objects[0],type)
+        symbol.Code=p[6].objects[0]
         thisEnv.setSymbol(p[2].value,symbol)
     elif len(p)==5:
         symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
@@ -663,7 +665,7 @@ def p_type_expr_2(p):
     | empty'''
     p[0]=lex_value("Type_expr_2")
     if len(p)==4:
-        p[0].objects.append(p[2].objects)
+        p[0].objects.extend(p[2].objects[0])
         p[0].objects.extend(p[3].objects)
 def p_path_1(p):
     '''Path_1 : DOUBLECOLON LV6ID Path_1
@@ -724,12 +726,9 @@ def p_expr(p):
     | List_expr
     | Switch_expr
     | Bool_expr'''
-    # p[0]=lex_value("Expr")
-    # if p[1].strs=="Id_expr" or p[1].strs=='Arith_expr':
-    #     p[0].objects.extend(p[1].objects)
-    # else:
-    #     p[0].objects.append(p[1])
-    p[0]=p[1]
+    p[0]=lex_value()
+    if p[1].strs!='List_expr':
+        p[0].objects=[p[1].objects]
 
 #arrow对应于C语言的三目运算符
 #pre：需要在output中添加一个mem
@@ -751,25 +750,29 @@ def p_tempo_expr(p):
             symbol.Returns.append(initName)
         # p[0].objects.append(lex_value('lv6id',initName,'bool'))
         # p[0].objects.append(lex_value("?","?","str"))
-        initName=symbol.InitName
-        initElem=getName("initElem")
-        initLex=lex_value("initElem",initElem)
-        thisEnv.setSymbol(initElem,Symbol(initElem,"TmpVar"))
+        if len(p[1].objects)!=len(p[3].objects):
+            print("error")
+            exit()
 
         p[0].beforeObjects.extend(p[1].beforeObjects)
         p[0].beforeObjects.extend(p[3].beforeObjects)
 
-        befDefList = list()
-        befDefList.extend([lex_value("if(","if(","str"),lex_value("lv6id",initName),lex_value("){\n","){\n")])
-        befDefList.extend([lex_value("lv6id",initElem),lex_value("=","=")])
-        befDefList.extend(p[1].objects)
-        befDefList.append(lex_value("",";\n}else{\n"))
-        befDefList.extend([lex_value("lv6id",initElem),lex_value("=","=")])
-        befDefList.extend(p[3].objects)
-        befDefList.append(lex_value(";\n}\n",";\n}\n"))
-        p[0].beforeObjects.append([initElem,befDefList])
+        for idx in range(len(p[1].objects)):
+            initName = symbol.InitName
+            initElem = getName("initElem")
+            initLex = lex_value("initElem", initElem)
+            thisEnv.setSymbol(initElem, Symbol(initElem, "TmpVar"))
+            befDefList = list()
+            befDefList.extend([lex_value("if(", "if(", "str"), lex_value("lv6id", initName), lex_value("){\n", "){\n")])
+            befDefList.extend([lex_value("lv6id", initElem), lex_value("=", "=")])
+            befDefList.extend(p[1].objects[idx])
+            befDefList.append(lex_value("", ";\n}else{\n"))
+            befDefList.extend([lex_value("lv6id", initElem), lex_value("=", "=")])
+            befDefList.extend(p[3].objects[idx])
+            befDefList.append(lex_value(";\n}\n", ";\n}\n"))
+            p[0].beforeObjects.append([initElem, befDefList])
 
-        p[0].objects.append(initLex)
+            p[0].objects.append([initLex])
 
         p[0].afterObjects.extend(p[1].afterObjects)
         p[0].afterObjects.extend(p[3].afterObjects)
@@ -778,19 +781,25 @@ def p_tempo_expr(p):
     elif len(p)==3:
         #若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre。
         #则此时只需要输出上一个周期的值。可能出现pre(2)
-        preName=getName("mem_pre")
-        symbol.Returns.append(preName)
-        preSymbol=Symbol(preName,"Pre","")
-        preSymbol.IsReturn=True
-        thisEnv.setSymbol(preName,preSymbol)
+        #expr可能是列表
+        print(p[2].objects)
+        for idx in range(len(p[2].objects)):
+            preName = getName("mem_pre")
+            symbol.Returns.append(preName)
+            preSymbol = Symbol(preName, "Pre", "")
+            preSymbol.IsReturn = True
+            thisEnv.setSymbol(preName, preSymbol)
+
+            p[0].objects.append([lex_value("lv6id", preName, "")])
+            afterDefList = list()
+            afterDefList.extend([lex_value("lv6id", preName), lex_value("=", "=")])
+            afterDefList.extend(p[2].objects[idx])
+            afterDefList.append(lex_value("", ";\n"))
+            p[0].afterObjects.extend(p[2].afterObjects)
+            p[0].afterObjects.append([preName, afterDefList])
+
         p[0].beforeObjects.extend(p[2].beforeObjects)
-        p[0].objects.append(lex_value("lv6id",preName,""))
-        afterDefList=list()
-        afterDefList.extend([lex_value("lv6id",preName),lex_value("=","=")])
-        afterDefList.extend(p[2].objects)
-        afterDefList.append(lex_value("",";\n"))
-        p[0].afterObjects.extend(p[2].afterObjects)
-        p[0].afterObjects.append([preName,afterDefList])
+        print(p[0].objects)
     elif len(p)==9:
         #若是fby操作符，首先在outC结构体中添加一个idx和数组
         #fby(input1;cycle;input2) cycle必须是静态表达式
@@ -802,45 +811,63 @@ def p_tempo_expr(p):
             initSymbol.IsReturn=True
             thisEnv.setSymbol(initName,initSymbol)
             symbol.Returns.append(initName)
-        fbyIdx=getName("fbyIdx")
-        fbyArr=getName("fbyArray")
+        if len(p[3].objects)!=len(p[7].objects):
+            print("error")
+            exit()
 
-        type=getTypefromObjects(p[5].objects)
-        if type=="":
-            type="int32"
-        fbyIdxSymbol=Symbol(fbyIdx,"FbyIdx",type)
-        fbyIdxSymbol.IsReturn=True
-        fbyArrSymbol=Symbol(fbyArr,"FbyArr")
-        fbyArrSymbol.IsReturn=True
-        fbyArrSymbol.IsArray=True
-        thisEnv.setSymbol(fbyIdx,fbyIdxSymbol)
-        thisEnv.setSymbol(fbyArr,fbyArrSymbol)
-        fbyIdxSymbol.Code.extend(p[5].objects)
-        setObjectsType(fbyIdxSymbol.Code,type)
-        symbol.Returns.append(fbyIdx)
-        symbol.Returns.append(fbyArr)
-        symbol.fbyList.append(fbyClass(fbyIdx,fbyArr))
+        p[0].beforeObjects += p[3].beforeObjects + p[5].beforeObjects + p[7].beforeObjects
+        p[0].afterObjects += p[3].afterObjects + p[5].afterObjects + p[7].afterObjects
+        for idx in range(len(p[3].objects)):
+            fbyIdx = getName("fbyIdx")
+            fbyArr = getName("fbyArray")
 
-        p[0].objects.extend([lex_value("lv6id",fbyArr,""),lex_value("[","[","str"),lex_value("lv6id",fbyIdx,"int32"),lex_value("]","]","str")])
+            type = getTypefromObjects(p[5].objects)
+            if type == "":
+                type = "int32"
+            fbyIdxSymbol = Symbol(fbyIdx, "FbyIdx", type)
+            fbyIdxSymbol.IsReturn = True
+            fbyArrSymbol = Symbol(fbyArr, "FbyArr")
+            fbyArrSymbol.IsReturn = True
+            fbyArrSymbol.IsArray = True
+            thisEnv.setSymbol(fbyIdx, fbyIdxSymbol)
+            thisEnv.setSymbol(fbyArr, fbyArrSymbol)
+            fbyIdxSymbol.Code.extend(p[5].objects)
+            setObjectsType(fbyIdxSymbol.Code, type)
+            symbol.Returns.append(fbyIdx)
+            symbol.Returns.append(fbyArr)
+            symbol.fbyList.append(fbyClass(fbyIdx, fbyArr))
 
-        befDefList=list()
-        p[0].beforeObjects += p[3].beforeObjects+p[5].beforeObjects+p[7].beforeObjects
-        befDefList.extend([lex_value("","if("),lex_value("lv6id",thisEnv.getSymbol(op_kind_id).InitName),lex_value(")\n{",")\n{")])
-        befDefList.append(lex_value("","for(int idx=0;idx<%s;idx++){\n"%objectsToString(p[5].objects)))
-        befDefList.extend([lex_value("lv6id",fbyArr),lex_value("","["),lex_value("lv6id",fbyIdx),lex_value("","]=")])
-        befDefList.extend(p[7].objects)
-        befDefList.append(lex_value("",";\n}\n}"))
-        p[0].beforeObjects.append(["",befDefList])
+            p[0].objects.append(
+                [lex_value("lv6id", fbyArr, ""), lex_value("[", "[", "str"), lex_value("lv6id", fbyIdx, "int32"),
+                 lex_value("]", "]", "str")])
 
-        p[0].afterObjects += p[3].afterObjects+p[5].afterObjects+p[7].afterObjects
-        aftDefList=list()
-        aftDefList.extend([lex_value("lv6id",fbyArr),lex_value("","["),lex_value("lv6id",fbyIdx),lex_value("","]=")])
-        aftDefList.extend(p[3].objects)
-        aftDefList.append(lex_value("",";\n"))
-        aftDefList.extend([lex_value("lv6id",fbyIdx),lex_value("","=("),lex_value("lv6id",fbyIdx),lex_value("","+1)%(")])
-        aftDefList.extend(p[5].objects)
-        aftDefList.append(lex_value("",");\n"))
-        p[0].afterObjects.append(["",aftDefList])
+            befDefList = list()
+
+            befDefList.extend([lex_value("", "if("), lex_value("lv6id", thisEnv.getSymbol(op_kind_id).InitName),
+                               lex_value(")\n{", ")\n{")])
+            befDefList.append(lex_value("", "for(int idx=0;idx<%s;idx++){\n" % objectsToString(p[5].objects[idx])))
+            befDefList.extend(
+                [lex_value("lv6id", fbyArr), lex_value("", "["), lex_value("lv6id", fbyIdx), lex_value("", "]=")])
+            # 注意是List，先考虑list为1
+            for elem in p[7].objects[idx]:
+                befDefList.extend(elem)
+            # befDefList.extend(p[7].objects)
+            befDefList.append(lex_value("", ";\n}\n}"))
+            p[0].beforeObjects.append(["", befDefList])
+
+
+            aftDefList = list()
+            aftDefList.extend(
+                [lex_value("lv6id", fbyArr), lex_value("", "["), lex_value("lv6id", fbyIdx), lex_value("", "]=")])
+            for elem in p[3].objects[idx]:
+                aftDefList.extend(elem)
+            aftDefList.append(lex_value("", ";\n"))
+            aftDefList.extend(
+                [lex_value("lv6id", fbyIdx), lex_value("", "=("), lex_value("lv6id", fbyIdx), lex_value("", "+1)%(")])
+            aftDefList.extend(p[5].objects[idx])
+            aftDefList.append(lex_value("", ");\n"))
+            p[0].afterObjects.append(["", aftDefList])
+
         # for elem in p[0].beforeObjects:
         #     print("fby",elem)
 
@@ -850,9 +877,15 @@ def p_relation_expr(p):
     p[0].beforeObjects.extend(p[1].beforeObjects)
     p[0].beforeObjects.extend(p[3].beforeObjects)
 
-    p[0].objects.extend(p[1].objects)
-    p[0].objects.append(p[2])
-    p[0].objects.extend(p[3].objects)
+    if len(p[1].objects)!=len(p[3].objects):
+        print("error")
+        exit()
+    for idx in range(len(p[1].objects)):
+        idxList=list()
+        idxList.extend(p[1].objects[idx])
+        idxList.extend(p[2])
+        idxList.extend(p[3].objects[idx])
+        p[0].objects.append(idxList)
 
     p[0].afterObjects.extend(p[1].afterObjects)
     p[0].afterObjects.extend(p[3].afterObjects)
