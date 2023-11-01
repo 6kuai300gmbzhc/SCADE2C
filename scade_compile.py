@@ -133,16 +133,16 @@ def objectsToString(objects,num=0):
     return sstr
 def getTypefromObjects(objects):
     type=""
-    for obj in objects:
-        if obj.strs=='lv6id':
-            symbol=thisEnv.getSymbol(obj.value)
-            type=symbol.Type
-            break
+    for objs in objects:
+        for elem in objs:
+            if elem.strs=='lv6id':
+                symbol=thisEnv.getSymbol(elem.value)
+                type=symbol.Type
+                break
     return type
 
 def setObjectsType(objects,type):
     for elem in objects:
-        print("set",elem.value)
         symbol=thisEnv.getSymbol(elem.value)
         if symbol==None:
             if elem.type=='':
@@ -163,6 +163,7 @@ def exprToNum(objects):
 
 def getArrSize(objects):
     str=""
+    print("getArrSize",objects)
     for elem in reversed(objects):
         if len(elem) == 1:
             if elem[0].strs == 'integernum':
@@ -387,8 +388,6 @@ def p_simple_equation(p):
 
 #objects [["expr"]]
 #beforeObjects[["lhs",“lhs=expr”]]
-    print("before",p[3].beforeObjects)
-    print("after",p[3].afterObjects)
     for elem in p[3].objects:
         setObjectsType(elem,type)
     for elem in p[3].beforeObjects:
@@ -398,10 +397,11 @@ def p_simple_equation(p):
 
     for idx in range(len(p[1].objects)):
         defList=list()
-        defList.extend([p[1].objects[idx],p[2]])
+        defList.extend(p[1].objects[idx])
+        defList.append(p[2])
         defList.extend(p[3].objects[idx])
         defList.append(lex_value("",";\n"))
-        p[0].objects.append([p[1].objects[idx].value,defList])
+        p[0].objects.append([p[1].objects[idx][0].value,defList])
 
     p[0].beforeObjects.extend(p[3].beforeObjects)
     p[0].afterObjects.extend(p[3].afterObjects)
@@ -414,7 +414,7 @@ def p_lhs(p):
     | Lhs_id Lhs_1'''
     p[0]=lex_value("Lhs")
     if p[1].strs!='lparenthese':
-        p[0].objects.append(p[1])
+        p[0].objects.append([p[1]])
         p[0].objects.extend(p[2].objects)
 
 
@@ -424,7 +424,8 @@ def p_lhs_1(p):
     | empty'''
     p[0]=lex_value("Lhs_1")
     if len(p)==4:
-        p[0].objects.append(p[2])
+        p[0].objects.append([p[2]])
+        p[0].objects.extend(p[3].objects)
 
 
 #not finish
@@ -665,7 +666,7 @@ def p_type_expr_2(p):
     | empty'''
     p[0]=lex_value("Type_expr_2")
     if len(p)==4:
-        p[0].objects.extend(p[2].objects[0])
+        p[0].objects.append(p[2].objects[0])
         p[0].objects.extend(p[3].objects)
 def p_path_1(p):
     '''Path_1 : DOUBLECOLON LV6ID Path_1
@@ -726,17 +727,20 @@ def p_expr(p):
     | List_expr
     | Switch_expr
     | Bool_expr'''
-    p[0]=lex_value()
-    if p[1].strs!='List_expr':
+    p[0]=lex_value("Expr")
+    if p[1].strs!='List_expr' and p[1].strs!='Tempo_expr' and p[1].strs!='Switch_expr':
         p[0].objects=[p[1].objects]
+    else:
+        p[0].objects=p[1].objects
+    p[0].beforeObjects=p[1].beforeObjects
+    p[0].afterObjects=p[1].afterObjects
 
 #arrow对应于C语言的三目运算符
 #pre：需要在output中添加一个mem
 def p_tempo_expr(p):
     '''Tempo_expr : Expr ARROW Expr
     | PRE Expr
-    | FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE
-    | Expr TIMES Expr'''
+    | FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE'''
     #若是init操作符，则需要向out结构体中添加init。若有重名，则使用init1（依此递增）
     symbol = thisEnv.getSymbol(op_kind_id)
     p[0] = lex_value("Tempo_expr")
@@ -751,7 +755,7 @@ def p_tempo_expr(p):
         # p[0].objects.append(lex_value('lv6id',initName,'bool'))
         # p[0].objects.append(lex_value("?","?","str"))
         if len(p[1].objects)!=len(p[3].objects):
-            print("error")
+            print("tempo_expr arrow:error")
             exit()
 
         p[0].beforeObjects.extend(p[1].beforeObjects)
@@ -782,7 +786,6 @@ def p_tempo_expr(p):
         #若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre。
         #则此时只需要输出上一个周期的值。可能出现pre(2)
         #expr可能是列表
-        print(p[2].objects)
         for idx in range(len(p[2].objects)):
             preName = getName("mem_pre")
             symbol.Returns.append(preName)
@@ -799,7 +802,6 @@ def p_tempo_expr(p):
             p[0].afterObjects.append([preName, afterDefList])
 
         p[0].beforeObjects.extend(p[2].beforeObjects)
-        print(p[0].objects)
     elif len(p)==9:
         #若是fby操作符，首先在outC结构体中添加一个idx和数组
         #fby(input1;cycle;input2) cycle必须是静态表达式
@@ -812,7 +814,7 @@ def p_tempo_expr(p):
             thisEnv.setSymbol(initName,initSymbol)
             symbol.Returns.append(initName)
         if len(p[3].objects)!=len(p[7].objects):
-            print("error")
+            print("tempo_expr fby:error")
             exit()
 
         p[0].beforeObjects += p[3].beforeObjects + p[5].beforeObjects + p[7].beforeObjects
@@ -877,15 +879,12 @@ def p_relation_expr(p):
     p[0].beforeObjects.extend(p[1].beforeObjects)
     p[0].beforeObjects.extend(p[3].beforeObjects)
 
-    if len(p[1].objects)!=len(p[3].objects):
-        print("error")
-        exit()
-    for idx in range(len(p[1].objects)):
-        idxList=list()
-        idxList.extend(p[1].objects[idx])
-        idxList.extend(p[2])
-        idxList.extend(p[3].objects[idx])
-        p[0].objects.append(idxList)
+    if len(p[1].objects)!=len(p[3].objects) and len(p[1].objects)!=1:
+        print("relation_epxr:error")
+        exit(0)
+    p[0].objects.extend(p[1].objects[0])
+    p[0].objects.extend(p[2])
+    p[0].objects.extend(p[3].objects[0])
 
     p[0].afterObjects.extend(p[1].afterObjects)
     p[0].afterObjects.extend(p[3].afterObjects)
@@ -953,9 +952,9 @@ def p_arith_expr(p):
     | Expr Bin_arith_op Expr'''
     p[0]=lex_value("Arith_expr")
     if len(p)==4:
-        p[0].objects.extend(p[1].objects)
+        p[0].objects.extend(p[1].objects[0])
         p[0].objects.append(p[2])
-        p[0].objects.extend(p[3].objects)
+        p[0].objects.extend(p[3].objects[0])
         p[0].beforeObjects.extend(p[1].beforeObjects)
         p[0].beforeObjects.extend(p[3].beforeObjects)
         p[0].afterObjects.extend(p[1].afterObjects)
@@ -967,7 +966,7 @@ def p_arith_expr(p):
         elif p[1].strs=='lnot':
             #新增一个变量，将其strs设置为lnot_lv6id。当遍历到这个变量时，将其转化为kcg_lnot_type
             p[0].objects.extend([lex_value("lnot_lv6id"),lex_value("(","(")])
-            p[0].objects.extend(p[2].objects)
+            p[0].objects.extend(p[2].objects[0])
             p[0].objects.append(lex_value(")",")"))
         p[0].afterObjects.extend(p[2].afterObjects)
 
@@ -991,7 +990,7 @@ def p_list(p):
 def p_list_1(p):
     '''List_1 : Expr List_2'''
     p[0]=lex_value("List_1")
-    p[0].objects.append(p[1].objects)
+    p[0].objects.extend(p[1].objects)
     p[0].beforeObjects.extend(p[1].beforeObjects)
     p[0].afterObjects.extend(p[1].afterObjects)
     p[0].objects.extend(p[2].objects)
@@ -1003,7 +1002,7 @@ def p_list_2(p):
     | empty'''
     p[0]=lex_value("List_2")
     if len(p)==4:
-        p[0].objects.append(p[2].objects)
+        p[0].objects.extend(p[2].objects)
         p[0].beforeObjects.extend(p[2].beforeObjects)
         p[0].afterObjects.extend(p[2].afterObjects)
         p[0].objects.extend(p[3].objects)
@@ -1067,13 +1066,13 @@ def p_bool_expr(p):
     if len(p)==3:
         p[1].value='!'
         p[0].objects.append(p[1])
-        p[0].objects.extend(p[2].objects)
+        p[0].objects.extend(p[2].objects[0])
         p[0].beforeObjects.extend(p[2].beforeObjects)
         p[0].afterObjects.extend(p[2].afterObjects)
     elif len(p)==4:
-        p[0].objects+=p[1].objects
+        p[0].objects+=p[1].objects[0]
         p[0].objects.append(p[2])
-        p[0].objects+=p[3].objects
+        p[0].objects+=p[3].objects[0]
         p[0].beforeObjects+=p[1].beforeObjects+p[3].beforeObjects
         p[0].afterObjects+=p[1].afterObjects+p[3].afterObjects
     elif len(p)==5:
