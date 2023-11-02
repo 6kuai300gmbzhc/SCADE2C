@@ -391,6 +391,7 @@ def p_simple_equation(p):
     for elem in p[3].objects:
         setObjectsType(elem,type)
     for elem in p[3].beforeObjects:
+        print(elem[1])
         setObjectsType(elem[1],type)
     for elem in p[3].afterObjects:
         setObjectsType(elem[1],type)
@@ -907,21 +908,28 @@ def p_switch_expr(p):
     | LPARENTHESE CASE Expr OF Switch_expr_1 RPARENTHESE'''
     p[0] = lex_value("Switch_expr")
     if p[1].value=='if':
+        if len(p[4].objects)!=len(p[6].objects):
+            print("switch_expr if error")
+            exit(0)
         p[0].beforeObjects += p[2].beforeObjects + p[4].beforeObjects + p[6].beforeObjects
-        ifTmp = getName("ifTmp")
-        ifSymbol = Symbol(ifTmp, "TmpVar")
-        thisEnv.setSymbol(ifTmp, ifSymbol)
-        p[0].beforeObjects.append(lex_value("", "if("))
-        p[0].beforeObjects.extend(p[2].objects)
-        p[0].beforeObjects.extend([lex_value("", "){\n"), lex_value("lv6id", ifTmp), lex_value("", "=")])
-        p[0].beforeObjects.extend(p[4].objects)
-        p[0].beforeObjects.append(lex_value("", ";\n}else{\n"))
-        p[0].beforeObjects.append(lex_value("lv6id", ifTmp))
-        p[0].beforeObjects.append(lex_value("", "="))
-        p[0].beforeObjects.extend(p[6].objects)
-        p[0].beforeObjects.append(lex_value("", ";\n}\n"))
+        for idx in range(len(p[4].objects)):
+            ifTmp = getName("ifTmp")
+            ifSymbol = Symbol(ifTmp, "TmpVar")
+            thisEnv.setSymbol(ifTmp, ifSymbol)
+            befDefList=list()
+            befDefList.append(lex_value("", "if("))
+            befDefList.extend(p[2].objects[0])
+            befDefList.extend([lex_value("", "){\n"), lex_value("lv6id", ifTmp), lex_value("", "=")])
+            befDefList.extend(p[4].objects[idx])
+            befDefList.append(lex_value("", ";\n}else{\n"))
+            befDefList.append(lex_value("lv6id", ifTmp))
+            befDefList.append(lex_value("", "="))
+            befDefList.extend(p[6].objects[idx])
+            befDefList.append(lex_value("", ";\n}\n"))
+            p[0].beforeObjects.append([ifTmp,befDefList])
 
-        p[0].objects.append(lex_value("lv6id", ifTmp))
+            p[0].objects.append([lex_value("lv6id", ifTmp)])
+
 
         p[0].afterObjects += p[2].afterObjects + p[4].afterObjects + p[6].afterObjects
     else:
