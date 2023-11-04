@@ -6,6 +6,9 @@ typedef struct {
 kcg_bool in1;
 kcg_bool in2;
 kcg_bool in3;
+kcg_int8 in4;
+kcg_int8 in5;
+kcg_int8 in6;
 } inC_bool_expr;
 
 

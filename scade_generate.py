@@ -60,9 +60,12 @@ class Scade_generate:
 if __name__=='__main__':
     file=open('test.txt','r')
     # strs=file.read()
-    strs="node pre_if2(input1,input2:int8;tmp:bool) returns(output1,output2:int8)\
-let \
- output1,output2=(1,2)->pre(input1,input2);\
+    strs="node order_list(in1,in2:int8) returns (out1:int8)\
+var\
+ tmp:int8;\
+let\
+	tmp=in1-in2;\
+	out1=tmp+in1;\
 tel"
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)

@@ -3,7 +3,8 @@
 #include "bool_expr.h"
 void bool_expr(inC_bool_expr *inC, outC_bool_expr *outC)
 {
-outC->out2=inC->in1 ^ inC->in2;
+outC->out1=!inC->in1;
+outC->out2=inC->in1 | inC->in2;
 outC->out3=(inC->in1)+(inC->in2)+(inC->in3)<=1;
 
 }

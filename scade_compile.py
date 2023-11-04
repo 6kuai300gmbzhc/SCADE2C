@@ -178,7 +178,7 @@ def getArrSize(objects):
 def defToString(defList):
     content=""
     for elem in defList:
-        content+=objectsToString(elem[1])
+        content+=objectsToString(elem)
     return content
 
 def p_program(p):
@@ -392,9 +392,9 @@ def p_simple_equation(p):
         setObjectsType(elem,type)
     for elem in p[3].beforeObjects:
         print(elem[1])
-        setObjectsType(elem[1],type)
+        setObjectsType(elem,type)
     for elem in p[3].afterObjects:
-        setObjectsType(elem[1],type)
+        setObjectsType(elem,type)
 
     for idx in range(len(p[1].objects)):
         defList=list()
@@ -402,7 +402,7 @@ def p_simple_equation(p):
         defList.append(p[2])
         defList.extend(p[3].objects[idx])
         defList.append(lex_value("",";\n"))
-        p[0].objects.append([p[1].objects[idx][0].value,defList])
+        p[0].objects.append(defList)
 
     p[0].beforeObjects.extend(p[3].beforeObjects)
     p[0].afterObjects.extend(p[3].afterObjects)
@@ -708,9 +708,11 @@ def p_id_expr(p):
         lastSymbol.IsReturn = True
         thisEnv.setSymbol(lastName, lastSymbol)
         p[0].objects.append(lex_value("lv6id", lastName))
-        p[0].afterObjects.extend([lex_value("lv6id",lastName),lex_value("=","=")])
-        p[0].afterObjects.append(p[3])
-        p[0].afterObjects.append(lex_value("",";\n"))
+        afterList=list()
+        afterList.extend([lex_value("lv6id",lastName),lex_value("=","=")])
+        afterList.append(p[3])
+        afterList.append(lex_value("",";\n"))
+        p[0].afterList.append(afterList)
     elif len(p)==3:
         pass
 
@@ -775,7 +777,7 @@ def p_tempo_expr(p):
             befDefList.extend([lex_value("lv6id", initElem), lex_value("=", "=")])
             befDefList.extend(p[3].objects[idx])
             befDefList.append(lex_value(";\n}\n", ";\n}\n"))
-            p[0].beforeObjects.append([initElem, befDefList])
+            p[0].beforeObjects.append(befDefList)
 
             p[0].objects.append([initLex])
 
@@ -800,7 +802,7 @@ def p_tempo_expr(p):
             afterDefList.extend(p[2].objects[idx])
             afterDefList.append(lex_value("", ";\n"))
             p[0].afterObjects.extend(p[2].afterObjects)
-            p[0].afterObjects.append([preName, afterDefList])
+            p[0].afterObjects.append( afterDefList)
 
         p[0].beforeObjects.extend(p[2].beforeObjects)
     elif len(p)==9:
@@ -856,7 +858,7 @@ def p_tempo_expr(p):
                 befDefList.extend(elem)
             # befDefList.extend(p[7].objects)
             befDefList.append(lex_value("", ";\n}\n}"))
-            p[0].beforeObjects.append(["", befDefList])
+            p[0].beforeObjects.append(befDefList)
 
 
             aftDefList = list()
@@ -869,7 +871,7 @@ def p_tempo_expr(p):
                 [lex_value("lv6id", fbyIdx), lex_value("", "=("), lex_value("lv6id", fbyIdx), lex_value("", "+1)%(")])
             aftDefList.extend(p[5].objects[idx])
             aftDefList.append(lex_value("", ");\n"))
-            p[0].afterObjects.append(["", aftDefList])
+            p[0].afterObjects.append( aftDefList)
 
         # for elem in p[0].beforeObjects:
         #     print("fby",elem)
@@ -926,7 +928,7 @@ def p_switch_expr(p):
             befDefList.append(lex_value("", "="))
             befDefList.extend(p[6].objects[idx])
             befDefList.append(lex_value("", ";\n}\n"))
-            p[0].beforeObjects.append([ifTmp,befDefList])
+            p[0].beforeObjects.append(befDefList)
 
             p[0].objects.append([lex_value("lv6id", ifTmp)])
 
