@@ -12,7 +12,7 @@ class Symbol:
                          #如属于PathId，其Code记录了该Path_id的路径
                          #Type(用于Type_block)
 
-        self.Type = Type  # Type类型(int , float)
+        self.Type = Type  # Type类型(int , float,enum,array)
                             #Node还是function
         self.Public = Public
         self.External = External

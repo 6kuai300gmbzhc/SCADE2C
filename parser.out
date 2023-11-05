@@ -214,7 +214,7 @@ Rule 138   Pattern -> CHARACTER
 Rule 139   Pattern -> Pattern_1 INTEGERNUM
 Rule 140   Pattern -> Bool_atom
 Rule 141   Pattern -> UNDERLINE
-Rule 142   Pattern_1 -> UNDERLINE
+Rule 142   Pattern_1 -> MINUS
 Rule 143   Pattern_1 -> empty
 Rule 144   Arith_expr -> Unary_arith_op Expr
 Rule 145   Arith_expr -> Expr Bin_arith_op Expr
@@ -341,7 +341,7 @@ MAPW                 :
 MAPWI                : 
 MATCH                : 
 MERGE                : 
-MINUS                : 152 156
+MINUS                : 142 152 156
 MOD                  : 159
 MODEL                : 
 NEEDS                : 
@@ -394,7 +394,7 @@ UINT16               : 98
 UINT32               : 99
 UINT64               : 100
 UINT8                : 97
-UNDERLINE            : 141 142
+UNDERLINE            : 141
 UNLESS               : 
 UNSAFE               : 
 UNSIGNED             : 23 96
@@ -6358,7 +6358,7 @@ state 251
     (140) Pattern -> . Bool_atom
     (141) Pattern -> . UNDERLINE
     (109) Path_id -> . LV6ID Path_1
-    (142) Pattern_1 -> . UNDERLINE
+    (142) Pattern_1 -> . MINUS
     (143) Pattern_1 -> . empty
     (169) Bool_atom -> . TRUE
     (170) Bool_atom -> . FALSE
@@ -6367,6 +6367,7 @@ state 251
     CHARACTER       shift and go to state 273
     UNDERLINE       shift and go to state 276
     LV6ID           shift and go to state 77
+    MINUS           shift and go to state 277
     TRUE            shift and go to state 145
     FALSE           shift and go to state 146
     INTEGERNUM      reduce using rule 177 (empty -> .)
@@ -6375,7 +6376,7 @@ state 251
     Path_id                        shift and go to state 272
     Pattern_1                      shift and go to state 274
     Bool_atom                      shift and go to state 275
-    empty                          shift and go to state 277
+    empty                          shift and go to state 278
 
 state 252
 
@@ -6440,7 +6441,7 @@ state 253
     PLUS            shift and go to state 148
     LNOT            shift and go to state 149
 
-    Expr                           shift and go to state 278
+    Expr                           shift and go to state 279
     Id_expr                        shift and go to state 123
     Atom                           shift and go to state 124
     Tempo_expr                     shift and go to state 125
@@ -6485,7 +6486,7 @@ state 256
 
     (31) Opt_body -> Equation . SEMICOLON
 
-    SEMICOLON       shift and go to state 279
+    SEMICOLON       shift and go to state 280
 
 
 state 257
@@ -6497,12 +6498,12 @@ state 257
     (37) Local_block -> . VAR Local_block_1
     (177) empty -> .
 
-    VAR             shift and go to state 283
+    VAR             shift and go to state 284
     LET             reduce using rule 177 (empty -> .)
 
-    Local_block_zero_or_one        shift and go to state 280
-    Local_block                    shift and go to state 281
-    empty                          shift and go to state 282
+    Local_block_zero_or_one        shift and go to state 281
+    Local_block                    shift and go to state 282
+    empty                          shift and go to state 283
 
 state 258
 
@@ -6523,14 +6524,14 @@ state 260
 
     (43) Simple_equation -> Lhs . EQU Expr
 
-    EQU             shift and go to state 284
+    EQU             shift and go to state 285
 
 
 state 261
 
     (44) Lhs -> LPARENTHESE . RPARENTHESE
 
-    RPARENTHESE     shift and go to state 285
+    RPARENTHESE     shift and go to state 286
 
 
 state 262
@@ -6540,11 +6541,11 @@ state 262
     (47) Lhs_1 -> . empty
     (177) empty -> .
 
-    COMMA           shift and go to state 287
+    COMMA           shift and go to state 288
     EQU             reduce using rule 177 (empty -> .)
 
-    Lhs_1                          shift and go to state 286
-    empty                          shift and go to state 288
+    Lhs_1                          shift and go to state 287
+    empty                          shift and go to state 289
 
 state 263
 
@@ -6563,8 +6564,8 @@ state 264
     SEMICOLON       reduce using rule 177 (empty -> .)
     RPARENTHESE     reduce using rule 177 (empty -> .)
 
-    Var_decls_3                    shift and go to state 289
-    empty                          shift and go to state 290
+    Var_decls_3                    shift and go to state 290
+    empty                          shift and go to state 291
 
 state 265
 
@@ -6634,7 +6635,7 @@ state 266
     PLUS            shift and go to state 148
     LNOT            shift and go to state 149
 
-    List                           shift and go to state 291
+    List                           shift and go to state 292
     Expr                           shift and go to state 193
     List_1                         shift and go to state 194
     empty                          shift and go to state 195
@@ -6697,7 +6698,7 @@ state 268
     RPARENTHESE     reduce using rule 177 (empty -> .)
 
     Case_expr                      shift and go to state 268
-    Switch_expr_2                  shift and go to state 292
+    Switch_expr_2                  shift and go to state 293
     empty                          shift and go to state 270
 
 state 269
@@ -6718,7 +6719,7 @@ state 271
 
     (136) Case_expr -> VERTICALBAR Pattern . COLON Expr
 
-    COLON           shift and go to state 293
+    COLON           shift and go to state 294
 
 
 state 272
@@ -6739,7 +6740,7 @@ state 274
 
     (139) Pattern -> Pattern_1 . INTEGERNUM
 
-    INTEGERNUM      shift and go to state 294
+    INTEGERNUM      shift and go to state 295
 
 
 state 275
@@ -6752,20 +6753,25 @@ state 275
 state 276
 
     (141) Pattern -> UNDERLINE .
-    (142) Pattern_1 -> UNDERLINE .
 
     COLON           reduce using rule 141 (Pattern -> UNDERLINE .)
-    INTEGERNUM      reduce using rule 142 (Pattern_1 -> UNDERLINE .)
 
 
 state 277
+
+    (142) Pattern_1 -> MINUS .
+
+    INTEGERNUM      reduce using rule 142 (Pattern_1 -> MINUS .)
+
+
+state 278
 
     (143) Pattern_1 -> empty .
 
     INTEGERNUM      reduce using rule 143 (Pattern_1 -> empty .)
 
 
-state 278
+state 279
 
     (131) Switch_expr -> IF Expr THEN Expr ELSE Expr .
     (121) Tempo_expr -> Expr . ARROW Expr
@@ -6867,7 +6873,7 @@ state 278
     Bin_relation_op                shift and go to state 166
     Bin_bool_op                    shift and go to state 167
 
-state 279
+state 280
 
     (31) Opt_body -> Equation SEMICOLON .
 
@@ -6881,29 +6887,29 @@ state 279
     END             reduce using rule 31 (Opt_body -> Equation SEMICOLON .)
 
 
-state 280
+state 281
 
     (32) Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one . LET Equation_zero_or_more_with_semicolon TEL SEMICOLON
     (33) Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one . LET Equation_zero_or_more_with_semicolon TEL
 
-    LET             shift and go to state 295
+    LET             shift and go to state 296
 
 
-state 281
+state 282
 
     (35) Local_block_zero_or_one -> Local_block .
 
     LET             reduce using rule 35 (Local_block_zero_or_one -> Local_block .)
 
 
-state 282
+state 283
 
     (36) Local_block_zero_or_one -> empty .
 
     LET             reduce using rule 36 (Local_block_zero_or_one -> empty .)
 
 
-state 283
+state 284
 
     (37) Local_block -> VAR . Local_block_1
     (38) Local_block_1 -> . Var_decls SEMICOLON Local_block_1
@@ -6919,13 +6925,13 @@ state 283
     LV6ID           reduce using rule 177 (empty -> .)
     CLOCK           shift and go to state 160
 
-    Local_block_1                  shift and go to state 296
-    Var_decls                      shift and go to state 297
-    empty                          shift and go to state 298
+    Local_block_1                  shift and go to state 297
+    Var_decls                      shift and go to state 298
+    empty                          shift and go to state 299
     Var_id                         shift and go to state 158
     Var_id_1                       shift and go to state 159
 
-state 284
+state 285
 
     (43) Simple_equation -> Lhs EQU . Expr
     (113) Expr -> . Id_expr
@@ -6980,7 +6986,7 @@ state 284
     PLUS            shift and go to state 148
     LNOT            shift and go to state 149
 
-    Expr                           shift and go to state 299
+    Expr                           shift and go to state 300
     Id_expr                        shift and go to state 123
     Atom                           shift and go to state 124
     Tempo_expr                     shift and go to state 125
@@ -6993,37 +6999,37 @@ state 284
     Bool_atom                      shift and go to state 134
     Unary_arith_op                 shift and go to state 141
 
-state 285
+state 286
 
     (44) Lhs -> LPARENTHESE RPARENTHESE .
 
     EQU             reduce using rule 44 (Lhs -> LPARENTHESE RPARENTHESE .)
 
 
-state 286
+state 287
 
     (45) Lhs -> Lhs_id Lhs_1 .
 
     EQU             reduce using rule 45 (Lhs -> Lhs_id Lhs_1 .)
 
 
-state 287
+state 288
 
     (46) Lhs_1 -> COMMA . Lhs_id Lhs_1
     (48) Lhs_id -> . LV6ID
 
     LV6ID           shift and go to state 263
 
-    Lhs_id                         shift and go to state 300
+    Lhs_id                         shift and go to state 301
 
-state 288
+state 289
 
     (47) Lhs_1 -> empty .
 
     EQU             reduce using rule 47 (Lhs_1 -> empty .)
 
 
-state 289
+state 290
 
     (59) Var_decls -> Var_id Var_decls_1 COLON Type_expr Var_decls_2 Var_decls_3 . Var_decls_4
     (69) Var_decls_4 -> . empty
@@ -7032,10 +7038,10 @@ state 289
     SEMICOLON       reduce using rule 177 (empty -> .)
     RPARENTHESE     reduce using rule 177 (empty -> .)
 
-    Var_decls_4                    shift and go to state 301
-    empty                          shift and go to state 302
+    Var_decls_4                    shift and go to state 302
+    empty                          shift and go to state 303
 
-state 290
+state 291
 
     (68) Var_decls_3 -> empty .
 
@@ -7043,21 +7049,21 @@ state 290
     RPARENTHESE     reduce using rule 68 (Var_decls_3 -> empty .)
 
 
-state 291
+state 292
 
     (123) Tempo_expr -> FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List . RPARENTHESE
 
-    RPARENTHESE     shift and go to state 303
+    RPARENTHESE     shift and go to state 304
 
 
-state 292
+state 293
 
     (134) Switch_expr_2 -> Case_expr Switch_expr_2 .
 
     RPARENTHESE     reduce using rule 134 (Switch_expr_2 -> Case_expr Switch_expr_2 .)
 
 
-state 293
+state 294
 
     (136) Case_expr -> VERTICALBAR Pattern COLON . Expr
     (113) Expr -> . Id_expr
@@ -7112,7 +7118,7 @@ state 293
     PLUS            shift and go to state 148
     LNOT            shift and go to state 149
 
-    Expr                           shift and go to state 304
+    Expr                           shift and go to state 305
     Id_expr                        shift and go to state 123
     Atom                           shift and go to state 124
     Tempo_expr                     shift and go to state 125
@@ -7125,14 +7131,14 @@ state 293
     Bool_atom                      shift and go to state 134
     Unary_arith_op                 shift and go to state 141
 
-state 294
+state 295
 
     (139) Pattern -> Pattern_1 INTEGERNUM .
 
     COLON           reduce using rule 139 (Pattern -> Pattern_1 INTEGERNUM .)
 
 
-state 295
+state 296
 
     (32) Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET . Equation_zero_or_more_with_semicolon TEL SEMICOLON
     (33) Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET . Equation_zero_or_more_with_semicolon TEL
@@ -7149,28 +7155,28 @@ state 295
     LPARENTHESE     shift and go to state 261
     LV6ID           shift and go to state 263
 
-    Equation_zero_or_more_with_semicolon shift and go to state 305
-    Equation                       shift and go to state 306
-    empty                          shift and go to state 307
+    Equation_zero_or_more_with_semicolon shift and go to state 306
+    Equation                       shift and go to state 307
+    empty                          shift and go to state 308
     Simple_equation                shift and go to state 258
     Lhs                            shift and go to state 260
     Lhs_id                         shift and go to state 262
 
-state 296
+state 297
 
     (37) Local_block -> VAR Local_block_1 .
 
     LET             reduce using rule 37 (Local_block -> VAR Local_block_1 .)
 
 
-state 297
+state 298
 
     (38) Local_block_1 -> Var_decls . SEMICOLON Local_block_1
 
-    SEMICOLON       shift and go to state 308
+    SEMICOLON       shift and go to state 309
 
 
-state 298
+state 299
 
     (39) Local_block_1 -> empty .
     (64) Var_id_1 -> empty .
@@ -7180,7 +7186,7 @@ state 298
     LV6ID           reduce using rule 64 (Var_id_1 -> empty .)
 
 
-state 299
+state 300
 
     (43) Simple_equation -> Lhs EQU Expr .
     (121) Tempo_expr -> Expr . ARROW Expr
@@ -7233,20 +7239,20 @@ state 299
     Bin_relation_op                shift and go to state 166
     Bin_bool_op                    shift and go to state 167
 
-state 300
+state 301
 
     (46) Lhs_1 -> COMMA Lhs_id . Lhs_1
     (46) Lhs_1 -> . COMMA Lhs_id Lhs_1
     (47) Lhs_1 -> . empty
     (177) empty -> .
 
-    COMMA           shift and go to state 287
+    COMMA           shift and go to state 288
     EQU             reduce using rule 177 (empty -> .)
 
-    Lhs_1                          shift and go to state 309
-    empty                          shift and go to state 288
+    Lhs_1                          shift and go to state 310
+    empty                          shift and go to state 289
 
-state 301
+state 302
 
     (59) Var_decls -> Var_id Var_decls_1 COLON Type_expr Var_decls_2 Var_decls_3 Var_decls_4 .
 
@@ -7254,7 +7260,7 @@ state 301
     RPARENTHESE     reduce using rule 59 (Var_decls -> Var_id Var_decls_1 COLON Type_expr Var_decls_2 Var_decls_3 Var_decls_4 .)
 
 
-state 302
+state 303
 
     (69) Var_decls_4 -> empty .
 
@@ -7262,7 +7268,7 @@ state 302
     RPARENTHESE     reduce using rule 69 (Var_decls_4 -> empty .)
 
 
-state 303
+state 304
 
     (123) Tempo_expr -> FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE .
 
@@ -7297,7 +7303,7 @@ state 303
     VERTICALBAR     reduce using rule 123 (Tempo_expr -> FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE .)
 
 
-state 304
+state 305
 
     (136) Case_expr -> VERTICALBAR Pattern COLON Expr .
     (121) Tempo_expr -> Expr . ARROW Expr
@@ -7351,29 +7357,29 @@ state 304
     Bin_relation_op                shift and go to state 166
     Bin_bool_op                    shift and go to state 167
 
-state 305
+state 306
 
     (32) Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon . TEL SEMICOLON
     (33) Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon . TEL
 
-    TEL             shift and go to state 310
-
-
-state 306
-
-    (40) Equation_zero_or_more_with_semicolon -> Equation . SEMICOLON Equation_zero_or_more_with_semicolon
-
-    SEMICOLON       shift and go to state 311
+    TEL             shift and go to state 311
 
 
 state 307
+
+    (40) Equation_zero_or_more_with_semicolon -> Equation . SEMICOLON Equation_zero_or_more_with_semicolon
+
+    SEMICOLON       shift and go to state 312
+
+
+state 308
 
     (41) Equation_zero_or_more_with_semicolon -> empty .
 
     TEL             reduce using rule 41 (Equation_zero_or_more_with_semicolon -> empty .)
 
 
-state 308
+state 309
 
     (38) Local_block_1 -> Var_decls SEMICOLON . Local_block_1
     (38) Local_block_1 -> . Var_decls SEMICOLON Local_block_1
@@ -7389,25 +7395,25 @@ state 308
     LV6ID           reduce using rule 177 (empty -> .)
     CLOCK           shift and go to state 160
 
-    Var_decls                      shift and go to state 297
-    Local_block_1                  shift and go to state 312
-    empty                          shift and go to state 298
+    Var_decls                      shift and go to state 298
+    Local_block_1                  shift and go to state 313
+    empty                          shift and go to state 299
     Var_id                         shift and go to state 158
     Var_id_1                       shift and go to state 159
 
-state 309
+state 310
 
     (46) Lhs_1 -> COMMA Lhs_id Lhs_1 .
 
     EQU             reduce using rule 46 (Lhs_1 -> COMMA Lhs_id Lhs_1 .)
 
 
-state 310
+state 311
 
     (32) Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL . SEMICOLON
     (33) Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL .
 
-    SEMICOLON       shift and go to state 313
+    SEMICOLON       shift and go to state 314
     CONST           reduce using rule 33 (Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL .)
     TYPE            reduce using rule 33 (Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL .)
     SENSOR          reduce using rule 33 (Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL .)
@@ -7418,7 +7424,7 @@ state 310
     END             reduce using rule 33 (Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL .)
 
 
-state 311
+state 312
 
     (40) Equation_zero_or_more_with_semicolon -> Equation SEMICOLON . Equation_zero_or_more_with_semicolon
     (40) Equation_zero_or_more_with_semicolon -> . Equation SEMICOLON Equation_zero_or_more_with_semicolon
@@ -7434,21 +7440,21 @@ state 311
     LPARENTHESE     shift and go to state 261
     LV6ID           shift and go to state 263
 
-    Equation                       shift and go to state 306
-    Equation_zero_or_more_with_semicolon shift and go to state 314
-    empty                          shift and go to state 307
+    Equation                       shift and go to state 307
+    Equation_zero_or_more_with_semicolon shift and go to state 315
+    empty                          shift and go to state 308
     Simple_equation                shift and go to state 258
     Lhs                            shift and go to state 260
     Lhs_id                         shift and go to state 262
 
-state 312
+state 313
 
     (38) Local_block_1 -> Var_decls SEMICOLON Local_block_1 .
 
     LET             reduce using rule 38 (Local_block_1 -> Var_decls SEMICOLON Local_block_1 .)
 
 
-state 313
+state 314
 
     (32) Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL SEMICOLON .
 
@@ -7462,7 +7468,7 @@ state 313
     END             reduce using rule 32 (Opt_body -> Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL SEMICOLON .)
 
 
-state 314
+state 315
 
     (40) Equation_zero_or_more_with_semicolon -> Equation SEMICOLON Equation_zero_or_more_with_semicolon .
 
@@ -7612,23 +7618,23 @@ WARNING: shift/reduce conflict for GREATEREQU in state 219 resolved as shift
 WARNING: shift/reduce conflict for AND in state 219 resolved as shift
 WARNING: shift/reduce conflict for OR in state 219 resolved as shift
 WARNING: shift/reduce conflict for XOR in state 219 resolved as shift
-WARNING: shift/reduce conflict for ARROW in state 278 resolved as shift
-WARNING: shift/reduce conflict for PLUS in state 278 resolved as shift
-WARNING: shift/reduce conflict for MINUS in state 278 resolved as shift
-WARNING: shift/reduce conflict for STAR in state 278 resolved as shift
-WARNING: shift/reduce conflict for DIVIDE in state 278 resolved as shift
-WARNING: shift/reduce conflict for MOD in state 278 resolved as shift
-WARNING: shift/reduce conflict for LAND in state 278 resolved as shift
-WARNING: shift/reduce conflict for LOR in state 278 resolved as shift
-WARNING: shift/reduce conflict for LXOR in state 278 resolved as shift
-WARNING: shift/reduce conflict for LSL in state 278 resolved as shift
-WARNING: shift/reduce conflict for LSR in state 278 resolved as shift
-WARNING: shift/reduce conflict for EQU in state 278 resolved as shift
-WARNING: shift/reduce conflict for NOEQU in state 278 resolved as shift
-WARNING: shift/reduce conflict for LESS in state 278 resolved as shift
-WARNING: shift/reduce conflict for GREATER in state 278 resolved as shift
-WARNING: shift/reduce conflict for LESSEQU in state 278 resolved as shift
-WARNING: shift/reduce conflict for GREATEREQU in state 278 resolved as shift
-WARNING: shift/reduce conflict for AND in state 278 resolved as shift
-WARNING: shift/reduce conflict for OR in state 278 resolved as shift
-WARNING: shift/reduce conflict for XOR in state 278 resolved as shift
+WARNING: shift/reduce conflict for ARROW in state 279 resolved as shift
+WARNING: shift/reduce conflict for PLUS in state 279 resolved as shift
+WARNING: shift/reduce conflict for MINUS in state 279 resolved as shift
+WARNING: shift/reduce conflict for STAR in state 279 resolved as shift
+WARNING: shift/reduce conflict for DIVIDE in state 279 resolved as shift
+WARNING: shift/reduce conflict for MOD in state 279 resolved as shift
+WARNING: shift/reduce conflict for LAND in state 279 resolved as shift
+WARNING: shift/reduce conflict for LOR in state 279 resolved as shift
+WARNING: shift/reduce conflict for LXOR in state 279 resolved as shift
+WARNING: shift/reduce conflict for LSL in state 279 resolved as shift
+WARNING: shift/reduce conflict for LSR in state 279 resolved as shift
+WARNING: shift/reduce conflict for EQU in state 279 resolved as shift
+WARNING: shift/reduce conflict for NOEQU in state 279 resolved as shift
+WARNING: shift/reduce conflict for LESS in state 279 resolved as shift
+WARNING: shift/reduce conflict for GREATER in state 279 resolved as shift
+WARNING: shift/reduce conflict for LESSEQU in state 279 resolved as shift
+WARNING: shift/reduce conflict for GREATEREQU in state 279 resolved as shift
+WARNING: shift/reduce conflict for AND in state 279 resolved as shift
+WARNING: shift/reduce conflict for OR in state 279 resolved as shift
+WARNING: shift/reduce conflict for XOR in state 279 resolved as shift

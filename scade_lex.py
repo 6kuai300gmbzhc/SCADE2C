@@ -328,7 +328,7 @@ t_EMIT = r'emit'
 t_SYNCHRO = r'synchro'
 t_DO = r'do'
 t_ELSIF = r'elsif'
-t_UNDERLINE = r'_'
+t_UNDERLINE = r'\_'
 
 def t_CHARACTER(t):
     r"'[^']'"
@@ -356,7 +356,7 @@ def t_INTEGERNUM(t):
 
 
 def t_LV6ID(t):
-    r'[a-zA-Z_][a-zA-Z0-9_]*'
+    r'[a-zA-Z][a-zA-Z0-9_]*|[_][a-zA-Z0-9_]+'
     t.type = reserved.get(t.value, 'LV6ID')
     if not reserved.get(t.value):
         t.value = lex_value('lv6id', t.value)
@@ -415,10 +415,10 @@ class scade_lex:
 lexer = lex.lex()
 
 if __name__ == '__main__':
-    data = '''node lnot_test(input1:char) returns(output1,output2:char)\
-let \
-	output2='a';\
-tel'''
+    data = "node case_test(in1,in2,in3:int8;in4:char) returns(out1:int8)\
+    let\
+     out1= (case in4 of | 'a':in1 | 'b':in2 | 'c':in3| _:in2);\
+    tel"
     toks = get_tokens(data)
     for tok in toks:
         print(tok, tok.value.strs,tok.value.value,tok.value.type)

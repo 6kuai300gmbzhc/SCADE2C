@@ -7,6 +7,7 @@ packageName=""
 op_kind_id=""
 intArr=["int8","int16","int32","int64","uint8","uint16","uint32","uint64"]
 floatArr=["float32","float64"]
+typeArr=['bool','int8','int16','int64','int32','uint8','uint16','uint32','uint64','float32','float64','char','enum','array']
 
 scade_lexer=scade_lex()
 GlobalEnv=SymbolTable('Global')
@@ -161,6 +162,8 @@ def exprToNum(objects):
         print("exprToNum:",elem.strs,elem.value)
     return num
 
+
+
 def getArrSize(objects):
     str=""
     print("getArrSize",objects)
@@ -223,6 +226,12 @@ def p_Type_decl(p):
     thisEnv.setSymbol(p[2].value,typeSymbol)
     if p[3].strs=='Type_expr':
         typeSymbol.Type=p[3].value
+        print("p[3].objects",p[3].objects)
+        if len(p[3].objects)!=0:
+           typeSymbol.Type='array'
+        typeSymbol.Code.extend(p[3].objects)
+    elif p[3].strs=='Enum':
+        typeSymbol.Type="enum"
         typeSymbol.Code.extend(p[3].objects)
 
 
@@ -241,7 +250,9 @@ def p_type_def(p):
                 | ENUM LBPARENTHESE Id_one_or_more_with_comma RBPARENTHESE'''
     if len(p)==2:
         p[0]=p[1]
-
+    else:
+        p[0]=p[3]
+        p[0].strs='Enum'
 def p_numeric_kind(p):
     '''Numeric_kind : NUMERIC
     | FLOAT
@@ -627,6 +638,7 @@ def p_id_one_or_more_with_comma_1(p):
     p[0]=lex_value('Id_one_or_more_with_comma_1')
     if len(p)==4:
         p[0].objects.append(p[2])
+        p[0].objects.extend(p[3].objects)
 
 
 #not finish
@@ -902,7 +914,42 @@ def p_bin_relation_op(p):
     p[0]=p[1]
     if p[1].strs=='NOEQU':
         p[1].value='!='
+    elif p[1].strs=='EQU':
+        p[1].value='=='
 
+
+def judgeIsEnum(objects):
+    print()
+    for elem in objects:
+        if elem.strs=='lv6id':
+            symbol=thisEnv.getSymbol(elem.value)
+            if symbol!=None:
+                value=symbol.Type
+                while value not in typeArr:
+                    symbol=thisEnv.getSymbol(value)
+                    value=symbol.Type
+                if value=='enum':
+                    return symbol.Name
+    return ""
+
+
+def checkEnum(eName,objects):
+    isUnderline=False
+    sum=0
+    eSymbol=thisEnv.getSymbol(eName)
+    eDict=dict()
+    for elem in eSymbol.Code:
+        eDict[elem.value]=1
+    for elem in objects:
+        if elem[0][0].strs=='_':
+            isUnderline=True
+        elif elem[0][0].strs=='lv6id':
+            eDict[elem[0][0].value]-=1
+    for key,value in eDict:
+        if value==1:
+            sum+=1
+    if (sum>=1 and isUnderline==True) or (sum==0 and isUnderline==False):
+        return True
 
 #往符号表添加一个局部变量存储if表达式的结果。if (boolExpr){ localVar=Expr1;}else{ localVar=Expr2;}
 def p_switch_expr(p):
@@ -935,28 +982,64 @@ def p_switch_expr(p):
 
         p[0].afterObjects += p[2].afterObjects + p[4].afterObjects + p[6].afterObjects
     else:
-        pass
+        # 如果是char，integernum需要添加default。如果是path_id，则是枚举
+        print(p[5].objects)
+        exprSymbol=thisEnv.getSymbol(p[2].value)
+        eName=judgeIsEnum(p[3].objects[0])
+        if eName!='':
+            if checkEnum(eName,p[5].objects[0])==False:
+                print("Case error")
+            else:
+                pass
+        else:
+            pass
 
 def p_switch_expr_1(p):
     'Switch_expr_1 : Case_expr Switch_expr_2'
-    pass
+    p[0]=lex_value('Switch_expr_1')
+    for idx in range(len(p[1].objects)):
+        p[0].objects.append([p[1].objects[idx]])
+    for idx in range(len(p[2].objects)):
+        p[0].objects[idx].extend(p[2].objects[idx])
+    print("Switch_expr_1", p[0].objects)
 def p_switch_expr_2(p):
     '''Switch_expr_2 : Case_expr Switch_expr_2
     | empty'''
-    pass
+    p[0]=lex_value("Switch_expr_2")
+    if len(p)==3:
+        for idx in range(len(p[1].objects)):
+            p[0].objects.append([p[1].objects[idx]])
+        for idx in range(len(p[2].objects)):
+            p[0].objects[idx].extend(p[2].objects[idx])
+        print("Switch_expr_2",p[0].objects)
+
 def p_case_expr(p):
     'Case_expr : VERTICALBAR Pattern COLON Expr'
-    pass
+    p[0]=lex_value('Case_expr')
+    for idx in range(len(p[4].objects)):
+        tmpList=list()
+        tmpList.append([p[2]])
+        tmpList.append(p[4].objects[idx])
+        p[0].objects.append(tmpList)
+
 def p_pattern(p):
     '''Pattern : Path_id
     | CHARACTER
     | Pattern_1 INTEGERNUM
     | Bool_atom
     | UNDERLINE'''
-    pass
+    print(p[1].strs,p[1].value)
+    if len(p)==3:
+        p[0]=p[2]
+        p[2].value=str(-p[2].value)
+    else:
+        p[0]=p[1]
+
 def p_pattern_1(p):
-    '''Pattern_1 : UNDERLINE
+    '''Pattern_1 : MINUS
     | empty'''
+    p[0]=p[1]
+
 def p_arith_expr(p):
     '''Arith_expr : Unary_arith_op Expr
     | Expr Bin_arith_op Expr'''
