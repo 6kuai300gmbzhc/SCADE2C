@@ -184,6 +184,3 @@ typedef enum kcg_tag_TruthTableValues_truthtables {
 
 
 
-typedef array type1;
-typedef kcg_int32 type2;
-typedef enum {TT,FF,XX} enum_case;

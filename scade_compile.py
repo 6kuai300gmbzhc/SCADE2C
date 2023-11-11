@@ -125,6 +125,8 @@ def objectsToString(objects,num=0):
             sstr+="kcg_true"
         elif elem.strs=='false':
             sstr+="kcg_false"
+        elif elem.strs=='enum_lv6id':
+            sstr+=elem.value
         # elif elem.strs=='Pre':
         #     symbol=thisEnv.getSymbol(elem.value)
         #     symbol.Type=type
@@ -158,15 +160,12 @@ def exprToNum(objects):
     for elem in objects:
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
-            print("symbol.Code=",symbol.Code)
-        print("exprToNum:",elem.strs,elem.value)
     return num
 
 
 
 def getArrSize(objects):
     str=""
-    print("getArrSize",objects)
     for elem in reversed(objects):
         if len(elem) == 1:
             if elem[0].strs == 'integernum':
@@ -226,7 +225,6 @@ def p_Type_decl(p):
     thisEnv.setSymbol(p[2].value,typeSymbol)
     if p[3].strs=='Type_expr':
         typeSymbol.Type=p[3].value
-        print("p[3].objects",p[3].objects)
         if len(p[3].objects)!=0:
            typeSymbol.Type='array'
         typeSymbol.Code.extend(p[3].objects)
@@ -402,7 +400,6 @@ def p_simple_equation(p):
     for elem in p[3].objects:
         setObjectsType(elem,type)
     for elem in p[3].beforeObjects:
-        print(elem[1])
         setObjectsType(elem,type)
     for elem in p[3].afterObjects:
         setObjectsType(elem,type)
@@ -919,18 +916,17 @@ def p_bin_relation_op(p):
 
 
 def judgeIsEnum(objects):
-    print()
+    symName=""
     for elem in objects:
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
             if symbol!=None:
                 value=symbol.Type
-                while value not in typeArr:
+                while value not in typeArr:#存在该变量的类型是重命名之后，因此需要找到该变量的最初类型
                     symbol=thisEnv.getSymbol(value)
                     value=symbol.Type
-                if value=='enum':
-                    return symbol.Name
-    return ""
+                symName=symbol.Name
+    return symName
 
 
 def checkEnum(eName,objects):
@@ -943,13 +939,14 @@ def checkEnum(eName,objects):
     for elem in objects:
         if elem[0][0].strs=='_':
             isUnderline=True
-        elif elem[0][0].strs=='lv6id':
+        elif elem[0][0].strs=='enum_lv6id':
             eDict[elem[0][0].value]-=1
-    for key,value in eDict:
+    for key,value in eDict.items():
         if value==1:
             sum+=1
     if (sum>=1 and isUnderline==True) or (sum==0 and isUnderline==False):
         return True
+    return False
 
 #往符号表添加一个局部变量存储if表达式的结果。if (boolExpr){ localVar=Expr1;}else{ localVar=Expr2;}
 def p_switch_expr(p):
@@ -963,7 +960,7 @@ def p_switch_expr(p):
         p[0].beforeObjects += p[2].beforeObjects + p[4].beforeObjects + p[6].beforeObjects
         for idx in range(len(p[4].objects)):
             ifTmp = getName("ifTmp")
-            ifSymbol = Symbol(ifTmp, "TmpVar")
+            ifSymbol = Symbol(ifTmp, "ifExpr")
             thisEnv.setSymbol(ifTmp, ifSymbol)
             befDefList=list()
             befDefList.append(lex_value("", "if("))
@@ -983,16 +980,46 @@ def p_switch_expr(p):
         p[0].afterObjects += p[2].afterObjects + p[4].afterObjects + p[6].afterObjects
     else:
         # 如果是char，integernum需要添加default。如果是path_id，则是枚举
-        print(p[5].objects)
-        exprSymbol=thisEnv.getSymbol(p[2].value)
-        eName=judgeIsEnum(p[3].objects[0])
-        if eName!='':
-            if checkEnum(eName,p[5].objects[0])==False:
-                print("Case error")
+        symName=judgeIsEnum(p[3].objects[0])
+        exprSymbol=thisEnv.getSymbol(symName)
+        if exprSymbol==None:
+            print("Switch_expr Error")
+            exit(0)
+        if exprSymbol.Type=="enum":
+            if checkEnum(exprSymbol.Name,p[5].objects[0])==False:
+                print("Switch_expr enum Error")
+                exit(0)
+        for idx in range(len(p[5].objects)):
+            caseName=getName("caseTmp")
+            caseSymbol=Symbol(caseName,"switchExpr")
+            thisEnv.setSymbol(caseName,caseSymbol)
+            defList=list()
+            defList.append(lex_value("","switch("))
+            defList.extend(p[3].objects[0])
+            defList.append(lex_value("","){\n"))
+            for elem in p[5].objects[idx]:
+                if elem[0][0].value!='_':
+                    defList.append(lex_value("", "case "))
+                    defList.extend(elem[0])
+                else:
+                    isDefault=True
+                    defList.append(lex_value("","default "))
+                defList.append(lex_value("", " :\n"))
+                defList.append(lex_value("lv6id", caseName))
+                defList.append(lex_value("", " = "))
+                defList.extend(elem[1])
+                defList.append(lex_value("", ";\nbreak;\n"))
+            if isDefault==False:
+                defList.append(lex_value("","default :\nbreak;\n}\n"))
             else:
-                pass
-        else:
-            pass
+                defList.append(lex_value("","}\n"))
+            p[0].beforeObjects.append(defList)
+            p[0].objects.append([lex_value("lv6id", caseName)])
+
+
+
+
+
 
 def p_switch_expr_1(p):
     'Switch_expr_1 : Case_expr Switch_expr_2'
@@ -1001,7 +1028,6 @@ def p_switch_expr_1(p):
         p[0].objects.append([p[1].objects[idx]])
     for idx in range(len(p[2].objects)):
         p[0].objects[idx].extend(p[2].objects[idx])
-    print("Switch_expr_1", p[0].objects)
 def p_switch_expr_2(p):
     '''Switch_expr_2 : Case_expr Switch_expr_2
     | empty'''
@@ -1011,7 +1037,6 @@ def p_switch_expr_2(p):
             p[0].objects.append([p[1].objects[idx]])
         for idx in range(len(p[2].objects)):
             p[0].objects[idx].extend(p[2].objects[idx])
-        print("Switch_expr_2",p[0].objects)
 
 def p_case_expr(p):
     'Case_expr : VERTICALBAR Pattern COLON Expr'
@@ -1028,12 +1053,13 @@ def p_pattern(p):
     | Pattern_1 INTEGERNUM
     | Bool_atom
     | UNDERLINE'''
-    print(p[1].strs,p[1].value)
     if len(p)==3:
         p[0]=p[2]
         p[2].value=str(-p[2].value)
     else:
         p[0]=p[1]
+        if p[0].strs=='lv6id':
+            p[0].strs='enum_lv6id'
 
 def p_pattern_1(p):
     '''Pattern_1 : MINUS

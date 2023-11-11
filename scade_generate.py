@@ -67,10 +67,13 @@ class Scade_generate:
 if __name__=='__main__':
     file=open('test.txt','r')
     # strs=file.read()
-    strs="type enum_case=enum{TT,FF,XX};\
-node case_test(in1,in2,in3:bool;in4:enum_case) returns(out1,out2,out3:bool)\
+    strs="node test_last(tmp:bool;in1,in2:int8) returns(out1,out2:int8)\
+var \
+	tvar1:int8;\
 let\
- out1,out2,out3 = (case in4 of | TT:(in1,in2,in3) | FF:(in2,in3,in3) | _:(in3,in1,in2));\
+	tvar1=in1+in2;\
+	out1=(in1-in2)->pre(out2+tvar1);\
+	out2=tvar1+out1;\
 tel"
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)

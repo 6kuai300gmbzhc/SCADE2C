@@ -11,6 +11,8 @@ class Symbol:
                           # Sensor Pre Init LocalVar(在local_block中定义的变量) TmpVar(if和init操作符使用的局部变量)
                          #如属于PathId，其Code记录了该Path_id的路径
                          #Type(用于Type_block)
+                        #fbyIdx，fbyArray
+                        #ifExpr,switchExpr
 
         self.Type = Type  # Type类型(int , float,enum,array)
                             #Node还是function
