@@ -7,6 +7,8 @@ class lex_value:
         self.value = value
         self.type = Type
         self.objects = list()
+        self.beforeObjects = list()
+        self.afterObjects = list()
         # self.values1 = list()
         self.scope = scope
 
@@ -146,11 +148,11 @@ reserved = {
 }
 
 tokens = [
-    "INTCONST",  # ++
-    "REALCONST",  # ++
-    "LV6ID",
-    # "ID",  # id = word
-    "IDREF",  # ++
+    "INTEGERNUM",  # ++
+    "FLOATNUM",  # ++
+    "CHARACTER", #++
+    "LV6ID",  # id
+    "LV6IDREF",  # ++
     'LBRACKET',  # [
     'RBRACKET',  # ]
     'LPARENTHESE',  # (
@@ -162,6 +164,7 @@ tokens = [
     'COMMA',  # ,
     'SEMICOLON',  # ;
     'COLON',  # :
+    'DOUBLECOLON', # ::
     'EQU',  # =
     'LESS',  # <
     'GREATER',  # >
@@ -182,15 +185,9 @@ tokens = [
     'VERTICALBAR',  # |
     'SINGLEQUOTE',  # '
     'AT',  # @
-
-    'INTEGERNUM',  # ++
-    "FLOATNUM",  # \d+.\d+
-    
-    "NAME", # name = 'word
-    "CHARACTER", 
-    "TYPED_INTEGER",
-    "TYPED_FLOAT"
+    'UNDERLINE' #_
 ] + list(reserved.values())
+
 
 t_BOOL = r'bool'
 t_REAL = r'real'
@@ -269,6 +266,7 @@ t_RBPARENTHESE = r'}'
 t_HASHTAG = r'\#'
 t_EQU = r'='
 t_COLON = r':'
+t_DOUBLECOLON = r'::'
 t_DIVIDE = r'/'
 t_SURPLUS = r'%'
 t_LESS = r'<'
@@ -341,64 +339,35 @@ t_EMIT = r'emit'
 t_SYNCHRO = r'synchro'
 t_DO = r'do'
 t_ELSIF = r'elsif'
+t_UNDERLINE = r'\_'
 
-def t_CHARACTER(t): # TODO: character can also be '\x digit16 digit16'
-    r'\'[a-zA-Z0-9_]\''
-    t.value = lex_value('character', str(t.value))
+def t_CHARACTER(t):
+    r"'[^']'"
+    t.value = lex_value('character', t.value)
     return t
+
 
 def t_FLOATNUM(t):
-    r'\d+\.\d+'
+    r'((\d+\.\d*)|(\.\d+))([eE][+-]?\d+)?'
     t.value = lex_value('floatnum', float(t.value))
-    return t
-
-def t_TYPED_INTEGER(t): # TODO: int8, int16, int32, int64 need change to int then save the value
-    r'\d+_[ui]\d+'
-    t.value = lex_value('typed_integer', str(t.value))
-
-def t_TYPED_FLOAT(t): # TODO: change the float then save the value
-    r'\d+\._f\d+'
-    t.value = lex_value('typed_float', str(t.value))
-
-# def t_ID(t):
-#     r'[a-zA-Z_][a-zA-Z0-9_]*'
-#     t.type = reserved.get(t.value, 'ID')
-#     if not reserved.get(t.value):
-#         t.value = lex_value('id', t.value)
-#     else:
-#         t.value = lex_value(t.value, t.value)
-#     return t
-
-# name = 'word, so just add a ' before the ID
-def t_NAME(t):
-    r'\'[a-zA-Z_][a-zA-Z0-9_]*'
-    t.type = reserved.get(t.value, 'NAME')
-    if not reserved.get(t.value):
-        t.value = lex_value('name', t.value)
-    else:
-        t.value = lex_value(t.value, t.value)
-    return t
-
-
-def t_REALCONST(t):
-    r'\d+\.\d+'
-    t.value = lex_value('realconst', float(t.value))
-    return t
-
-def t_INTCONST(t):
-    r'\d+'
-    t.value = lex_value('intconst', int(t.value))
     return t
 
 # decimal and hexadecimal
 def t_INTEGERNUM(t):
-    r'^(0b[01]+|0[0-7]+|\d+|0x[0-9a-fA-F]+)$'
-    t.value=lex_value('integernum',t.value)
+    r'(0x[0-9a-fA-F]+)|(0b[01]+)|(0[0-7]+)|0|([1-9][0-9]*)'
+    if len(t.value)>1 and t.value[1]=='x':
+        num=int(t.value,16)
+    elif len(t.value)>1 and t.value[1]=='b':
+        num=int(t.value,1)
+    elif t.value[0]=='0' and len(t.value)>1 :
+        num=int(t.value,8)
+    else:
+        num=int(t.value)
+    t.value = lex_value('integernum', t.value)
     return t
 
-# id in lustre v6, will be deprecated in this scade version
 def t_LV6ID(t):
-    r'[a-zA-Z_][a-zA-Z0-9_]*'
+    r'[a-zA-Z][a-zA-Z0-9_]*|[_][a-zA-Z0-9_]+'
     t.type = reserved.get(t.value, 'LV6ID')
     if not reserved.get(t.value):
         t.value = lex_value('lv6id', t.value)
@@ -556,7 +525,7 @@ if __name__ == '__main__':
     '''
     toks = get_tokens(data)
     for tok in toks:
-        print(tok, tok.value.strs)
+        print(tok, tok.value.strs,tok.value.value,tok.value.type)
     lex_ = scade_lex()
     lex_.set_tokens(toks)
     lex_.output_program(sys.stdout)

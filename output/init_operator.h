@@ -9,6 +9,7 @@ kcg_int8 input1;
 
 typedef struct {
 kcg_int8 output1;
+kcg_boolinit;
 } outC_init_operator;
 
 
