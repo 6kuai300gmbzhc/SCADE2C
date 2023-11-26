@@ -448,7 +448,7 @@ def p_state_machine(p):
     '''State_machine : AUTOMATON State_machine_1'''
     # 原来应当为 Id_zero_or_one 省略状态机名字为空的情况，默认没有ID
     print('定义状态机, 默认名字为当前node name, 即thisEnv: ', thisEnv.EnvName)
-    # TODO: 增加状态机有名称的情况，状态机隶属于一个node，且单独创建 状态机名称_node名称.c .h文件
+    # TODO: 添加状态机全为强迁移的情况
     p[0]=lex_value("State_machine")
     # switch (state_sel)
     p[0].value+="SSM_ST state_sel = outC->state_nxt;\n"
@@ -463,24 +463,36 @@ def p_state_machine_1(p):
                        | empty'''
     p[0]=lex_value("State_machine_1")
     if len(p) == 3:
-        p[0].objects.append(p[1]) # 拼接多个状态定义
-        p[0].objects.extend(p[2].objects)
-        print('状态定义', p[1].value)
+        if p[1].strs=='Weak_state_decl':
+            p[0].objects.append(p[1]) # 拼接多个状态定义，每个p[i]object里面的.value字段自带代码
+            p[0].objects.extend(p[2].objects)
+            print('状态定义', p[1].value)
+        elif p[1].strs=='Strong_state_decl':
+            pass
     
 def p_state_decl(p):
     '''State_decl ::= State_decl_1 State_decl_2 STATE State_Lv6id State_decl_3 Data_def State_decl_4'''
-    p[0]=lex_value("State_decl")
-    # TODO: 目前仅实现弱迁移，p[5] state_decl_3 的 unless语句强迁移未实现
     if p[1]!=None:
         assert p[1].value == 'initial'
         print("初始状态加入状态列表！", p[4].value)
         thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
         thisNode.StateList.append(p[4].value)
 
-    # p[4] 为状态名，p[6]为状态内部赋值语句equation, p[7]为 transition
-    p[0].value+='case '+p[4].value+':\n'
-    p[0].value+=p[6].value+'\n'
-    p[0].value+=p[7].value+'\n'
+    if p[7]!=None and p[7].strs=='Weak_transition':
+        p[0]=lex_value("Weak_state_decl")
+        # p[4] 为状态名，p[6]为状态内部赋值语句equation, p[7]为 transition
+        p[0].value+='case '+p[4].value+':\n'
+        p[0].value+=p[6].value+'\n'
+        p[0].value+=p[7].value+'\n'
+        
+    elif p[5]!=None and p[5].strs=='Strong_transition':
+        p[0]=lex_value("Strong_state_decl")
+        # TODO: 目前仅实现弱迁移，p[5] state_decl_3 的 unless语句强迁移未实现
+        
+    else:
+        raise NotImplementedError('状态机应当仅有强迁移或者仅有弱迁移')
+    
+
 
 def p_state_decl_1(p):
     '''State_decl_1 : INITIAL
@@ -496,29 +508,42 @@ def p_state_decl_2(p):
     pass
 
 def p_state_decl_3(p):
-    '''State_decl_3 : empty'''
+    '''State_decl_3 : UNLESS Strong_transition SEMICOLON
+                    | empty'''
     # TODO: unless语句强迁移未实现
-    pass
+    p[0]=lex_value("Strong_transition")
+    if len(p)>2:
+        pass # 需要两个switch case，要用到objects
+
+def p_strong_transition(p):
+    '''Strong_transition : IF Expr Target'''
 
 def p_data_def(p):
-    '''Data_def : Equation SEMICOLON
+    '''Data_def : LET Equation SEMICOLON TEL
                 | empty'''
     # 在状态机中仅实现了简单的无 LET...TEL语句
     p[0]=lex_value("Data_def")
-    if len(p)==3:
-        p[0].value+=defToString(p[1].objects) # 等式变为C语句填入代码体
+    if len(p)==5:
+        print("Debug: 拆解状态机的arrow赋值语句, p[2].beforeObjects: ", p[2].beforeObjects)
+        print("Debug: 拆解状态机的arrow赋值语句, p[2].objects: ", p[2].objects)
+        print("Debug: 拆解状态机的arrow赋值语句, p[2].afterObjects: ", p[2].afterObjects)
+        p[0].value+=defToString(p[2].beforeObjects)
+        p[0].value+=defToString(p[2].objects)
+        p[0].value+=defToString(p[2].afterObjects)
         # 不用额外加分号结尾
 
 def p_state_decl_4(p):
-    '''State_decl_4 : UNTIL Transition SEMICOLON'''
-    p[0]=lex_value("State_decl_4")
-    p[0].value+=p[2].value
+    '''State_decl_4 : UNTIL Weak_transition SEMICOLON
+                    | empty '''
+    p[0]=lex_value("Weak_transition")
+    if len(p)>2:
+        p[0].value+=p[2].value
 
-def p_transition(p):
-    '''Transition : IF Expr Target'''
+def p_weak_transition(p):
+    '''Weak_transition : IF Expr Target'''
     # 省略 Scade 语法中原有的 Arrow, 因为ARROW是一个token运算符, 暂未实现 p_arrow
-    print("Transition: ", p[1], p[2].objects, p[3])
-    p[0]=lex_value("Transition")
+    print("Weak_transition: ", p[1], p[2].objects, p[3])
+    p[0]=lex_value("Weak_transition")
     p[2].value = defToString(p[2].objects)
 
     p[0].value+="if("+p[2].value+")"
@@ -527,7 +552,7 @@ def p_transition(p):
 
 def p_target(p):
     '''Target : RESTART LV6ID'''
-    # 目前仅实现 restart 关键字，状态重新开始，resume暂缓实现
+    # TODO: 目前仅实现 restart 关键字，状态重新开始，resume暂缓实现
     print("Target: ", p[1], p[2])
     # outC->state_nxt = state_name;
     p[0]=lex_value("Target")
@@ -918,7 +943,7 @@ def p_tempo_expr(p):
     p[0] = lex_value("Tempo_expr")
     if len(p)==4 and p[2].value=='->':
         if symbol.InitName=="":
-            initName=getName("init")
+            initName=getName("init")   # BUG:init变量不会自增
             symbol.InitName=initName
             initSymbol=Symbol(initName,"Init","bool")
             initSymbol.IsReturn=True
@@ -934,7 +959,7 @@ def p_tempo_expr(p):
         p[0].beforeObjects.extend(p[3].beforeObjects)
 
         for idx in range(len(p[1].objects)):
-            initName = symbol.InitName
+            initName = symbol.InitName     # FIXME: 'init变量不会自增' BUG 
             initElem = getName("initElem")
             initLex = lex_value("initElem", initElem)
             thisEnv.setSymbol(initElem, Symbol(initElem, "TmpVar"))
@@ -1416,14 +1441,35 @@ if __name__=='__main__':
     node simple_automaton (i: int32; c: bool; d: bool) returns (o: int32)
     automaton
         state ADD1
-            o = i + 1 ;
+        let
+            o = 100 -> i + 1 ;
+        tel
         until if c and d restart MINUS1;
 
         initial state MINUS1
-            o = i - 1;
-        until if c restart ADD1;
-    returns o;  
+        let
+            o = i - 1 ;
+        tel
+        until if c or d restart ADD1;
+    returns o; 
     """
+    # strs = """
+    # node strong_automaton (i: int32; c: bool; d: bool) returns (o: int32)
+    # automaton
+    #     state ADD1
+    #     unless if c and d restart MINUS1;
+    #     let
+    #         o = 100 -> i + 1 ;
+    #     tel
+    #     
+    #     initial state MINUS1
+    #     unless if c restart ADD1;
+    #     let
+    #         o = 2 -> i - 1 ;
+    #     tel
+    # returns o; 
+    # """
+    
     string_tokens=get_tokens(strs)
     scade_lexer.set_tokens(string_tokens)
     nodes=parser.parse(strs,lexer=scade_lexer)
