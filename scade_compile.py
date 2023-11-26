@@ -65,6 +65,10 @@ def generate_c_file(body):
         symbol = thisEnv.getSymbol(para)
         if symbol.IsArray==False:
             c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para).Type))
+    # NOTE: init状态机初始状态赋值
+    if op_kind_symbol.isStatemachine:
+        c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.StateList[0]
+
     for elem in op_kind_symbol.fbyList:
         c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(),getParamsInitValue(thisEnv.getSymbol(elem.fbyArr).Type))
     c_content += "}\n"
@@ -73,6 +77,9 @@ def generate_c_file(body):
     for para in thisEnv.SymbolTable.values():
         if para.Kind=="Pre":
             c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name).Type))
+    # NOTE: reset状态机初始状态赋值
+    if op_kind_symbol.isStatemachine:
+        c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.StateList[0]
     c_content += "}\n"
     filename = "./output/%s.c" %(name)
     print(c_content)
@@ -277,9 +284,8 @@ def p_user_op_decl(p):
     global thisEnv
     symbol=thisEnv.getSymbol(p[3].value) # 该symbol名字在 User_op_decl_Lv6id已经被set
     if isStatemachine==1:
-        symbol.isStatemachine==True # 该node name为状态机名字
-        print('状态机', p[3].value, '的状态列表: ', symbol.StateList)
-        print('TODO: 即将构建reset, init函数body传给generate_c_file')
+        symbol.isStatemachine=True # 该node name为状态机名字
+        print('状态机', p[3].value, '的初始状态列表: ', symbol.StateList)
     for idx in p[5].objects:
         # print(idx.strs,idx.value)
         symbol.Params.append(idx.value)
@@ -318,10 +324,8 @@ def p_state_lv6id(p):
     # TODO: 获取当前作用域的EnvName, 是当前状态机所属node的名字
     # 通过 thisEnv.getSymbol(thisEnv.EnvName) 得到当前状态机所属node的symbol类
     # 向该symbol中的 StateList 添加当前状态的名字
-    print("即将向当前作用域的 StateList中添加状态，This EnvName: ", thisEnv.EnvName)
-    thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
-    print("type of this node symbol: ", type(thisNode))
-    thisNode.StateList.append(p[1].value)
+    # print("即将向当前作用域的 StateList中添加状态，This EnvName: ", thisEnv.EnvName)
+    
 
 def p_op_kind(p):
     '''Op_kind : FUNCTION
@@ -362,6 +366,9 @@ def p_opt_body(p):
             p[0].value+=defToString(p[1].beforeObjects)
             p[0].value+=defToString(p[1].objects)
             p[0].value+=defToString(p[1].afterObjects)
+            # NOTE:加上Equation Control block的控制流代码
+            p[0].value+=p[1].value
+            print("Debug info: Opt_body len(p)==3, p[0].value is: ", p[0].value)
         else:
             p[0].value+=defToString(p[4].beforeObjects)
             p[0].value+=defToString(p[4].objects)
@@ -415,8 +422,9 @@ def p_equation(p):
         p[0].objects.extend(p[1].objects)
         p[0].beforeObjects.extend(p[1].beforeObjects)
         p[0].afterObjects.extend(p[1].afterObjects)
-    elif len(p)==3: # TODO: 添加控制流等式
+    elif len(p)==3: # TODO: 添加控制流等式, 改写为 objects before objects, afterObjects
         p[0].value+=p[1].value+p[2].value
+        print("Control block, p[1],p[2] value: ", p[1].value, ", ", p[2].value)
 
 
 def p_control_block(p):
@@ -461,9 +469,14 @@ def p_state_machine_1(p):
     
 def p_state_decl(p):
     '''State_decl ::= State_decl_1 State_decl_2 STATE State_Lv6id State_decl_3 Data_def State_decl_4'''
-    # TODO: 目前仅实现弱迁移，state_decl_3 的 unless语句强迁移未实现
     p[0]=lex_value("State_decl")
-    
+    # TODO: 目前仅实现弱迁移，p[5] state_decl_3 的 unless语句强迁移未实现
+    if p[1]!=None:
+        assert p[1].value == 'initial'
+        print("初始状态加入状态列表！", p[4].value)
+        thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
+        thisNode.StateList.append(p[4].value)
+
     # p[4] 为状态名，p[6]为状态内部赋值语句equation, p[7]为 transition
     p[0].value+='case '+p[4].value+':\n'
     p[0].value+=p[6].value+'\n'
@@ -473,6 +486,7 @@ def p_state_decl_1(p):
     '''State_decl_1 : INITIAL
                     | empty'''
     print("State_decl_1: ", p[1])
+    p[0]=p[1]
     # TODO: Do something in nodename.c init, reset function
     pass
 
@@ -483,15 +497,17 @@ def p_state_decl_2(p):
 
 def p_state_decl_3(p):
     '''State_decl_3 : empty'''
+    # TODO: unless语句强迁移未实现
     pass
 
 def p_data_def(p):
-    '''Data_def : Simple_equation SEMICOLON
+    '''Data_def : Equation SEMICOLON
                 | empty'''
     # 在状态机中仅实现了简单的无 LET...TEL语句
     p[0]=lex_value("Data_def")
     if len(p)==3:
-        p[0].value+=p[1].value+p[2].value
+        p[0].value+=defToString(p[1].objects) # 等式变为C语句填入代码体
+        # 不用额外加分号结尾
 
 def p_state_decl_4(p):
     '''State_decl_4 : UNTIL Transition SEMICOLON'''
@@ -499,11 +515,12 @@ def p_state_decl_4(p):
     p[0].value+=p[2].value
 
 def p_transition(p):
-    '''Transition : IF LV6ID Target'''
+    '''Transition : IF Expr Target'''
     # 省略 Scade 语法中原有的 Arrow, 因为ARROW是一个token运算符, 暂未实现 p_arrow
-    # If Expr 的 表达式简化成一个 LV6ID
-    print("Transition: ", p[1], p[2], p[3])
+    print("Transition: ", p[1], p[2].objects, p[3])
     p[0]=lex_value("Transition")
+    p[2].value = defToString(p[2].objects)
+
     p[0].value+="if("+p[2].value+")"
     p[0].value+="{\n  "+p[3].value+"\n}\n"
     p[0].value+='break;'
@@ -833,7 +850,7 @@ def p_path_1(p):
 
 def p_path_id(p):
     '''Path_id : LV6ID Path_1'''
-    if len(p[2].objects)!=0:
+    if p[2]!=None and len(p[2].objects)!=0:
         elem=p[2].objects[-1]
         symbol=Symbol(elem.value,"PathId")
         symbol.Kind="PathId"
@@ -1396,13 +1413,13 @@ if __name__=='__main__':
     # strs = str("sensor Sensor1:int32;\
     # sensor Sensor2:int32;")
     strs = """
-    node simple_automaton (i: int32; c: bool) returns (o: int32)
+    node simple_automaton (i: int32; c: bool; d: bool) returns (o: int32)
     automaton
-        initial state ADD1
+        state ADD1
             o = i + 1 ;
-        until if c restart MINUS1;
+        until if c and d restart MINUS1;
 
-        state MINUS1
+        initial state MINUS1
             o = i - 1;
         until if c restart ADD1;
     returns o;  

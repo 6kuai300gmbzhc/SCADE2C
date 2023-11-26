@@ -45,7 +45,7 @@ class Symbol:
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
         self.arrSize=list()
 
-        self.StateList = list()
+        self.StateList = list() # 状态机所有可能状态名列表
         self.Params = list()  # 函数标识符的参数列表
         self.Returns = list()  # 函数标识符的返回值列表
         self.StaticParams = list()  # 函数的静态参数列表
