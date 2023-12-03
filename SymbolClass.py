@@ -5,7 +5,7 @@ class fbyClass:
         self.fbyIdx = idx
         self.fbyArr = arr
 class Symbol:
-    def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='') -> None:
+    def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='',isStatemachine=False,StatemachineName='') -> None:
         self.Name = Name  # 标识符的名字
         self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点或函数(OpKind) 包(Package)
                           # Sensor Pre Init LocalVar(在local_block中定义的变量) TmpVar(if和init操作符使用的局部变量)
@@ -22,6 +22,9 @@ class Symbol:
         self.IsPackage = isPackage
         self.PackageName = PackageName
         self.isCalled=False   #用于标识一个node是否被调用
+
+        self.isStatemachine=isStatemachine
+        self.StateMachineName=StatemachineName
 
         # self.VarType = VarType             #常量、变量等类型标识符的数据类型
         # self.TypeType = TypeType           #类型定义的基本类型，或者Struct、Enum
@@ -42,6 +45,7 @@ class Symbol:
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
         self.arrSize=list()
 
+        self.StateList = list() # 状态机所有可能状态名列表
         self.Params = list()  # 函数标识符的参数列表
         self.Returns = list()  # 函数标识符的返回值列表
         self.StaticParams = list()  # 函数的静态参数列表

@@ -2,7 +2,7 @@ import ply.lex as lex
 import sys
 
 class lex_value:
-    def __init__(self, strs = "", value = "", Type = "") -> None:
+    def __init__(self, strs = "", value = "", Type = "", scope = "") -> None:
         self.strs = strs
         self.value = value
         self.type = Type
@@ -10,6 +10,17 @@ class lex_value:
         self.beforeObjects = list()
         self.afterObjects = list()
         # self.values1 = list()
+        self.scope = scope
+
+        self.entity = None
+        self.syms = list()
+        self.rets = list()
+    
+    def set_value(self, value):
+        self.value = value
+
+    def set_scope(self, scope):
+        self.scope = scope
  
     def __repr__(self) -> str:
         strs = str(self.strs) + ' ' + str(self.value)
@@ -341,6 +352,7 @@ def t_FLOATNUM(t):
     t.value = lex_value('floatnum', float(t.value))
     return t
 
+# decimal and hexadecimal
 def t_INTEGERNUM(t):
     r'(0x[0-9a-fA-F]+)|(0b[01]+)|(0[0-7]+)|0|([1-9][0-9]*)'
     if len(t.value)>1 and t.value[1]=='x':
@@ -353,7 +365,6 @@ def t_INTEGERNUM(t):
         num=int(t.value)
     t.value = lex_value('integernum', t.value)
     return t
-
 
 def t_LV6ID(t):
     r'[a-zA-Z][a-zA-Z0-9_]*|[_][a-zA-Z0-9_]+'
@@ -372,6 +383,7 @@ def t_error(t):
     print("Illegal charactor '%s'" % t.value[0])
     t.lexer.skip(1)
 
+
 def get_tokens(inputString):
     lexer.input(inputString)
     string_tokens = list()
@@ -382,7 +394,76 @@ def get_tokens(inputString):
         if type(tok.value) == str:
             tok.value = lex_value(tok.value, tok.value)
         string_tokens.append(tok)
+    get_scope(string_tokens) # 计算出scope
+    print("------------TOKENS-------------")
+    print(string_tokens)
+    print("-----------END TOKENS----------\n")
     return string_tokens
+
+def token2string(token):
+    return "值：%10s，类型：%15s" % (token.value, token.type)
+
+def getNfadir():
+    nfa_dir = {}
+    with open("data/NFA.txt") as nfa_f:
+        nfas = list()
+        nfa = list()
+        for line in nfa_f.readlines():
+            if len(line.strip()) == 0:
+                nfas.append(nfa)
+                nfa = list()
+            else:
+                nfa.append(line)
+        if len(nfa) != 0:
+            nfas.append(nfa)
+        for n in nfas:
+            type = n[0].split(':')[1].strip()
+            nfa_dir[type] = n[1:]
+    return nfa_dir
+
+# Not sure how increase scope and get scope how to work
+def increase_scope(scope) -> str:
+    scopes = scope.split(".")
+    if len(scopes) == 1:
+        return str(int(scopes[0]) + 1)
+    else:
+        scopes[-1] = str(int(scopes[-1]) + 1)
+        return '.'.join(scopes)
+            
+def get_scope(tokens) -> bool:
+    """
+    给每一个lex_value对象的scope属性赋值
+    后续可以通过是否在一个scope判断变量名出现的合法性
+    """
+    stack = list()
+    scope = str()
+    cur_line = 0
+
+    for i, tok in enumerate(tokens):
+        if len(stack) == 0:
+            stack.append([i, "1"])
+            scope = stack[-1][1]
+        elif tok.type == "LET":
+            tmp = stack[-1][1] + ".1"
+            stack.append([i, tmp]) 
+            scope = stack[-1][1]
+        elif tok.type == "TEL":
+            scope = increase_scope(stack[-1][1])
+            if tokens[stack[-1][0]].type == "LET":
+                stack.pop()
+            else:
+                print("Error let/tel at " + str(tok.lineno) + "," + str(tok.lexpos))
+                return False
+        elif tok.lineno != cur_line:
+            stack[-1][1] = increase_scope(stack[-1][1])
+            scope = stack[-1][1]
+        
+        cur_line = tokens[i].lineno
+        tokens[i].value.scope = scope   
+    return True        
+
+def get_raw_lexer():
+    return lexer
 
 class scade_lex:
     def __init__(self):
@@ -404,21 +485,44 @@ class scade_lex:
         pass
 
     def output_program(self, f):
+        scope = ""
         cur_line = self.toks[0].lineno
         f.write("--------------program----------------\n")
         for tok in self.toks:
             if cur_line != tok.lineno:
+                f.write("{0:>10}\n".format("#" + scope))
                 cur_line = tok.lineno
             f.write(str(tok.value.value) + " ")
+            scope = tok.value.scope
+        f.write("{0:>10}\n".format("#" + scope))
         f.write("--------------------------------------\n")
 
 lexer = lex.lex()
 
 if __name__ == '__main__':
-    data = "node case_test(in1,in2,in3:int8;in4:char) returns(out1:int8)\
-    let\
-     out1= (case in4 of | 'a':in1 | 'b':in2 | 'c':in3| _:in2);\
-    tel"
+    data = '''
+    node simple_automaton(i: int32; c: bool) returns (o: int32)
+    let
+    automaton
+    initial state ADD1
+    let
+        o = i + 1 ;
+    tel
+    until if c restart MINUS1;
+
+    state MINUS1
+    let
+        o = i - 1;
+    tel
+    until if c restart ADD1;
+    returns o;
+    tel
+
+    node edge (X: bool) returns (Y: bool);
+    let
+     Y = r_edge (X) or r_edge (not(X));
+    tel
+    '''
     toks = get_tokens(data)
     for tok in toks:
         print(tok, tok.value.strs,tok.value.value,tok.value.type)

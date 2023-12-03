@@ -52,7 +52,7 @@ if __name__ == '__main__':
     # 5 + 1.1 - 'a' - num
     # '''
     inputString = ""
-    with open("source_program/scade_program.txt") as r_f:
+    with open("source_program/simple_automaton.txt") as r_f:
         for line in r_f.readlines():
             inputString += line
     
@@ -60,21 +60,21 @@ if __name__ == '__main__':
     string_tokens = get_tokens(inputString)
     # for it in string_tokens:
     #     print(it)
-    grammar, pda = cfg.create_pda(grammarString)
+    pda = cfg.create_pda(grammarString)
     with open('pda_output/scade_pda_whole.txt', 'wt') as f: # 打开文件
         print(pda, file=f)
 
-    may_empty_nonterminal = cfg.get_may_empty_nonterminal(grammar)
+    # may_empty_nonterminal = cfg.get_may_empty_nonterminal(grammar)
 
     # reconigtion = Recognition(pda, string_tokens, may_empty_nonterminal)
-    # result = reconigtion.is_accept('Start',0)
-    
+    reconigtion = Recognition(pda, string_tokens)
+    result = reconigtion.is_accept('Start',0)
 
-    # if result:
-    #     print("result : True")
-    #     print(reconigtion.Code)
-    # else:
-    #     print("result : False")
+    if result:
+        print("result : True")
+        print(reconigtion.Code)
+    else:
+        print("result : False")
 
 # # 文法单元 -> 前置条件/后置条件
 # # 文法单元 -> 下推自动机  ++

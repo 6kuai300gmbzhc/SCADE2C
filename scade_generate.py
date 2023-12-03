@@ -75,6 +75,9 @@ let\
 	out1,out2=fby(in1+1,in1+2;1+2;in1-1,in2+3);\
 tel"
     program,symboltable=scade_compile.get_parse(strs)
+    print("*************************************")
+    print(program)
+    print("*************************************")
     gen=Scade_generate(program,symboltable)
     gen.gen_const_file()
     gen.gen_sensor_file()
