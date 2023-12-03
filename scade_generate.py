@@ -72,8 +72,7 @@ var \
 	tvar1:int8;\
 let\
 	tvar1=in1+in2;\
-	out1=(in1-in2)->pre(out2+tvar1);\
-	out2=tvar1+out1;\
+	out1,out2=fby(in1+1,in1+2;1+2;in1-1,in2+3);\
 tel"
     program,symboltable=scade_compile.get_parse(strs)
     gen=Scade_generate(program,symboltable)

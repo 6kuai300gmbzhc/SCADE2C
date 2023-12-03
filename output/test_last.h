@@ -10,8 +10,11 @@ kcg_int8 in2;
 
 
 typedef struct {
-kcg_int8 mem_pre;
 kcg_bool init;
+kcg_int32 fbyIdx;
+kcg_int8 fbyArray;
+kcg_int32 fbyIdx1;
+kcg_int8 fbyArray1;
 kcg_int8 out1;
 kcg_int8 out2;
 } outC_test_last;
