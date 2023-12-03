@@ -35,8 +35,6 @@ class Symbol:
         self.IsInput = False
         self.IsReturn = False
 
-        self.InitName = ""
-
         self.Value = None  # 常量、变量等的值
 
         self.fbyList = list()
@@ -59,7 +57,6 @@ class Symbol:
             return "outC->"+self.Name
         elif self.Kind=="PathId":
             name=self.Name
-            print("changeName",len(self.Code))
             for elem in self.Code:
                 name+="_"+elem.value
             return name

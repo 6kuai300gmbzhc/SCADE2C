@@ -65,15 +65,24 @@ class Scade_generate:
 
 
 if __name__=='__main__':
-    file=open('test.txt','r')
-    # strs=file.read()
-    strs="node test_last(tmp:bool;in1,in2:int8) returns(out1,out2:int8)\
-var \
-	tvar1:int8;\
-let\
-	tvar1=in1+in2;\
-	out1,out2=fby(in1+1,in1+2;1+2;in1-1,in2+3);\
-tel"
+    strs="type color2 = enum { Red, Blue, Yellow };\
+    node activate2(in1,in2:int32;in3:color2) returns(out1,out2:int32)\
+    let\
+    activate when in3 match\
+        | Red:\
+        let\
+        out1, out2 = (in1 - in2, 2)->pre(in1 + in2, 3);\
+        tel\
+        | Blue:\
+        let\
+        out1, out2 = fby(in2, in1;5;in1, in2);\
+        tel\
+        | Yellow:\
+            let\
+        out1, out2 = (5, 2);\
+        tel\
+    returns out1,out2;\
+    tel"
     program,symboltable=scade_compile.get_parse(strs)
     print("*************************************")
     print(program)

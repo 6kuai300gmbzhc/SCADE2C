@@ -46,7 +46,6 @@ def generate_head_file():
     head_content+="\nextern void "+name+"_reset(outC_"+name+" *outC);\n"
     head_content += "\nextern void " + name + "_init(outC_" + name + " *outC);\n"
     filename="./output/"+name+".h"
-    # print("head_content")
     print(head_content)
     with open(filename,'w') as f:
         f.write(head_content)
@@ -159,7 +158,6 @@ def getTypefromObjects(objects):
 
 def setObjectsType(objects,type):
     for elem in objects:
-        print(elem)
         symbol=thisEnv.getSymbol(elem.value)
         if symbol==None:
             if elem.type=='':
@@ -333,18 +331,6 @@ def p_op_kind(p):
     | NODE'''
     p[0]=p[1]
 
-# def equationToString(objects):
-#     sstr = ""
-#     sstr+=objectsToString(objects)
-#     sstr+=";\n"
-#     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
-#     if op_kind_symbol.IsInit == True:
-#         sstr += "outC->" + op_kind_symbol.InitName + "=kcg_false;\n"
-#     for elem in thisEnv.SymbolTable.values():
-#         if elem.Kind == "Pre":
-#             sstr += "OutC->" + elem.Name + "="
-#             sstr += objectsToString(elem.Code) + ";\n"
-#     return sstr
 
 def p_opt_body(p):
     '''Opt_body : SEMICOLON
@@ -364,19 +350,20 @@ def p_opt_body(p):
             if elem.Kind=="TmpVar":
                 p[0].value+="kcg_%s %s;\n"%(elem.Type,elem.Name)
         if len(p)==3:
-            p[0].value+=defToString(p[1].beforeObjects)
-            p[0].value+=defToString(p[1].objects)
-            p[0].value+=defToString(p[1].afterObjects)
+            # p[0].value+=defToString(p[1].beforeObjects)
+            # p[0].value+=defToString(p[1].objects)
+            # p[0].value+=defToString(p[1].afterObjects)
             # NOTE:加上Equation Control block的控制流代码
             p[0].value+=p[1].value
             print("Debug info: Opt_body len(p)==3, p[0].value is: ", p[0].value)
         else:
-            p[0].value+=defToString(p[4].beforeObjects)
-            p[0].value+=defToString(p[4].objects)
-            p[0].value+=defToString(p[4].afterObjects)
-        if op_kind_symbol.InitName!="":
-            initSymbol=thisEnv.getSymbol(op_kind_symbol.InitName)
-            p[0].value+="if(%s){%s=kcg_false;}"%(initSymbol.changeName(),initSymbol.changeName())
+            # p[0].value+=defToString(p[4].beforeObjects)
+            # p[0].value+=defToString(p[4].objects)
+            # p[0].value+=defToString(p[4].afterObjects)
+            p[0].value+=p[4].value
+        # if op_kind_symbol.InitName!="":
+        #     initSymbol=thisEnv.getSymbol(op_kind_symbol.InitName)
+        #     p[0].value+="if(%s){%s=kcg_false;}"%(initSymbol.changeName(),initSymbol.changeName())
 
 
 def p_signal_block_zero_or_one(p):
@@ -406,44 +393,62 @@ def p_equation_zero_or_more_with_semicolon(p):
     | empty'''
     p[0]=lex_value("Equation_zero_or_more_with_semicolon")
     if len(p)==4:
-        p[0].objects.extend(p[1].objects)
-        p[0].beforeObjects.extend(p[1].beforeObjects)
-        p[0].afterObjects.extend(p[1].afterObjects)
-        p[0].objects.extend(p[3].objects)
-        p[0].beforeObjects.extend(p[3].beforeObjects)
-        p[0].afterObjects.extend(p[3].afterObjects)
+        p[0].value+=p[1].value+p[3].value
+        # p[0].objects.extend(p[1].objects)
+        # p[0].beforeObjects.extend(p[1].beforeObjects)
+        # p[0].afterObjects.extend(p[1].afterObjects)
+        # p[0].objects.extend(p[3].objects)
+        # p[0].beforeObjects.extend(p[3].beforeObjects)
+        # p[0].afterObjects.extend(p[3].afterObjects)
 
 def p_equation(p):
     '''Equation : Simple_equation
                 | Control_block Return'''
     p[0]=lex_value("Equation")
+    print("Equation",len(p),p[1].strs)
     if len(p) == 2:
-        print("Equation\n",p[0].value, ' end of p[0].value')
-        print("Equation\n",p[1].value, ' end of p[1].value')
-        p[0].objects.extend(p[1].objects)
-        p[0].beforeObjects.extend(p[1].beforeObjects)
-        p[0].afterObjects.extend(p[1].afterObjects)
+        # print("Equation\n",p[0].value, ' end of p[0].value')
+        # print("Equation\n",p[1].value, ' end of p[1].value')
+        # p[0].objects.extend(p[1].objects)
+        # p[0].beforeObjects.extend(p[1].beforeObjects)
+        # p[0].afterObjects.extend(p[1].afterObjects)
+        p[0].value+=defToString(p[1].beforeObjects)+defToString(p[1].objects)+defToString(p[1].afterObjects)
     elif len(p)==3: # TODO: 添加控制流等式, 改写为 objects before objects, afterObjects
         p[0].value+=p[1].value+p[2].value
-        print("Control block, p[1],p[2] value: ", p[1].value, ", ", p[2].value)
+        print("p[2]",p[2])
+        # print("Control block, p[1],p[2] value: ", p[1].value, ", ", p[2].value)
 
 
 def p_control_block(p):
-    '''Control_block : State_machine'''
+    '''Control_block : State_machine
+    | Clocked_block'''
     p[0]=lex_value("Control_block")
     p[0].value+=p[1].value
 
 
+
 def p_return(p):
     '''Return : RETURNS Returns_var'''
+    print("Return")
     p[0]=lex_value("Return")
     # node以及function定义的时候已经写了return的参数列表，C代码使用 outC->var_name = 为返回值赋值，所以这里的return语句不需要再生成
-    pass
+
 
 def p_returns_var(p):
-    '''Returns_var : LV6ID'''
+    '''Returns_var : Returns_var_1 Returns_var_2'''
     # 目前设计 仅返回单个变量, 不能返回空变量, 这个生成式没用
-    p[0]=p[1]
+    p[0]=lex_value("Returns_var")
+    pass
+
+def p_returns_var_1(p):
+    '''Returns_var_1 : Returns_var_1 LV6ID COMMA
+    | empty'''
+    pass
+
+def p_returns_var_2(p):
+    '''Returns_var_2 : LV6ID
+    | TPOINT'''
+    pass
 
 def p_state_machine(p):
     '''State_machine : AUTOMATON State_machine_1'''
@@ -520,18 +525,30 @@ def p_strong_transition(p):
     '''Strong_transition : IF Expr Target'''
 
 def p_data_def(p):
-    '''Data_def : LET Equation SEMICOLON TEL
-                | empty'''
+    '''Data_def : Equation SEMICOLON
+                | Scope'''
     # 在状态机中仅实现了简单的无 LET...TEL语句
     p[0]=lex_value("Data_def")
-    if len(p)==5:
-        print("Debug: 拆解状态机的arrow赋值语句, p[2].beforeObjects: ", p[2].beforeObjects)
-        print("Debug: 拆解状态机的arrow赋值语句, p[2].objects: ", p[2].objects)
-        print("Debug: 拆解状态机的arrow赋值语句, p[2].afterObjects: ", p[2].afterObjects)
-        p[0].value+=defToString(p[2].beforeObjects)
-        p[0].value+=defToString(p[2].objects)
-        p[0].value+=defToString(p[2].afterObjects)
+    # if len(p)==5:
+    #     print("Debug: 拆解状态机的arrow赋值语句, p[2].beforeObjects: ", p[2].beforeObjects)
+    #     print("Debug: 拆解状态机的arrow赋值语句, p[2].objects: ", p[2].objects)
+    #     print("Debug: 拆解状态机的arrow赋值语句, p[2].afterObjects: ", p[2].afterObjects)
+    #     p[0].value+=defToString(p[2].beforeObjects)
+    #     p[0].value+=defToString(p[2].objects)
+    #     p[0].value+=defToString(p[2].afterObjects)
         # 不用额外加分号结尾
+    p[0].value+=p[1].value
+def p_scope(p):
+    '''Scope : Signal_block_zero_or_one Local_block_zero_or_one Eqs
+    | Signal_block_zero_or_one Local_block_zero_or_one'''
+    p[0]=lex_value("Scope")
+    if len(p)==4:
+        p[0].value+=p[3].value
+
+def p_eqs(p):
+    'Eqs : LET Equation_zero_or_more_with_semicolon TEL'
+    p[0]=lex_value("Eqs")
+    p[0].value+=p[2].value
 
 def p_state_decl_4(p):
     '''State_decl_4 : UNTIL Weak_transition SEMICOLON
@@ -563,7 +580,69 @@ def p_target(p):
     print('自底向上分析，在最底层设置全局变量, 当前node为状态机')
     global isStatemachine
     isStatemachine=1
-    
+
+def p_clocked_block(p):
+    '''Clocked_block : ACTIVATE Id_zero_or_one If_block
+    | ACTIVATE Id_zero_or_one Match_block'''
+    #目前没发现Id_zero_or_one有什么作用
+    p[0]=lex_value("Clocked_block")
+    p[0].value+=p[3].value
+def p_id_zero_or_one(p):
+    '''Id_zero_or_one : LV6ID
+    | empty'''
+    pass
+
+def p_if_block(p):
+    'If_block : IF Expr THEN If_block_1 ELSE If_block_1'
+    p[0]=lex_value("If_block")
+    type=getTypefromObjects(p[2].objects)
+    setObjectsType(p[2].objects[0],type)
+    p[0].value+="if("+defToString(p[2].objects)+"){\n"
+    p[0].value+=p[4].value
+    p[0].value+="}else{\n"
+    p[0].value+=p[6].value
+    p[0].value+="}\n"
+    print("p[0].value",p[0].value)
+
+def p_if_block_1(p):
+    '''If_block_1 : Data_def
+    | If_block'''
+    p[0]=lex_value("If_block_1")
+    p[0].value+=p[1].value
+
+def p_match_block(p):
+    '''Match_block : WHEN Expr MATCH Match_block_1'''
+    #Match_block_1的objects格式为[[[Pattern][Data_def]],[[Pattern][Data_def]],[]]
+    p[0]=lex_value("Match_block")
+    p[0].value+="switch("+defToString(p[2].objects)+"){\n"
+    for elem in p[4].objects:
+        p[0].value+="case "+elem[0][0].value+" :\n"
+        p[0].value+=elem[1][0].value
+        p[0].value+="break;\n"
+    p[0].value+="default : \n break;\n}"
+
+
+def p_match_block_1(p):
+    ' Match_block_1 : VERTICALBAR Pattern COLON Data_def Match_block_2 '
+    p[0]=lex_value('Match_block_1')
+    patternList=list()
+    patternList.append([p[2]])
+    patternList.append([p[4]])
+    p[0].objects.append(patternList)
+    p[0].objects.extend(p[5].objects)
+
+def p_match_block_2(p):
+    '''Match_block_2 : VERTICALBAR Pattern COLON Data_def Match_block_2
+    | empty'''
+    p[0]=lex_value('Match_block_2')
+    if len(p)==6:
+        patternList = list()
+        patternList.append([p[2]])
+        patternList.append([p[4]])
+        p[0].objects.append(patternList)
+        p[0].objects.extend(p[5].objects)
+
+
 def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
     #若出现input1=1->pre(2)。2作为mem_pre加进符号表，此时的类型未知，初始化会出现错误。因此需要找到lhs的类型
@@ -573,7 +652,7 @@ def p_simple_equation(p):
     type=getTypefromObjects(p[1].objects)
 
 #objects [["expr"]]
-#beforeObjects[["lhs",“lhs=expr”]]
+#beforeObjects[[“lhs=expr”]]
     for elem in p[3].objects:
         setObjectsType(elem,type)
     for elem in p[3].beforeObjects:
@@ -943,15 +1022,6 @@ def p_tempo_expr(p):
     symbol = thisEnv.getSymbol(op_kind_id)
     p[0] = lex_value("Tempo_expr")
     if len(p)==4 and p[2].value=='->':
-        if symbol.InitName=="":
-            initName=getName("init")   # BUG:init变量不会自增
-            symbol.InitName=initName
-            initSymbol=Symbol(initName,"Init","bool")
-            initSymbol.IsReturn=True
-            thisEnv.setSymbol(initName,initSymbol)
-            symbol.Returns.append(initName)
-        # p[0].objects.append(lex_value('lv6id',initName,'bool'))
-        # p[0].objects.append(lex_value("?","?","str"))
         if len(p[1].objects)!=len(p[3].objects):
             print("tempo_expr arrow:error")
             exit()
@@ -960,7 +1030,13 @@ def p_tempo_expr(p):
         p[0].beforeObjects.extend(p[3].beforeObjects)
 
         for idx in range(len(p[1].objects)):
-            initName = symbol.InitName     # FIXME: 'init变量不会自增' BUG 
+            initName=getName("init")
+            initSymbol=Symbol(initName,"Init","bool")
+            initSymbol.IsReturn=True
+            thisEnv.setSymbol(initName,initSymbol)
+            symbol.Returns.append(initName)
+
+            # initName = symbol.InitName     # FIXME: 'init变量不会自增' BUG
             initElem = getName("initElem")
             initLex = lex_value("initElem", initElem)
             thisEnv.setSymbol(initElem, Symbol(initElem, "TmpVar"))
@@ -968,7 +1044,9 @@ def p_tempo_expr(p):
             befDefList.extend([lex_value("if(", "if(", "str"), lex_value("lv6id", initName), lex_value("){\n", "){\n")])
             befDefList.extend([lex_value("lv6id", initElem), lex_value("=", "=")])
             befDefList.extend(p[1].objects[idx])
-            befDefList.append(lex_value("", ";\n}else{\n"))
+            befDefList.append(lex_value("",";\n"))
+            befDefList.extend([lex_value("lv6id",initName),lex_value("=","="),lex_value("","kcg_false;\n")])
+            befDefList.append(lex_value("", "}else{\n"))
             befDefList.extend([lex_value("lv6id", initElem), lex_value("=", "=")])
             befDefList.extend(p[3].objects[idx])
             befDefList.append(lex_value(";\n}\n", ";\n}\n"))
@@ -1003,24 +1081,20 @@ def p_tempo_expr(p):
     elif len(p)==9:
         #若是fby操作符，首先在outC结构体中添加一个idx和数组
         #fby(input1;cycle;input2) cycle必须是静态表达式
-        print("p[5].objects",p[5].objects)
-        if symbol.InitName=="":
-            initName=getName("init")
-            symbol.InitName=initName
-            symbol.IsInit=True
-            initSymbol=Symbol(initName,"Init","bool")
-            initSymbol.IsReturn=True
-            thisEnv.setSymbol(initName,initSymbol)
-            symbol.Returns.append(initName)
         if len(p[3].objects)!=len(p[7].objects):
             print("tempo_expr fby:error")
             exit()
 
         p[0].beforeObjects += p[3].beforeObjects + p[5].beforeObjects + p[7].beforeObjects
         p[0].afterObjects += p[3].afterObjects + p[5].afterObjects + p[7].afterObjects
-        print("p[3].objects",p[3].objects)
-        print("p[7].objects",p[7].objects)
         for idx in range(len(p[3].objects)):
+            initName=getName("init")
+            initSymbol=Symbol(initName,"Init","bool")
+            initSymbol.IsReturn=True
+            thisEnv.setSymbol(initName,initSymbol)
+            symbol.Returns.append(initName)
+
+
             fbyIdx = getName("fbyIdx")
             fbyArr = getName("fbyArray")
 
@@ -1046,14 +1120,16 @@ def p_tempo_expr(p):
 
             befDefList = list()
 
-            befDefList.extend([lex_value("", "if("), lex_value("lv6id", thisEnv.getSymbol(op_kind_id).InitName),
+            befDefList.extend([lex_value("", "if("), lex_value("lv6id", initName),
                                lex_value(")\n{\n", ")\n{\n")])
             befDefList.append(lex_value("", "for(int idx=0;idx<%s;idx++){\n" % objectsToString(p[5].objects[0])))
             befDefList.extend([lex_value("lv6id", fbyArr), lex_value("", "["), lex_value("lv6id", fbyIdx), lex_value("", "]=")])
-            # 注意是List，先考虑list为1
             befDefList.extend(p[7].objects[idx])
-            # befDefList.extend(p[7].objects)
-            befDefList.append(lex_value("", ";\n}\n}\n"))
+            befDefList.append(lex_value("",";\n}\n"))
+
+            befDefList.extend([lex_value("lv6id",initName),lex_value("","="),lex_value("","kcg_false;\n")])
+            befDefList.extend([lex_value("lv6id",fbyIdx),lex_value("","="),lex_value("","0;\n")])
+            befDefList.append(lex_value("", "}\n"))
             p[0].beforeObjects.append(befDefList)
 
 
@@ -1081,7 +1157,7 @@ def p_relation_expr(p):
         print("relation_epxr:error")
         exit(0)
     p[0].objects.extend(p[1].objects[0])
-    p[0].objects.extend(p[2])
+    p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects[0])
 
     p[0].afterObjects.extend(p[1].afterObjects)
@@ -1095,10 +1171,10 @@ def p_bin_relation_op(p):
     | LESSEQU
     | GREATEREQU'''
     p[0]=p[1]
-    if p[1].strs=='NOEQU':
-        p[1].value='!='
-    elif p[1].strs=='EQU':
-        p[1].value='=='
+    if p[1].strs=='<>':
+        p[0].value='!='
+    elif p[1].strs=='=':
+        p[0].value='=='
 
 
 def judgeIsEnum(objects):
@@ -1201,10 +1277,6 @@ def p_switch_expr(p):
                 defList.append(lex_value("","}\n"))
             p[0].beforeObjects.append(defList)
             p[0].objects.append([lex_value("lv6id", caseName)])
-
-
-
-
 
 
 def p_switch_expr_1(p):
@@ -1406,8 +1478,7 @@ def p_error(p):
 
 def p_empty(p):
     'empty :'
-    pass
-    # p[0]=lex_value('Empty')
+    p[0]=lex_value('Empty')
 
 def get_parse(strs):
     global program
@@ -1449,7 +1520,7 @@ if __name__=='__main__':
 
         initial state MINUS1
         let
-            o = i - 1 ;
+            o = 2 -> i - 1 ;
         tel
         until if c or d restart ADD1;
     returns o; 
