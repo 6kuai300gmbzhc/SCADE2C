@@ -456,13 +456,18 @@ def p_state_machine(p):
     print('定义状态机, 默认名字为当前node name, 即thisEnv: ', thisEnv.EnvName)
     # TODO: 添加状态机全为强迁移的情况
     p[0]=lex_value("State_machine")
-    # switch (state_sel)
-    p[0].value+="SSM_ST state_sel = outC->state_nxt;\n"
-    p[0].value+="switch (state_sel)\n{\n"
-    for statement in p[2].objects: # 每个状态已经在生成式中构造好了数据流和状态转移语句
-        p[0].value+=statement.value+"\n"
-    p[0].value+="}\n"
-    
+
+    if p[2].strs=='Weak_state_machine':
+        # switch (state_sel)
+        p[0].value+="SSM_ST state_sel = outC->state_nxt;\n"
+        p[0].value+="switch (state_sel)\n{\n"
+        for statement in p[2].objects: # 每个状态已经在生成式中构造好了数据流和状态转移语句
+            p[0].value+=statement.value+"\n"
+        p[0].value+="}\n"
+    elif p[2].strs=='Strong_state_machine':
+        pass
+    else:
+        raise NotImplementedError('状态机定义为空，语法错误')
 
 def p_state_machine_1(p):
     '''State_machine_1 : State_decl State_machine_1
@@ -470,26 +475,28 @@ def p_state_machine_1(p):
     p[0]=lex_value("State_machine_1")
     if len(p) == 3:
         if p[1].strs=='Weak_state_decl':
+            p[0].strs = 'Weak_state_machine'
             p[0].objects.append(p[1]) # 拼接多个状态定义，每个p[i]object里面的.value字段自带代码
             p[0].objects.extend(p[2].objects)
             print('状态定义', p[1].value)
         elif p[1].strs=='Strong_state_decl':
+            p[0].strs = 'Strong_state_machine'
             pass
     
 def p_state_decl(p):
     '''State_decl ::= State_decl_1 State_decl_2 STATE State_Lv6id State_decl_3 Data_def State_decl_4'''
+    thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
     if p[1]!=None and p[1].strs!='Empty':
-        print("p[1]=", p[1].strs)
         assert p[1].value == 'initial'
         print("记录初始状态", p[4].value)
-        thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
         thisNode.initState=p[4].value
     
     # NOTE: 将状态添加至该状态机的状态列表中, 默认状态不会有重复名称
-    thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
     thisNode.StateList.append(p[4].value)
 
     if p[7]!=None and p[7].strs=='Weak_transition':
+        if thisNode.StrongOrWeak==1:
+            raise NotImplementedError('已出现过unless语句，当前状态机应当仅有强迁移')
         p[0]=lex_value("Weak_state_decl")
         # p[4] 为状态名，p[6]为状态内部赋值语句equation, p[7]为 transition
         p[0].value+='case '+p[4].value+':\n'
@@ -497,11 +504,14 @@ def p_state_decl(p):
         p[0].value+=p[7].value+'\n'
         
     elif p[5]!=None and p[5].strs=='Strong_transition':
+        if thisNode.StrongOrWeak==0:
+            raise NotImplementedError('已出现过until语句，当前状态机应当仅有弱迁移')
         p[0]=lex_value("Strong_state_decl")
         # TODO: 目前仅实现弱迁移，p[5] state_decl_3 的 unless语句强迁移未实现
         
+        
     else:
-        raise NotImplementedError('状态机应当仅有强迁移或者仅有弱迁移')
+        raise NotImplementedError('状态迁移定义语法错误')
     
 
 
@@ -522,6 +532,9 @@ def p_state_decl_3(p):
     '''State_decl_3 : UNLESS Strong_transition SEMICOLON
                     | empty'''
     # TODO: unless语句强迁移未实现
+    thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
+    if len(p)>2 and thisNode.StrongOrWeak==None:
+        thisNode.StrongOrWeak=1
     p[0]=lex_value("Strong_transition")
     if len(p)>2:
         pass # 需要两个switch case，要用到objects
@@ -558,6 +571,9 @@ def p_eqs(p):
 def p_state_decl_4(p):
     '''State_decl_4 : UNTIL Weak_transition SEMICOLON
                     | empty '''
+    thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
+    if len(p)>2 and thisNode.StrongOrWeak==None:
+        thisNode.StrongOrWeak=0
     p[0]=lex_value("Weak_transition")
     if len(p)>2:
         p[0].value+=p[2].value
@@ -1519,13 +1535,13 @@ if __name__=='__main__':
     automaton
         state ADD1
         let
-            o = 100 -> i + 1 ;
+            o = i + 1 ;
         tel
         until if c and d restart MINUS1;
 
         initial state MINUS1
         let
-            o = 2 -> i - 1 ;
+            o = i - 1 ;
         tel
         until if c or d restart ADD1;
     returns o; 
