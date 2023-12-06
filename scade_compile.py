@@ -66,7 +66,7 @@ def generate_c_file(body):
             c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para).Type))
     # NOTE: init状态机初始状态赋值
     if op_kind_symbol.isStatemachine:
-        c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.StateList[0]
+        c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.initState
 
     for elem in op_kind_symbol.fbyList:
         c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(),getParamsInitValue(thisEnv.getSymbol(elem.fbyArr).Type))
@@ -78,7 +78,7 @@ def generate_c_file(body):
             c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name).Type))
     # NOTE: reset状态机初始状态赋值
     if op_kind_symbol.isStatemachine:
-        c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.StateList[0]
+        c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.initState
     c_content += "}\n"
     filename = "./output/%s.c" %(name)
     print(c_content)
@@ -284,7 +284,7 @@ def p_user_op_decl(p):
     symbol=thisEnv.getSymbol(p[3].value) # 该symbol名字在 User_op_decl_Lv6id已经被set
     if isStatemachine==1:
         symbol.isStatemachine=True # 该node name为状态机名字
-        print('状态机', p[3].value, '的初始状态列表: ', symbol.StateList)
+        print('状态机', p[3].value, '的状态列表: ', symbol.StateList)
     for idx in p[5].objects:
         # print(idx.strs,idx.value)
         symbol.Params.append(idx.value)
@@ -478,11 +478,16 @@ def p_state_machine_1(p):
     
 def p_state_decl(p):
     '''State_decl ::= State_decl_1 State_decl_2 STATE State_Lv6id State_decl_3 Data_def State_decl_4'''
-    if p[1]!=None:
+    if p[1]!=None and p[1].strs!='Empty':
+        print("p[1]=", p[1].strs)
         assert p[1].value == 'initial'
-        print("初始状态加入状态列表！", p[4].value)
+        print("记录初始状态", p[4].value)
         thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
-        thisNode.StateList.append(p[4].value)
+        thisNode.initState=p[4].value
+    
+    # NOTE: 将状态添加至该状态机的状态列表中, 默认状态不会有重复名称
+    thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
+    thisNode.StateList.append(p[4].value)
 
     if p[7]!=None and p[7].strs=='Weak_transition':
         p[0]=lex_value("Weak_state_decl")
