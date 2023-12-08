@@ -465,6 +465,17 @@ def p_state_machine(p):
             p[0].value+=statement.value+"\n"
         p[0].value+="}\n"
     elif p[2].strs=='Strong_state_machine':
+        p[0].value+="SSM_ST state_act;\n"
+        p[0].value+="SSM_ST state_sel = outC->state_nxt;"
+        p[0].value+="switch (state_sel)\n{\n"
+        for statement in p[2].beforeObjects:  # NOTE: beforeObjects 用来装强迁移的state_act条件赋值
+            p[0].value+=statement.value+"\n"
+        p[0].value+="}\n"
+
+        p[0].value+="switch (state_act)\n{\n"
+        for statement in p[2].afterObjects:
+            p[0].value+=statement.value+"\n"
+        p[0].value+="}\n"
         pass
     else:
         raise NotImplementedError('状态机定义为空，语法错误')
@@ -479,8 +490,11 @@ def p_state_machine_1(p):
             p[0].objects.append(p[1]) # 拼接多个状态定义，每个p[i]object里面的.value字段自带代码
             p[0].objects.extend(p[2].objects)
             print('状态定义', p[1].value)
+
         elif p[1].strs=='Strong_state_decl':
             p[0].strs = 'Strong_state_machine'
+            p[0].beforeObjects.extend(p[1].beforeObjects)
+            p[0].afterObjects.extend(p[1].afterObjects)
             pass
     
 def p_state_decl(p):
@@ -498,7 +512,7 @@ def p_state_decl(p):
         if thisNode.StrongOrWeak==1:
             raise NotImplementedError('已出现过unless语句，当前状态机应当仅有强迁移')
         p[0]=lex_value("Weak_state_decl")
-        # p[4] 为状态名，p[6]为状态内部赋值语句equation, p[7]为 transition
+        # p[4] 为状态名，p[6]为状态内部赋值语句equation, p[7]为 weak transition
         p[0].value+='case '+p[4].value+':\n'
         p[0].value+=p[6].value+'\n'
         p[0].value+=p[7].value+'\n'
@@ -508,6 +522,9 @@ def p_state_decl(p):
             raise NotImplementedError('已出现过until语句，当前状态机应当仅有弱迁移')
         p[0]=lex_value("Strong_state_decl")
         # TODO: 目前仅实现弱迁移，p[5] state_decl_3 的 unless语句强迁移未实现
+        # TODO: p[5].value 是强迁移的条件转移, p[6].value是状态内部赋值语句equation
+        # state_sel第一个switch case, 放到 beforeObjects; 对应的 strong_transition 生成式需要写 strong_target
+        # state_act 第二个 switch case放到afterObjects
         
         
     else:
