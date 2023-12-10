@@ -1,12 +1,9 @@
 Program ::= Decls_zero_or_more
 
-Path ::= id Path_1
-
 Path_1 ::= :: id Path_1
         ::= $
 
-Path_id ::= id
-        ::= Path :: id
+Path_id ::= id Path_1
 
 Package_decl ::= package Visibility_zero_or_one id Decls_zero_or_more end ;
 
@@ -410,7 +407,7 @@ Pattern_1 ::= -
 Array_expr ::= reverse Expr
             ::= Expr @ Expr
             ::= Expr Index
-            ::= Expr [ Expr .. ]
+            ::= Expr [ Expr .. Expr]
             ::= ( Expr . Array_expr_1 default Expr )
             ::= transpose ( Expr ; integernum ; integernum )
             ::= Expr ^ Expr

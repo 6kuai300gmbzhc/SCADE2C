@@ -48,22 +48,6 @@ class Recognition():
                         self.stack = cur_stack.copy()
         return False
 
-def create_pda(grammarStr):
-    # Create the grammar from the string
-    grammar = cfg.ContextFreeGrammar(grammarStr)
-
-    # # Simplify the grammar (simplifies using basic rules)
-    # grammar.simplify()
-
-    # # Removes any duplicate productions from any state
-    # grammar.removeDuplicates()
-
-    # Converts the grammar to a pushdown automata object
-    pda = grammar.toPDA()
-    print(pda)
-    # Prints a textual representation of the grammar
-    return pda
-
 
 if __name__ == '__main__':
     # grammarString = """

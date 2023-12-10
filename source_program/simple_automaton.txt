@@ -1,0 +1,16 @@
+node simple_automaton(i: int32; c: bool) returns (o: int32)
+let
+  automaton
+  initial state ADD1
+  let
+    o = i + 1 ;
+  tel
+  until if c restart MINUS1;
+
+  state MINUS1
+  let
+    o = i - 1;
+  tel
+  until if c restart ADD1;
+  returns o;
+tel
