@@ -35,7 +35,17 @@ def generate_head_file():
     head_content += "\n\ntypedef struct {\n"
     for output_name in op_kind_symbol.Returns:
         symbol=thisEnv.getSymbol(output_name)
-        head_content += type_change(symbol.Type) + " " + output_name + ";"+"\n"
+        print("symbol.Kind",symbol.Kind)
+        if symbol.Kind=='FbyIdx' or symbol.Kind=='FbyArr':
+            continue
+        else:
+            head_content += type_change(symbol.Type) + " " + output_name + ";"+"\n"
+    for fbyElem in op_kind_symbol.fbyList:
+        fbyIdx=thisEnv.getSymbol(fbyElem.fbyIdx)
+        fbyArr=thisEnv.getSymbol(fbyElem.fbyArr)
+        head_content += type_change(fbyIdx.Type)+" "+fbyIdx.Name + ";\n"
+        print("fbyIdx.Code",fbyIdx.Code)
+        head_content += "%s %s%s;\n"%(type_change(fbyArr.Type),fbyArr.Name,getArrSize([fbyIdx.Code]))
     # automata
     if isStatemachine==1:
         head_content+="\nSSM_ST state_nxt;\n"
@@ -424,8 +434,6 @@ def p_control_block(p):
     | Clocked_block'''
     p[0]=lex_value("Control_block")
     p[0].value+=p[1].value
-
-
 
 def p_return(p):
     '''Return : RETURNS Returns_var'''
@@ -1533,13 +1541,13 @@ if __name__=='__main__':
     #     let
     #         o = 100 -> i + 1 ;
     #     tel
-    #     
+    #
     #     initial state MINUS1
     #     unless if c restart ADD1;
     #     let
     #         o = 2 -> i - 1 ;
     #     tel
-    # returns o; 
+    # returns o;
     # """
     
     string_tokens=get_tokens(strs)

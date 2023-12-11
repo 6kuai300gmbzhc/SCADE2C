@@ -65,24 +65,13 @@ class Scade_generate:
 
 
 if __name__=='__main__':
-    strs="type color2 = enum { Red, Blue, Yellow };\
-    node activate2(in1,in2:int32;in3:color2) returns(out1,out2:int32)\
-    let\
-    activate when in3 match\
-        | Red:\
-        let\
-        out1, out2 = (in1 - in2, 2)->pre(in1 + in2, 3);\
-        tel\
-        | Blue:\
-        let\
-        out1, out2 = fby(in2, in1;5;in1, in2);\
-        tel\
-        | Yellow:\
-            let\
-        out1, out2 = (5, 2);\
-        tel\
-    returns out1,out2;\
-    tel"
+    strs='''node activateIf(in1,in2:int32) returns(out:int32)
+let
+	activate if in1>0
+	then out=fby(in1;5;in2);
+	else out=in1;
+	returns out;
+tel'''
     program,symboltable=scade_compile.get_parse(strs)
     print("*************************************")
     print(program)

@@ -184,4 +184,3 @@ typedef enum kcg_tag_TruthTableValues_truthtables {
 
 
 
-typedef enum {Red,Blue,Yellow} color2;
