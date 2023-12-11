@@ -12,10 +12,10 @@ class Symbol:
                          #如属于PathId，其Code记录了该Path_id的路径
                          #Type(用于Type_block)
                         #fbyIdx，fbyArray
-                        #ifExpr,switchExpr
+                        #ifExpr,switchExpr,structElem
 
         self.Type = Type  # Type类型(int , float,enum,array)
-                            #Node还是function
+                            #Node还是function,struct
         self.Public = Public
         self.External = External
 
@@ -28,8 +28,6 @@ class Symbol:
 
         # self.VarType = VarType             #常量、变量等类型标识符的数据类型
         # self.TypeType = TypeType           #类型定义的基本类型，或者Struct、Enum
-        self.IsArray = False
-        self.Size = 0                        #数组类型的大小
         # self.Clock = Clock                 #变量的时钟
 
         self.IsInput = False
@@ -41,7 +39,7 @@ class Symbol:
 
         self.FieldList = dict()  # 结构体变量的成员-类型和枚举变量的名字-整数值
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
-        self.arrSize=list()
+        self.arrSize=list()  #数组长度的表达式
 
         self.StateList = list() # 状态机所有可能状态名列表
         self.Params = list()  # 函数标识符的参数列表

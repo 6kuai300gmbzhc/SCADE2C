@@ -184,3 +184,32 @@ typedef enum kcg_tag_TruthTableValues_truthtables {
 
 
 
+<<<<<<< HEAD
+=======
+typedef struct {
+kcg_int32 t1;
+}Tstr1;
+typedef kcg_int32 t1[2];
+typedef struct {
+kcg_bool tt1;
+kcg_int32 tt2;
+kcg_float32 tt3;
+}t2;
+typedef struct {
+kcg_bool tt1;
+kcg_int32 tt2;
+kcg_float32 tt3;
+}t3[2];
+typedef struct {
+kcg_bool tt1;
+ tt2;
+}t4;
+typedef struct {
+kcg_bool tt1;
+kcg_int32 tt2[2];
+}t5;
+typedef struct {
+kcg_bool tt1;
+kcg_int32 tt2;
+}tmpStruct;
+>>>>>>> 0d8cdef58357f3477d64df68272653292ca0792d
