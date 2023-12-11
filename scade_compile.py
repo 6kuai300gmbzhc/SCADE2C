@@ -20,7 +20,7 @@ def generate_head_file():
     op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     name=op_kind_symbol.Name
     head_content=""
-    head_content+="_"+name+"_H_\n"+"#define _"+name+"_H_\n"
+    head_content+="#ifndef _"+name+"_H_\n"+"#define _"+name+"_H_\n"
     head_content+="#include \"kcg_types.h\"\n\n"
     head_content+="typedef struct {\n"
     #input_params
@@ -45,6 +45,9 @@ def generate_head_file():
     head_content+="\nextern void "+name+"(inC_"+name+" *inC, outC_"+name+" *outC);\n"
     head_content+="\nextern void "+name+"_reset(outC_"+name+" *outC);\n"
     head_content += "\nextern void " + name + "_init(outC_" + name + " *outC);\n"
+    # endif 
+    head_content += "#endif\n"
+    
     filename="./output/"+name+".h"
     print(head_content)
     with open(filename,'w') as f:

@@ -1,4 +1,4 @@
-_activateIf_H_
+#ifndef _activateIf_H_
 #define _activateIf_H_
 #include "kcg_types.h"
 
@@ -20,3 +20,4 @@ extern void activateIf(inC_activateIf *inC, outC_activateIf *outC);
 extern void activateIf_reset(outC_activateIf *outC);
 
 extern void activateIf_init(outC_activateIf *outC);
+#endif

@@ -32,6 +32,7 @@ class Symbol:
 
         self.IsInput = False
         self.IsReturn = False
+        self.IsArray = False
 
         self.Value = None  # 常量、变量等的值
 

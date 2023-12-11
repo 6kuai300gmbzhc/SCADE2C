@@ -36,7 +36,7 @@ class Scade_generate:
         content+="\n\n#endif"
         print("====const")
         print(content)
-        with open('./output/kcg_const.h','w') as f:
+        with open('./output/kcg_consts.h','w') as f:
             f.write(content)
 
     def gen_sensor_file(self):
@@ -76,22 +76,44 @@ class Scade_generate:
         print(typeContent)
         writeFile=open('output/kcg_types.h','w')
         writeFile.write(content)
+    
+    # kcg_types.h需要依赖kcg_assign.h, 目前的生成只需要简单的拷贝
+    def gen_assign_file(self):
+        file=open('source_program/kcg_assign.txt','r')
+        content=file.read()
+        writeFile = open('output/kcg_assign.h','w')
+        writeFile.write(content)
 
+    # kcg_types.h需要依赖kcg_imported_types.h，目前的生成只需要简单拷贝
+    def gen_imported_types_file(self):
+        file=open('source_program/kcg_imported_types.txt','r')
+        content=file.read()
+        writeFile = open('output/kcg_imported_types.h','w')
+        writeFile.write(content)
 
 if __name__=='__main__':
-    strs='''const imported c1:int32^2;
-const c3:int32=4;
-const imported c4:int32^2^(1+2);
-sensor s1:float32^2;
-type Tstr1={t1:int32};
-const imported c5:unsigned<<8>>;
-type t1=int32^2;
-type t2={tt1:bool,tt2:int32,tt3:float32};
-type t3={tt1:bool,tt2:int32,tt3:float32}^2;
-type t4={tt1:bool,tt2:{tt3:int8,tt4:float32}};
-type t5={tt1:bool,tt2:int32^2};
-const imported c6:{tt1:bool,tt2:int32};
-'''
+#     strs='''const imported c1:int32^2;
+# const c3:int32=4;
+# const imported c4:int32^2^(1+2);
+# sensor s1:float32^2;
+# type Tstr1={t1:int32};
+# const imported c5:unsigned<<8>>;
+# type t1=int32^2;
+# type t2={tt1:bool,tt2:int32,tt3:float32};
+# type t3={tt1:bool,tt2:int32,tt3:float32}^2;
+# type t4={tt1:bool,tt2:{tt3:int8,tt4:float32}};
+# type t5={tt1:bool,tt2:int32^2};
+# const imported c6:{tt1:bool,tt2:int32};
+# '''
+    strs = '''
+        node activateIf(in1,in2:int32) returns(out:int32)
+        let
+            activate if in1>0
+            then out=fby(in1;5;in2);
+            else out=in1;
+            returns out;
+        tel
+    '''
     program,symboltable=scade_compile.get_parse(strs)
     print("*************************************")
     print(program)
@@ -100,6 +122,8 @@ const imported c6:{tt1:bool,tt2:int32};
     gen.gen_const_file()
     gen.gen_sensor_file()
     gen.gen_types_file()
+    gen.gen_assign_file()
+    gen.gen_imported_types_file()
 
 
 

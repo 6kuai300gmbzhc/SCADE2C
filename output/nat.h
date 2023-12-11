@@ -1,4 +1,4 @@
-_nat_H_
+#ifndef _nat_H_
 #define _nat_H_
 #include "kcg_types.h"
 
@@ -18,3 +18,4 @@ extern void nat(inC_nat *inC, outC_nat *outC);
 extern void nat_reset(outC_nat *outC);
 
 extern void nat_init(outC_nat *outC);
+#endif
