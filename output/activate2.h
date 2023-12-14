@@ -22,6 +22,10 @@ kcg_int32 fbyIdx1;
 kcg_int32 fbyArray1;
 kcg_int32 out1;
 kcg_int32 out2;
+kcg_int32 fbyIdx;
+kcg_int32 fbyArray[5];
+kcg_int32 fbyIdx1;
+kcg_int32 fbyArray1[5];
 } outC_activate2;
 
 extern void activate2(inC_activate2 *inC, outC_activate2 *outC);

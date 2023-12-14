@@ -35,7 +35,17 @@ def generate_head_file():
     head_content += "\n\ntypedef struct {\n"
     for output_name in op_kind_symbol.Returns:
         symbol=thisEnv.getSymbol(output_name)
-        head_content += type_change(symbol.Type) + " " + output_name + ";"+"\n"
+        print("symbol.Kind",symbol.Kind)
+        if symbol.Kind=='FbyIdx' or symbol.Kind=='FbyArr':
+            continue
+        else:
+            head_content += type_change(symbol.Type) + " " + output_name + ";"+"\n"
+    for fbyElem in op_kind_symbol.fbyList:
+        fbyIdx=thisEnv.getSymbol(fbyElem.fbyIdx)
+        fbyArr=thisEnv.getSymbol(fbyElem.fbyArr)
+        head_content += type_change(fbyIdx.Type)+" "+fbyIdx.Name + ";\n"
+        print("fbyIdx.Code",fbyIdx.Code)
+        head_content += "%s %s%s;\n"%(type_change(fbyArr.Type),fbyArr.Name,getArrSize([fbyIdx.Code]))
     # automata
     if isStatemachine==1:
         head_content+="\nSSM_ST state_nxt;\n"
@@ -195,6 +205,18 @@ def defToString(defList):
         content+=objectsToString(elem)
     return content
 
+def objectsToStruct(objects):
+    structRet=dict()
+    for elem in objects:
+        symbol=Symbol(elem[0].value,"structElem",elem[1].value)
+        symbol.arrSize.extend(elem[1].objects)
+        if elem[1].strs=="struct":
+            symbol.FieldList=objectsToStruct(elem[1].structObjects)
+        structRet[elem[0].value]=symbol
+    return structRet
+
+
+
 def p_program(p):
     'Program : Decls_zero_or_mode'
     # p[0]=p[1]
@@ -233,13 +255,14 @@ def p_Type_decl(p):
         external=False
     if p[1].objects[0].value=="private":
         public=False
-    typeSymbol=Symbol(p[2].value,"Type",public,external)
+    typeSymbol=Symbol(p[2].value,"Type",'',public,external)
     thisEnv.setSymbol(p[2].value,typeSymbol)
-    if p[3].strs=='Type_expr':
+    if p[3].strs!='Empty':
         typeSymbol.Type=p[3].value
-        if len(p[3].objects)!=0:
-           typeSymbol.Type='array'
-        typeSymbol.Code.extend(p[3].objects)
+        if p[3].strs=='struct':
+            typeSymbol.Type='struct'
+            typeSymbol.FieldList=objectsToStruct(p[3].structObjects)
+        typeSymbol.arrSize.extend(p[3].objects)
     elif p[3].strs=='Enum':
         typeSymbol.Type="enum"
         typeSymbol.Code.extend(p[3].objects)
@@ -250,6 +273,8 @@ def p_Type_decl_1(p):
                     | empty'''
     if len(p)==3:
         p[0]=p[2]
+    else:
+        p[0]=p[1]
 def p_type_decl_2(p):
     '''Type_decl_2 : IS Numeric_kind
                    | empty'''
@@ -424,8 +449,6 @@ def p_control_block(p):
     | Clocked_block'''
     p[0]=lex_value("Control_block")
     p[0].value+=p[1].value
-
-
 
 def p_return(p):
     '''Return : RETURNS Returns_var'''
@@ -758,6 +781,7 @@ def p_user_op_decl_3(p):
     p[0]=p[1]
     pass
 
+
 def p_in_params(p):
     'In_Params : Params'
     p[0]=p[1]
@@ -798,11 +822,13 @@ def p_var_decls(p):
     p[0]=lex_value('Var_decls')
     symbol=thisEnv.getSymbol(p[1].value)
     symbol.Type=p[4].value
-    symbol.Code.extend(p[4].objects)
+    symbol.FieldList=objectsToStruct(p[4].structObjects)
+    symbol.arrSize.extend(p[4].objects)
     for i in range(len(p[2].objects)):
         symbol=thisEnv.getSymbol(p[2].objects[i].value)
         symbol.Type=p[4].value
-        symbol.Code.extend(p[4].value)
+        symbol.arrSize.extend(p[4].objects)
+        symbol.FieldList=objectsToStruct(p[4].structObjects)
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
 
@@ -867,15 +893,24 @@ def p_const_decl(p):
         external=False
     if p[1].objects[0].value=="private":
         public=False
-    if len(p)==7:
-        symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
+    if p[4].strs=='struct': #若为结构体，则是const imported c12:{tt1:bool,tt2:float32};
+        #创建一个变量，该symbol的Kind为type，结构体定义在kcg_types.h文件里
+        type=getName('tmpStruct')
+        typeSymbol=Symbol(type,"Type",'struct')
+        thisEnv.setSymbol(type,typeSymbol)
+        typeSymbol.FieldList=objectsToStruct(p[4].structObjects)
+    else:
         type=p[4].value
+    if len(p)==7:
+        #此处关于结构体的初始化还没有完成
+        symbol=Symbol(p[2].value,'Const',type,public,external,isPackage,packageName)
         symbol.arrSize.extend(p[4].objects)
         setObjectsType(p[6].objects[0],type)
+        symbol.FieldList=objectsToStruct(p[4].structObjects)
         symbol.Code=p[6].objects[0]
         thisEnv.setSymbol(p[2].value,symbol)
     elif len(p)==5:
-        symbol=Symbol(p[2].value,'Const',p[4].value,public,external,isPackage,packageName)
+        symbol=Symbol(p[2].value,'Const',type,public,external,isPackage,packageName)
         symbol.arrSize.extend(p[4].objects)
         thisEnv.setSymbol(p[2].value,symbol)
 
@@ -918,10 +953,17 @@ def p_sensor_block_1(p):
 def p_sensor_decl(p):
     'Sensor_decl : Id_one_or_more_with_comma COLON Type_expr'
     for item in p[1].objects:
+        if p[3].strs=='struct':
+            typeName=getName("tmpStruct")
+            typeSymbol=Symbol(type,"Type",'struct')
+            thisEnv.setSymbol(typeName,typeSymbol)
+            typeSymbol.FieldList=objectsToStruct(p[3].structObjects)
+        else:
+            typeName=p[3].value
         symbol=Symbol(item.value,'Sensor')
-        symbol.Type=p[3].value
+        symbol.Type=typeName
         thisEnv.setSymbol(item.value,symbol)
-        symbol.Code.extend(p[3].objects);
+        symbol.arrSize.extend(p[3].objects)
 
 
 def p_id_one_or_more_with_comma(p):
@@ -957,22 +999,51 @@ def p_type_expr(p):
     | FLOAT32 Type_expr_2
     | FLOAT64 Type_expr_2
     | CHAR Type_expr_2
-    | Path_id Type_expr_2'''
-    p[0]=lex_value('Type_expr')
+    | Path_id Type_expr_2
+    | LBPARENTHESE Field_decl Type_expr_1 RBPARENTHESE Type_expr_2'''
+    #Type_expr_2表示是否是数组
+    p[0]=lex_value('')
     if len(p)==3:
+        p[0].strs=p[1].strs
         p[0].value=p[1].value
         if len(p[2].objects)!=0:
             p[0].objects.extend(p[2].objects)
-    else:
+    elif p[1].strs=='signed' or p[1].strs=='unsigned':
         #没写完，需要将INTCONST改为Expr
         #需要计算出Expr表达式代表的值，Expr可能是静态数组，结构体。
+        #该情况也可能出现数组，没有完成
         # num=exprToNum(p[3].objects)
         if p[1].strs=='signed':
             type="int"+str(p[3].value)
         elif p[1].strs=='unsigned':
             type="uint"+str(p[3].value)
-        p[0].value=type
-        pass
+        p[0].strs=type
+        p[0].value=p[1].value
+    elif p[1].strs=='{':
+        #structObjects表示结构体的每个元素[[[lex_value("lv6id")],[type_expr]]]
+        p[0].strs="struct"
+        p[0].objects.extend(p[5].objects)
+        p[0].structObjects.extend(p[2].objects)
+        p[0].structObjects.extend(p[3].objects)
+    print("p[0].strs=",p[0].strs)
+def p_type_expr_1(p):
+    '''Type_expr_1 : COMMA Field_decl Type_expr_1
+    | empty'''
+    if len(p)!=2:
+        p[0]=lex_value("Type_expr_1")
+        p[0].objects.extend(p[2].objects)
+        p[0].objects.extend(p[3].objects)
+    else:
+        p[0]=p[1]
+
+def p_field_decl(p):
+    '''Field_decl : LV6ID COLON Type_expr'''
+    p[0]=lex_value("Field_decl")
+    field=list()
+    field.append(p[1])
+    field.append(p[3])
+    p[0].objects.append(field)
+
 
 def p_type_expr_2(p):
     '''Type_expr_2 : EXPONENT Expr Type_expr_2
@@ -1041,7 +1112,8 @@ def p_expr(p):
     | Relation_expr
     | List_expr
     | Switch_expr
-    | Bool_expr'''
+    | Bool_expr
+    | Struct_expr'''
     p[0]=lex_value("Expr")
     if p[1].strs!='List_expr' and p[1].strs!='Tempo_expr' and p[1].strs!='Switch_expr':
         p[0].objects=[p[1].objects]
@@ -1362,6 +1434,7 @@ def p_pattern_1(p):
     | empty'''
     p[0]=p[1]
 
+#Arith_expr还要添加(Expr:Type_expr) 文法
 def p_arith_expr(p):
     '''Arith_expr : Unary_arith_op Expr
     | Expr Bin_arith_op Expr'''
@@ -1457,7 +1530,7 @@ def p_bin_arith_op(p):
     elif p[1].strs=='LSR':
         p[0].value=' >> '
 
-#not finish
+#typed_integer和typed_float未添加
 def p_atom(p):
     '''Atom : Bool_atom
     | INTEGERNUM
@@ -1510,6 +1583,20 @@ def p_bin_bool_op(p):
     elif p[1].strs=='xor':
         p[1].value=' ^ '
     p[0]=p[1]
+
+def p_struct_expr(p):
+    '''Struct_expr : Expr POINT LV6ID
+    | LBPARENTHESE Label_expr Struct_expr_1 RBPARENTHESE'''
+    pass
+
+def p_struct_expr_1(p):
+    '''Struct_expr_1 : COMMA Label_expr Struct_expr_1
+    | empty'''
+    pass
+
+def p_label_expr(p):
+    '''Label_expr : LV6ID COLON Expr'''
+    pass
 
 def p_error(p):
     print("Syntax error in input!")
@@ -1571,13 +1658,13 @@ if __name__=='__main__':
     #     let
     #         o = 100 -> i + 1 ;
     #     tel
-    #     
+    #
     #     initial state MINUS1
     #     unless if c restart ADD1;
     #     let
     #         o = 2 -> i - 1 ;
     #     tel
-    # returns o; 
+    # returns o;
     # """
     
     string_tokens=get_tokens(strs)
