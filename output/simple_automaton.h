@@ -10,6 +10,8 @@ kcg_bool d;
 
 
 typedef struct {
+kcg_bool init;
+kcg_bool init1;
 kcg_int32 o;
 
 SSM_ST state_nxt;

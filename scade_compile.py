@@ -72,8 +72,8 @@ def generate_c_file(body):
     c_content += "void %s_init(outC_%s *outC)\n{\n" % (name,name)
     for para in op_kind_symbol.Returns:
         symbol = thisEnv.getSymbol(para)
-        if symbol.IsArray==False:
-            c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para).Type))
+        # if symbol.IsArray==False:
+        c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para).Type))
     # NOTE: init状态机初始状态赋值
     if op_kind_symbol.isStatemachine:
         c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.initState
@@ -477,7 +477,6 @@ def p_state_machine(p):
     '''State_machine : AUTOMATON State_machine_1'''
     # 原来应当为 Id_zero_or_one 省略状态机名字为空的情况，默认没有ID
     print('定义状态机, 默认名字为当前node name, 即thisEnv: ', thisEnv.EnvName)
-    # TODO: 添加状态机全为强迁移的情况
     p[0]=lex_value("State_machine")
 
     if p[2].strs=='Weak_state_machine':
@@ -489,7 +488,7 @@ def p_state_machine(p):
         p[0].value+="}\n"
     elif p[2].strs=='Strong_state_machine':
         p[0].value+="SSM_ST state_act;\n"
-        p[0].value+="SSM_ST state_sel = outC->state_nxt;"
+        p[0].value+="SSM_ST state_sel = outC->state_nxt;\n"
         p[0].value+="switch (state_sel)\n{\n"
         for statement in p[2].beforeObjects:  # NOTE: beforeObjects 用来装强迁移的state_act条件赋值
             p[0].value+=statement.value+"\n"
@@ -517,8 +516,10 @@ def p_state_machine_1(p):
         elif p[1].strs=='Strong_state_decl':
             p[0].strs = 'Strong_state_machine'
             p[0].beforeObjects.extend(p[1].beforeObjects)
+            p[0].beforeObjects.extend(p[2].beforeObjects)
             p[0].afterObjects.extend(p[1].afterObjects)
-            pass
+            p[0].afterObjects.extend(p[2].afterObjects)
+            print('状态定义', p[1].value)
     
 def p_state_decl(p):
     '''State_decl ::= State_decl_1 State_decl_2 STATE State_Lv6id State_decl_3 Data_def State_decl_4'''
@@ -533,7 +534,7 @@ def p_state_decl(p):
 
     if p[7]!=None and p[7].strs=='Weak_transition':
         if thisNode.StrongOrWeak==1:
-            raise NotImplementedError('已出现过unless语句，当前状态机应当仅有强迁移')
+            raise NotImplementedError('已出现过unless语句，当前状态机应当仅有强迁移, p[7]:', p[7])
         p[0]=lex_value("Weak_state_decl")
         # p[4] 为状态名，p[6]为状态内部赋值语句equation, p[7]为 weak transition
         p[0].value+='case '+p[4].value+':\n'
@@ -541,16 +542,27 @@ def p_state_decl(p):
         p[0].value+=p[7].value+'\n'
         
     elif p[5]!=None and p[5].strs=='Strong_transition':
+        print("检测到强迁移语句, p[4]: ", p[4], ", p[5]: ", p[5].beforeObjects, ", p[6]:", p[6], ", p[7]:", p[7])
         if thisNode.StrongOrWeak==0:
             raise NotImplementedError('已出现过until语句，当前状态机应当仅有弱迁移')
         p[0]=lex_value("Strong_state_decl")
-        # TODO: 目前仅实现弱迁移，p[5] state_decl_3 的 unless语句强迁移未实现
-        # TODO: p[5].value 是强迁移的条件转移, p[6].value是状态内部赋值语句equation
+        # p[5].value 是强迁移的条件转移, p[6].value是状态内部赋值语句equation
         # state_sel第一个switch case, 放到 beforeObjects; 对应的 strong_transition 生成式需要写 strong_target
+        switch_case_first = lex_value("switch_case_first")
+        switch_case_first.value += "case " + p[4].value + ":\n"
+        switch_case_first.value += p[5].beforeObjects[0].value + "\n"  # 先进行状态转移
+        p[0].beforeObjects.append(switch_case_first)
+
         # state_act 第二个 switch case放到afterObjects
-        
+        switch_case_second = lex_value("switch_case_second")
+        switch_case_second.value += "case " + p[4].value + ":\n"
+        switch_case_second.value += p[6].value + "\n"  # 状态内部赋值语句
+        switch_case_second.value += "outC->state_nxt = state_act;\n"  # 更新state_nxt
+        switch_case_second.value += "break;\n"
+        p[0].afterObjects.append(switch_case_second)
         
     else:
+        print("分析状态机错误, p[4]:", p[4], "，p[5]:", p[5], ", p[6]:", p[6], ", p[7]:", p[7])
         raise NotImplementedError('状态迁移定义语法错误')
     
 
@@ -560,7 +572,6 @@ def p_state_decl_1(p):
                     | empty'''
     print("State_decl_1: ", p[1])
     p[0]=p[1]
-    # TODO: Do something in nodename.c init, reset function
     pass
 
 def p_state_decl_2(p):
@@ -571,16 +582,36 @@ def p_state_decl_2(p):
 def p_state_decl_3(p):
     '''State_decl_3 : UNLESS Strong_transition SEMICOLON
                     | empty'''
-    # TODO: unless语句强迁移未实现
     thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
-    if len(p)>2 and thisNode.StrongOrWeak==None:
+    if len(p)>2: # thisNode.StrongOrWeak==None
         thisNode.StrongOrWeak=1
-    p[0]=lex_value("Strong_transition")
-    if len(p)>2:
-        pass # 需要两个switch case，要用到objects
+        p[0]=lex_value("Strong_transition")
+        print("State_decl_3: ", p[1], p[2], p[3])
+        if len(p)>2:
+            p[0].beforeObjects.append(p[2])  # strong_transition obj value已转换成代码
+        
 
 def p_strong_transition(p):
-    '''Strong_transition : IF Expr Target'''
+    '''Strong_transition : IF Expr Strong_target'''
+    print("Strong_transition: ", p[1], p[2].objects, p[3])
+    p[0]=lex_value("Strong_transition")
+    p[2].value = defToString(p[2].objects)
+
+    p[0].value+="if("+p[2].value+")"
+    p[0].value+="{\n  "+p[3].value+"\n}\n"
+    p[0].value+="else {\n"
+    p[0].value+="state_act = state_sel;\n}\n"
+    p[0].value+="break;"
+
+def p_strong_target(p):
+    '''Strong_target : RESTART LV6ID'''
+    # TODO: 目前仅实现 restart 关键字，状态重新开始，resume暂缓实现
+    print("Strong_target: ", p[1], p[2])
+    p[0]=lex_value("Strong_target")
+    p[0].value+="state_act = "+p[2].value+";"
+
+    global isStatemachine
+    isStatemachine=1
 
 def p_data_def(p):
     '''Data_def : Equation SEMICOLON
@@ -611,15 +642,16 @@ def p_eqs(p):
 def p_state_decl_4(p):
     '''State_decl_4 : UNTIL Weak_transition SEMICOLON
                     | empty '''
+    print("State_decl_4:", p[1])
     thisNode=thisEnv.PrevTable.getSymbol(thisEnv.EnvName)
-    if len(p)>2 and thisNode.StrongOrWeak==None:
-        thisNode.StrongOrWeak=0
-    p[0]=lex_value("Weak_transition")
     if len(p)>2:
-        p[0].value+=p[2].value
+        thisNode.StrongOrWeak=0
+        p[0]=lex_value("Weak_transition")
+        if len(p)>2:
+            p[0].value+=p[2].value
 
 def p_weak_transition(p):
-    '''Weak_transition : IF Expr Target'''
+    '''Weak_transition : IF Expr Weak_target'''
     # 省略 Scade 语法中原有的 Arrow, 因为ARROW是一个token运算符, 暂未实现 p_arrow
     print("Weak_transition: ", p[1], p[2].objects, p[3])
     p[0]=lex_value("Weak_transition")
@@ -629,12 +661,12 @@ def p_weak_transition(p):
     p[0].value+="{\n  "+p[3].value+"\n}\n"
     p[0].value+='break;'
 
-def p_target(p):
-    '''Target : RESTART LV6ID'''
+def p_weak_target(p):
+    '''Weak_target : RESTART LV6ID'''
     # TODO: 目前仅实现 restart 关键字，状态重新开始，resume暂缓实现
-    print("Target: ", p[1], p[2])
+    print("Weak_target: ", p[1], p[2])
     # outC->state_nxt = state_name;
-    p[0]=lex_value("Target")
+    p[0]=lex_value("Weak_target")
     p[0].value+="outC->state_nxt = "+p[2].value+";"
 
     # 自底向上分析，在最底层设置全局变量, 当前node为状态机
@@ -1634,38 +1666,38 @@ if __name__=='__main__':
     # strs=str("function plus_two (x:int8) returns (y:int8) y=x+2;")
     # strs = str("sensor Sensor1:int32;\
     # sensor Sensor2:int32;")
-    strs = """
-    node simple_automaton (i: int32; c: bool; d: bool) returns (o: int32)
-    automaton
-        state ADD1
-        let
-            o = i + 1 ;
-        tel
-        until if c and d restart MINUS1;
-
-        initial state MINUS1
-        let
-            o = i - 1 ;
-        tel
-        until if c or d restart ADD1;
-    returns o; 
-    """
     # strs = """
-    # node strong_automaton (i: int32; c: bool; d: bool) returns (o: int32)
+    # node simple_automaton (i: int32; c: bool; d: bool) returns (o: int32)
     # automaton
     #     state ADD1
-    #     unless if c and d restart MINUS1;
     #     let
     #         o = 100 -> i + 1 ;
     #     tel
-    #
+    #     until if c and d restart MINUS1;
+
     #     initial state MINUS1
-    #     unless if c restart ADD1;
     #     let
     #         o = 2 -> i - 1 ;
     #     tel
-    # returns o;
+    #     until if c or d restart ADD1;
+    # returns o; 
     # """
+    strs = """
+    node strong_automaton (i: int32; c: bool; d: bool) returns (o: int32)
+    automaton
+        initial state ADD1
+        unless if c and d restart MINUS1;
+        let
+            o = 100 -> i + 1 ;
+        tel
+    
+        state MINUS1
+        unless if c or d restart ADD1;
+        let
+            o = 2 -> i - 1 ;
+        tel
+    returns o;
+    """
     
     string_tokens=get_tokens(strs)
     scade_lexer.set_tokens(string_tokens)
