@@ -55,6 +55,7 @@ class Scade_generate:
         content=file.read()
         content+="\n"
         typeContent=""
+        symbolTable=self.symboltable.SymbolTable
         for k,v in self.symboltable.SymbolTable.items():
             if v.Kind=="Type":
                 if v.Type=='enum':
@@ -85,7 +86,8 @@ let
 	then out=fby(in1;5;in2);
 	else out=in1;
 	returns out;
-tel'''
+tel
+'''
 #     strs='''const imported c1:int32^2;
 # const c3:int32=4;
 # const imported c4:int32^2^(1+2);

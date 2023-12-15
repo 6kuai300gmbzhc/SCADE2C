@@ -72,7 +72,7 @@ def generate_c_file(body):
     c_content += "void %s_init(outC_%s *outC)\n{\n" % (name,name)
     for para in op_kind_symbol.Returns:
         symbol = thisEnv.getSymbol(para)
-        if symbol.IsArray==False:
+        if len(symbol.arrSize) == 0 and symbol.Kind != 'FbyArr':
             c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para).Type))
     # NOTE: init状态机初始状态赋值
     if op_kind_symbol.isStatemachine:
@@ -215,16 +215,20 @@ def objectsToStruct(objects):
         structRet[elem[0].value]=symbol
     return structRet
 
-
+def getRootSymbolTable(thisEnv):
+    if thisEnv.PrevTable!=None:
+        return getRootSymbolTable(thisEnv.PrevTable)
+    else:
+        return thisEnv
 
 def p_program(p):
-    'Program : Decls_zero_or_mode'
+    'Program : Decls_zero_or_more'
     # p[0]=p[1]
     pass
 
 #not finish
 def p_decls_zero_or_mode(p):
-    '''Decls_zero_or_mode : Decls Decls_zero_or_mode
+    '''Decls_zero_or_more : Decls Decls_zero_or_more
     | empty'''
     # p[0]=p[1]+p[2]
     pass
@@ -298,7 +302,7 @@ def p_numeric_kind(p):
 
 #将LV6ID写成Lv6id是为了提前知道包的名字
 def p_package_decl(p):
-    'Package_decl : Package Visibility_zero_or_one Pack_Lv6id Decls_zero_or_mode END SEMICOLON'
+    'Package_decl : Package Visibility_zero_or_one Pack_Lv6id Decls_zero_or_more END SEMICOLON'
     pass
 
 #每一个function和node都会产生一个对应其函数名的.h和.c文件
@@ -782,15 +786,27 @@ def p_var_decls(p):
     'Var_decls : Var_id Var_decls_1 COLON Type_expr Var_decls_2 Var_decls_3 Var_decls_4'
 #直接将var_decls_2 var_decls_3 var_decls_4设置为空
     p[0]=lex_value('Var_decls')
-    symbol=thisEnv.getSymbol(p[1].value)
-    symbol.Type=p[4].value
-    symbol.FieldList=objectsToStruct(p[4].structObjects)
-    symbol.arrSize.extend(p[4].objects)
+    if p[4].strs=="struct":
+        #此处生成的临时结构体，作用域应在根结点的符号表内
+        print("Var_decls:struct")
+        tmpStructName=getName("tmpStruct")
+        structSymbol=Symbol(tmpStructName,'Type','struct')
+        structSymbol.FieldList=objectsToStruct(p[4].structObjects)
+        structSymbol.arrSize.extend(p[4].objects)
+        rootSymbolTable=getRootSymbolTable(thisEnv)
+        rootSymbolTable.setSymbol(tmpStructName,structSymbol)
+        # print(len(thisEnv.SymbolTable))
+        typeName=tmpStructName
+    elif p[4].strs in typeArr:
+        typeName=p[4].value
+
+    symbol = thisEnv.getSymbol(p[1].value)
+    symbol.Type = typeName
+    # symbol.arrSize.extend(p[4].objects)
     for i in range(len(p[2].objects)):
         symbol=thisEnv.getSymbol(p[2].objects[i].value)
-        symbol.Type=p[4].value
-        symbol.arrSize.extend(p[4].objects)
-        symbol.FieldList=objectsToStruct(p[4].structObjects)
+        symbol.Type=typeName
+        # symbol.arrSize.extend(p[4].objects)
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
 
@@ -808,6 +824,7 @@ def p_var_id(p):
     # print("Var_id",p[3].value)
     symbol=Symbol(p[3].value,'Var','')
     thisEnv.setSymbol(p[3].value,symbol)
+    print("p_var_id setSymbol",len(thisEnv.SymbolTable))
 
 
 def p_var_id_1(p):
@@ -1195,7 +1212,7 @@ def p_tempo_expr(p):
             befDefList.extend([lex_value("", "if("), lex_value("lv6id", initName),
                                lex_value(")\n{\n", ")\n{\n")])
             befDefList.append(lex_value("", "for(int idx=0;idx<%s;idx++){\n" % objectsToString(p[5].objects[0])))
-            befDefList.extend([lex_value("lv6id", fbyArr), lex_value("", "["), lex_value("lv6id", fbyIdx), lex_value("", "]=")])
+            befDefList.extend([lex_value("lv6id", fbyArr), lex_value("", "["), lex_value("", "idx"), lex_value("", "]=")])
             befDefList.extend(p[7].objects[idx])
             befDefList.append(lex_value("",";\n}\n"))
 
