@@ -1,7 +1,7 @@
 import os
 import copy
 import scade_compile
-from scade_compile import type_change,type_initial,objectsToString,getArrSize
+from scade_compile import getArrSize,type_change,getRootSymbolTable
 
 def gen_struct_elem(elem):
     str=""
@@ -55,8 +55,8 @@ class Scade_generate:
         content=file.read()
         content+="\n"
         typeContent=""
-        symbolTable=self.symboltable.SymbolTable
-        for k,v in self.symboltable.SymbolTable.items():
+        symbolTable=getRootSymbolTable(self.symboltable)
+        for k,v in symbolTable.SymbolTable.items():
             if v.Kind=="Type":
                 if v.Type=='enum':
                     typeContent+="typedef enum {"
@@ -80,12 +80,20 @@ class Scade_generate:
 
 
 if __name__=='__main__':
-    strs='''node activateIf(in1,in2:int32) returns(out:int32)
+#     strs='''
+#     type type1={tt1:int8,tt2:{tt3:bool}};
+# node test6(in1:int8;in2:bool) returns(out1:type1)
+# let
+# 	out1={tt1:in1+1,tt2:{tt3:true}};
+# tel
+# '''
+    strs='''type type12={tt3:bool};
+type type11={tt1:int8,tt2:{tt3:bool}};
+node test6(in1:int8;in2:bool;in3:type12) returns(out1:type11;out2,out3:type12)
 let
-	activate if in1>0
-	then out=fby(in1;5;in2);
-	else out=in1;
-	returns out;
+	out2={tt3:in2};
+	out1={tt1:in1+1,tt2:out2};
+	out3=in3;
 tel
 '''
 #     strs='''const imported c1:int32^2;

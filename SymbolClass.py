@@ -14,8 +14,9 @@ class Symbol:
                         #FbyIdx，FbyArray
                         #ifExpr,switchExpr,structElem
 
-        self.Type = Type  # Type类型(int , float,enum,array)
+        self.Type = Type  # Type类型(int , float,enum,array,struct)
                             #Node还是function,struct
+                            #起别名之后的类型名
         self.Public = Public
         self.External = External
 
@@ -37,7 +38,7 @@ class Symbol:
 
         self.fbyList = list()
 
-        self.FieldList = dict()  # 结构体变量的成员-类型和枚举变量的名字-整数值
+        self.FieldList = dict()  # 结构体变量名，和该名对应的symbol
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
         self.arrSize=list()  #数组长度的表达式
 

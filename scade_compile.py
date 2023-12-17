@@ -1,7 +1,6 @@
 from ply.yacc import yacc
 from scade_lex import scade_lex,get_tokens,tokens,lex_value
 from SymbolClass import *
-
 isPackage=0
 # global isStatemachine
 isStatemachine=0
@@ -9,13 +8,19 @@ packageName=""
 op_kind_id=""
 intArr=["int8","int16","int32","int64","uint8","uint16","uint32","uint64"]
 floatArr=["float32","float64"]
-typeArr=['bool','int8','int16','int64','int32','uint8','uint16','uint32','uint64','float32','float64','char','enum','array']
+typeArr=['bool','int8','int16','int64','int32','uint8','uint16','uint32','uint64','float32','float64','char','enum','array','struct']
 
 scade_lexer=scade_lex()
 GlobalEnv=SymbolTable('Global')
 thisEnv=GlobalEnv
 program=None
 
+def type_change(type):
+    list=["char","bool","float32","float64","size","uint64","uint32","uint16","uint8","int64","int32","int16","int8"]
+    str=type
+    if type in list:
+        str="kcg_"+type
+    return str
 def generate_head_file():
     op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     name=op_kind_symbol.Name
@@ -69,10 +74,18 @@ def generate_c_file(body):
     c_content += body
     c_content += "\n}\n"
 
+    #初始化函数
     c_content += "void %s_init(outC_%s *outC)\n{\n" % (name,name)
     for para in op_kind_symbol.Returns:
         symbol = thisEnv.getSymbol(para)
-        if len(symbol.arrSize) == 0 and symbol.Kind != 'FbyArr':
+        realType=""
+        if symbol.Type not in typeArr:
+            realSymbol=getIdType(symbol.Name,thisEnv)
+            realType=realSymbol.Type
+        print("realType",realType)
+        if realType == "struct":
+            c_content=structInitial(c_content,"outC->"+symbol.Name,realSymbol,0)
+        elif len(symbol.arrSize) == 0 and symbol.Kind != 'FbyArr' :
             c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para).Type))
     # NOTE: init状态机初始状态赋值
     if op_kind_symbol.isStatemachine:
@@ -82,6 +95,7 @@ def generate_c_file(body):
         c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(),getParamsInitValue(thisEnv.getSymbol(elem.fbyArr).Type))
     c_content += "}\n"
 
+    #重置函数
     c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name,name)
     for para in thisEnv.SymbolTable.values():
         if para.Kind=="Pre":
@@ -97,7 +111,7 @@ def generate_c_file(body):
 
 def getName(initStr):
     symbol=thisEnv.getSymbol(op_kind_id)
-    for i in range(100):
+    for i in range(1000):
         target=initStr
         if i!=0:
             target+=str(i)
@@ -156,14 +170,22 @@ def objectsToString(objects,num=0):
         else:
             sstr+=elem.value
     return sstr
+def getIdType(value,symbolTable):
+    symbol=symbolTable.getSymbol(value)
+    if symbol.Type not in typeArr:
+        rootSymbolTable=getRootSymbolTable(symbolTable)
+        return getIdType(symbol.Type,symbolTable)
+    else:
+        return symbol
+
 def getTypefromObjects(objects):
     type=""
-    for objs in objects:
-        for elem in objs:
-            if elem.strs=='lv6id':
-                symbol=thisEnv.getSymbol(elem.value)
+    for obj in objects:
+        if obj.strs=='lv6id':
+            symbol=thisEnv.getSymbol(obj.value)
+            if symbol.Type in typeArr:
                 type=symbol.Type
-                break
+                return type
     return type
 
 def setObjectsType(objects,type):
@@ -202,6 +224,7 @@ def getArrSize(objects):
 def defToString(defList):
     content=""
     for elem in defList:
+        print("elem:",elem)
         content+=objectsToString(elem)
     return content
 
@@ -220,6 +243,56 @@ def getRootSymbolTable(thisEnv):
         return getRootSymbolTable(thisEnv.PrevTable)
     else:
         return thisEnv
+
+#结构体赋值时需要检查结构体元素是否一致
+def checkStructInitial(typeSymbol,rightObj):
+    rightDict=dict()
+    if(len(typeSymbol.FieldList)!=len(rightObj)):
+        return False
+    for idx in range(len(rightObj)):
+        rightDict[rightObj[idx][0].value]=idx
+    for elemK,elemV in typeSymbol.FieldList.items():
+        if elemK not in rightDict:
+            return False
+        elif elemV.Type=='struct':
+            return checkStructInitial(elemV,rightObj[rightDict[elemK]])
+    return True
+
+def structAssign(leftName,typeSymbol,rightObj,defList):
+    for elem in rightObj:
+        leftName+=".%s"%(elem[0].value)
+        symbol=typeSymbol.FieldList[elem[0].value]
+        if symbol.Type not in typeArr:
+            realSymbol=getIdType(symbol.Type,getRootSymbolTable(thisEnv))
+            if realSymbol=='struct':
+                pass
+            else:
+                pass
+        else:
+            if symbol.Type =='struct':
+                pass
+            else:
+                pass
+
+def isNormalFormat(objects):
+    if type(objects[0])==list:
+        return isNormalFormat(objects[0])
+    else:
+        if len(objects)==1 and getIdType(objects[0].value,thisEnv).Type=='struct':
+            return False
+    return True
+
+def structInitial(c_content,structName,symbol,level):
+    if symbol.Type=="struct":
+        if level!=0:
+            structName+=".%s"%symbol.Name
+        for elemK,elemV in symbol.FieldList.items():
+            if elemV.Type !="struct":
+                c_content+="%s=%s;\n"%(structName,getParamsInitValue(elemV.Type))
+            else:
+                c_content=structInitial(c_content,structName,elemV,level+1)
+        return c_content
+
 
 def p_program(p):
     'Program : Decls_zero_or_more'
@@ -266,10 +339,10 @@ def p_Type_decl(p):
         if p[3].strs=='struct':
             typeSymbol.Type='struct'
             typeSymbol.FieldList=objectsToStruct(p[3].structObjects)
+        elif p[3].strs=='Enum':
+            typeSymbol.Type="enum"
+            typeSymbol.Code.extend(p[3].objects)
         typeSymbol.arrSize.extend(p[3].objects)
-    elif p[3].strs=='Enum':
-        typeSymbol.Type="enum"
-        typeSymbol.Code.extend(p[3].objects)
 
 
 def p_Type_decl_1(p):
@@ -292,6 +365,7 @@ def p_type_def(p):
     else:
         p[0]=p[3]
         p[0].strs='Enum'
+        print(p[0].objects)
 def p_numeric_kind(p):
     '''Numeric_kind : NUMERIC
     | FLOAT
@@ -434,7 +508,6 @@ def p_equation(p):
     '''Equation : Simple_equation
                 | Control_block Return'''
     p[0]=lex_value("Equation")
-    print("Equation",len(p),p[1].strs)
     if len(p) == 2:
         # print("Equation\n",p[0].value, ' end of p[0].value')
         # print("Equation\n",p[1].value, ' end of p[1].value')
@@ -622,7 +695,7 @@ def p_id_zero_or_one(p):
 def p_if_block(p):
     'If_block : IF Expr THEN If_block_1 ELSE If_block_1'
     p[0]=lex_value("If_block")
-    type=getTypefromObjects(p[2].objects)
+    type=getTypefromObjects(p[2].objects[0])
     setObjectsType(p[2].objects[0],type)
     p[0].value+="if("+defToString(p[2].objects)+"){\n"
     p[0].value+=p[4].value
@@ -673,27 +746,49 @@ def p_match_block_2(p):
 def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
     #若出现input1=1->pre(2)。2作为mem_pre加进符号表，此时的类型未知，初始化会出现错误。因此需要找到lhs的类型
-    #先去Expr找是否存在类型为Pre的符号
     p[0]=lex_value('Simple_equation')
+    print("Simple_euqation:",p[3].objects)
     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
-    type=getTypefromObjects(p[1].objects)
-
-#objects [["expr"]]
-#beforeObjects[[“lhs=expr”]]
-    for elem in p[3].objects:
-        setObjectsType(elem,type)
-    for elem in p[3].beforeObjects:
-        setObjectsType(elem,type)
-    for elem in p[3].afterObjects:
-        setObjectsType(elem,type)
-
+    if len(p[1].objects)!=len(p[3].objects):
+        print("Simple_equation error")
+        exit(0)
     for idx in range(len(p[1].objects)):
-        defList=list()
-        defList.extend(p[1].objects[idx])
-        defList.append(p[2])
-        defList.extend(p[3].objects[idx])
-        defList.append(lex_value("",";\n"))
-        p[0].objects.append(defList)
+        #修改此处，若左边为结构体，右边是非struct_expr,则展开依次初始化
+        #否则使用memcpy
+        typeSymbol=getIdType(p[1].objects[idx].value,thisEnv)
+        if typeSymbol.Type=="struct":
+            defList=list()
+            if isNormalFormat(p[3].objects[idx])==False:
+                defList.append(lex_value("","memcpy(&"))
+                defList.append(lex_value("",p[1].objects[idx]))
+                defList.append(lex_value("",",&"))
+                defList.append(lex_value("",p[3].objects[idx][0]))
+                defList.append(lex_value("",",sizeof("+typeSymbol.Name+"));\n"))
+            else:
+                if checkStructInitial(typeSymbol,p[3].objects[idx])==False:
+                    print("checkStructInitial error")
+                    exit(0)
+                leftName = p[1].objects[idx].value
+                if thisEnv.getSymbol(p[1].objects[idx].value).IsReturn ==True:
+                    leftName="outC->"+ leftName
+                structAssign(leftName,typeSymbol,p[3].objects[idx],defList)
+            print("defList:",defList)
+            p[0].objects.extend(defList)
+        else:
+            type=typeSymbol.Type
+            setObjectsType(p[3].objects[idx],type)
+            if idx==0:
+                for elem in p[3].beforeObjects:
+                    setObjectsType(elem, type)
+                for elem in p[3].afterObjects:
+                    setObjectsType(elem,type)
+
+            defList = list()
+            defList.append(p[1].objects[idx])
+            defList.append(p[2])
+            defList.extend(p[3].objects[idx])
+            defList.append(lex_value("", ";\n"))
+            p[0].objects.append(defList)
 
     p[0].beforeObjects.extend(p[3].beforeObjects)
     p[0].afterObjects.extend(p[3].afterObjects)
@@ -706,7 +801,7 @@ def p_lhs(p):
     | Lhs_id Lhs_1'''
     p[0]=lex_value("Lhs")
     if p[1].strs!='lparenthese':
-        p[0].objects.append([p[1]])
+        p[0].objects.append(p[1])
         p[0].objects.extend(p[2].objects)
 
 
@@ -716,7 +811,7 @@ def p_lhs_1(p):
     | empty'''
     p[0]=lex_value("Lhs_1")
     if len(p)==4:
-        p[0].objects.append([p[2]])
+        p[0].objects.append(p[2])
         p[0].objects.extend(p[3].objects)
 
 
@@ -786,6 +881,7 @@ def p_var_decls(p):
     'Var_decls : Var_id Var_decls_1 COLON Type_expr Var_decls_2 Var_decls_3 Var_decls_4'
 #直接将var_decls_2 var_decls_3 var_decls_4设置为空
     p[0]=lex_value('Var_decls')
+    typeName=p[4].value
     if p[4].strs=="struct":
         #此处生成的临时结构体，作用域应在根结点的符号表内
         print("Var_decls:struct")
@@ -797,8 +893,6 @@ def p_var_decls(p):
         rootSymbolTable.setSymbol(tmpStructName,structSymbol)
         # print(len(thisEnv.SymbolTable))
         typeName=tmpStructName
-    elif p[4].strs in typeArr:
-        typeName=p[4].value
 
     symbol = thisEnv.getSymbol(p[1].value)
     symbol.Type = typeName
@@ -1000,11 +1094,12 @@ def p_type_expr(p):
         p[0].value=p[1].value
     elif p[1].strs=='{':
         #structObjects表示结构体的每个元素[[[lex_value("lv6id")],[type_expr]]]
+        #objects指示其是否是数组
         p[0].strs="struct"
         p[0].objects.extend(p[5].objects)
         p[0].structObjects.extend(p[2].objects)
         p[0].structObjects.extend(p[3].objects)
-    print("p[0].strs=",p[0].strs)
+        print("struct",p[0].structObjects)
 def p_type_expr_1(p):
     '''Type_expr_1 : COMMA Field_decl Type_expr_1
     | empty'''
@@ -1020,7 +1115,19 @@ def p_field_decl(p):
     p[0]=lex_value("Field_decl")
     field=list()
     field.append(p[1])
-    field.append(p[3])
+    if p[3].strs=="struct":
+        tmpStructName=getName("tmpStruct")
+        structSymbol=Symbol(tmpStructName,'Type','struct')
+        structSymbol.FieldList=objectsToStruct(p[3].structObjects)
+        structSymbol.arrSize.extend(p[3].objects)
+        rootSymbolTable=getRootSymbolTable(thisEnv)
+        rootSymbolTable.setSymbol(tmpStructName,structSymbol)
+        tmpLex_value=lex_value("struct",tmpStructName)
+        tmpLex_value.structObjects.extend(p[3].structObjects)
+        tmpLex_value.objects.extend(p[3].objects)
+        field.append(tmpLex_value)
+    else:
+        field.append(p[3])
     p[0].objects.append(field)
 
 
@@ -1187,7 +1294,7 @@ def p_tempo_expr(p):
             fbyIdx = getName("fbyIdx")
             fbyArr = getName("fbyArray")
 
-            type = getTypefromObjects(p[5].objects)
+            type = getTypefromObjects(p[5].objects[0])
             if type == "":
                 type = "int32"
             fbyIdxSymbol = Symbol(fbyIdx, "FbyIdx", type)
@@ -1566,16 +1673,36 @@ def p_bin_bool_op(p):
 def p_struct_expr(p):
     '''Struct_expr : Expr POINT LV6ID
     | LBPARENTHESE Label_expr Struct_expr_1 RBPARENTHESE'''
-    pass
+    p[0]=lex_value("Struct_expr")
+    if len(p)==5:
+        p[0].beforeObjects.extend(p[2].beforeObjects)
+        p[0].beforeObjects.extend(p[3].beforeObjects)
+        p[0].afterObjects.extend(p[2].afterObjects)
+        p[0].afterObjects.extend(p[3].afterObjects)
+        p[0].objects.extend(p[2].objects)
+        p[0].objects.extend(p[3].objects)
 
 def p_struct_expr_1(p):
     '''Struct_expr_1 : COMMA Label_expr Struct_expr_1
     | empty'''
-    pass
+    p[0]=lex_value("Struct_expr_1")
+    if len(p)!=2:
+        p[0].beforeObjects.extend(p[2].beforeObjects)
+        p[0].beforeObjects.extend(p[3].beforeObjects)
+        p[0].afterObjects.extend(p[2].afterObjects)
+        p[0].afterObjects.extend(p[3].afterObjects)
+        p[0].objects.extend(p[2].objects)
+        p[0].objects.extend(p[3].objects)
 
 def p_label_expr(p):
     '''Label_expr : LV6ID COLON Expr'''
-    pass
+    p[0]=lex_value("Label_expr")
+    p[0].beforeObjects.extend(p[3].beforeObjects)
+    p[0].afterObjects.extend(p[3].afterObjects)
+    labelList=list()
+    labelList.append(p[1])
+    labelList.extend(p[3].objects)
+    p[0].objects.append(labelList)
 
 def p_error(p):
     print("Syntax error in input!")
@@ -1592,13 +1719,6 @@ def get_parse(strs):
     scade_lexer.set_tokens(string_tokens)
     nodes=parser.parse(strs,lexer=scade_lexer)
     return program,GlobalEnv
-
-def type_change(type):
-    list=["char","bool","float32","float64","size","uint64","uint32","uint16","uint8","int64","int32","int16","int8"]
-    str=type
-    if type in list:
-        str="kcg_"+type
-    return str
 
 if __name__=='__main__':
     parser=yacc(debug=1)
