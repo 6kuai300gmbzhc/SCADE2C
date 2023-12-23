@@ -80,19 +80,16 @@ class Scade_generate:
 
 
 if __name__=='__main__':
-#     strs='''
-#     type type1={tt1:int8,tt2:{tt3:bool}};
-# node test6(in1:int8;in2:bool) returns(out1:type1)
+#     strs='''function test7(in1:int8) returns(out1:int8)
 # let
-# 	out1={tt1:in1+1,tt2:{tt3:true}};
-# tel
-# '''
+# 	out1=in1+1;
+# tel'''
     strs='''type type12={tt3:bool};
 type type11={tt1:int8,tt2:{tt3:bool}};
-node test6(in1:int8;in2:bool;in3:type12) returns(out1:type11;out2,out3:type12)
+node test6(in1:int8;in2:bool;in3:type12) returns(out1,out2:type11;out3:type12)
 let
-	out2={tt3:in2};
-	out1={tt1:in1+1,tt2:out2};
+	out2={tt1:8,tt2:{tt3:false}};
+	out1={tt1:in1+1,tt2:out3};
 	out3=in3;
 tel
 '''

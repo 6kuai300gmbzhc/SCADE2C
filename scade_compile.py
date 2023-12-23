@@ -40,7 +40,6 @@ def generate_head_file():
     head_content += "\n\ntypedef struct {\n"
     for output_name in op_kind_symbol.Returns:
         symbol=thisEnv.getSymbol(output_name)
-        print("symbol.Kind",symbol.Kind)
         if symbol.Kind=='FbyIdx' or symbol.Kind=='FbyArr':
             continue
         else:
@@ -224,7 +223,6 @@ def getArrSize(objects):
 def defToString(defList):
     content=""
     for elem in defList:
-        print("elem:",elem)
         content+=objectsToString(elem)
     return content
 
@@ -260,19 +258,45 @@ def checkStructInitial(typeSymbol,rightObj):
 
 def structAssign(leftName,typeSymbol,rightObj,defList):
     for elem in rightObj:
-        leftName+=".%s"%(elem[0].value)
+        name=leftName+".%s"%(elem[0].value)
         symbol=typeSymbol.FieldList[elem[0].value]
+        tmpList=list()
         if symbol.Type not in typeArr:
             realSymbol=getIdType(symbol.Type,getRootSymbolTable(thisEnv))
-            if realSymbol=='struct':
-                pass
+            if realSymbol.Type=='struct':
+                if isNormalFormat(elem[1])==True:
+                    structAssign(name,realSymbol,elem[1],defList)
+                else:
+                    tmpList.append(lex_value("","memcpy(&"+name))
+                    tmpList.append(lex_value("",",&"))
+                    tmpList.extend(elem[1])
+                    tmpList.append(lex_value("",",sizeof("+symbol.Type+"));\n"))
+                    defList.append(tmpList)
             else:
-                pass
+                setObjectsType(elem[1],realSymbol.Type)
+                tmpList.append(lex_value("",name))
+                tmpList.append(lex_value("","="))
+                tmpList.extend(elem[1])
+                tmpList.append(lex_value("",";\n"))
+                defList.append(tmpList)
         else:
             if symbol.Type =='struct':
-                pass
+                if isNormalFormat(elem[1])==True:
+                    structAssign(name,symbol,elem[1],defList)
+                else:
+                    setObjectsType(elem[1],symbol.Type)
+                    tmpList.append(lex_value("", name))
+                    tmpList.append(lex_value("", "="))
+                    tmpList.extend(elem[1])
+                    tmpList.append(lex_value("", ";\n"))
+                    defList.append(tmpList)
             else:
-                pass
+                setObjectsType(elem[1], symbol.Type)
+                tmpList.append(lex_value("", name))
+                tmpList.append(lex_value("", "="))
+                tmpList.extend(elem[1])
+                tmpList.append(lex_value("", ";\n"))
+                defList.append(tmpList)
 
 def isNormalFormat(objects):
     if type(objects[0])==list:
@@ -747,7 +771,6 @@ def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
     #若出现input1=1->pre(2)。2作为mem_pre加进符号表，此时的类型未知，初始化会出现错误。因此需要找到lhs的类型
     p[0]=lex_value('Simple_equation')
-    print("Simple_euqation:",p[3].objects)
     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
     if len(p[1].objects)!=len(p[3].objects):
         print("Simple_equation error")
@@ -760,10 +783,11 @@ def p_simple_equation(p):
             defList=list()
             if isNormalFormat(p[3].objects[idx])==False:
                 defList.append(lex_value("","memcpy(&"))
-                defList.append(lex_value("",p[1].objects[idx]))
+                defList.append(p[1].objects[idx])
                 defList.append(lex_value("",",&"))
-                defList.append(lex_value("",p[3].objects[idx][0]))
+                defList.append(p[3].objects[idx][0])
                 defList.append(lex_value("",",sizeof("+typeSymbol.Name+"));\n"))
+                p[0].objects.append(defList)
             else:
                 if checkStructInitial(typeSymbol,p[3].objects[idx])==False:
                     print("checkStructInitial error")
@@ -772,8 +796,7 @@ def p_simple_equation(p):
                 if thisEnv.getSymbol(p[1].objects[idx].value).IsReturn ==True:
                     leftName="outC->"+ leftName
                 structAssign(leftName,typeSymbol,p[3].objects[idx],defList)
-            print("defList:",defList)
-            p[0].objects.extend(defList)
+                p[0].objects.extend(defList)
         else:
             type=typeSymbol.Type
             setObjectsType(p[3].objects[idx],type)
@@ -918,7 +941,6 @@ def p_var_id(p):
     # print("Var_id",p[3].value)
     symbol=Symbol(p[3].value,'Var','')
     thisEnv.setSymbol(p[3].value,symbol)
-    print("p_var_id setSymbol",len(thisEnv.SymbolTable))
 
 
 def p_var_id_1(p):
@@ -1099,7 +1121,6 @@ def p_type_expr(p):
         p[0].objects.extend(p[5].objects)
         p[0].structObjects.extend(p[2].objects)
         p[0].structObjects.extend(p[3].objects)
-        print("struct",p[0].structObjects)
 def p_type_expr_1(p):
     '''Type_expr_1 : COMMA Field_decl Type_expr_1
     | empty'''
