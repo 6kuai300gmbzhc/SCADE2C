@@ -33,7 +33,7 @@ def generate_head_file():
     for input_name in op_kind_symbol.Params:
         symbol=thisEnv.getSymbol(input_name)
         print('正在生成head file, 当前op_kind_symbol的input_name:', input_name, '当前作用域: ', thisEnv.EnvName) # TODO: delete debug info
-        head_content+=type_change(symbol.Type)+" "+input_name+";\n"
+        head_content+="%s %s%s;\n"%(type_change(symbol.Type),input_name,getArrSize(symbol.arrSize))
     head_content+="} inC_"+name+";\n"
 
     #out_params
@@ -81,24 +81,23 @@ def generate_c_file(body):
         if symbol.Type not in typeArr:
             realSymbol=getIdType(symbol.Name,thisEnv)
             realType=realSymbol.Type
-        print("realType",realType)
         if realType == "struct":
-            c_content=structInitial(c_content,"outC->"+symbol.Name,realSymbol,0)
+            c_content=structInitial(c_content,"outC->"+symbol.Name,realSymbol)
         elif len(symbol.arrSize) == 0 and symbol.Kind != 'FbyArr' :
-            c_content += "outC->%s=%s;\n" % (para,getParamsInitValue(thisEnv.getSymbol(para).Type))
+            c_content += "outC->%s=%s;\n" % (para,symbolInit(symbol,thisEnv))
     # NOTE: init状态机初始状态赋值
     if op_kind_symbol.isStatemachine:
         c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.StateList[0]
 
     for elem in op_kind_symbol.fbyList:
-        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(),getParamsInitValue(thisEnv.getSymbol(elem.fbyArr).Type))
+        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(),symbolInit(thisEnv.getSymbol(elem.fbyArr),thisEnv))
     c_content += "}\n"
 
     #重置函数
     c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name,name)
     for para in thisEnv.SymbolTable.values():
         if para.Kind=="Pre":
-            c_content += "outC->%s=%s;\n"%(para.Name,getParamsInitValue(thisEnv.getSymbol(para.Name).Type))
+            c_content += "outC->%s=%s;\n"%(para.Name,symbolInit(para,thisEnv))
     # NOTE: reset状态机初始状态赋值
     if op_kind_symbol.isStatemachine:
         c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.StateList[0]
@@ -123,17 +122,33 @@ def getName(initStr):
         else:
             return target
     return initStr
-def getParamsInitValue(type):
-    if type in intArr:
-        return "kcg_lit_%s(0)" % type
-    elif type in floatArr:
-        return "kcg_lit_%s(0.0)" % type
-    elif type=="bool":
-        return "kcg_true"
+def symbolInit(symbol,symbolTable):
+    str=""
+    print("symbolInit",symbol.Name,symbol.Type)
+    if len(symbol.Default)!=0:
+        realType=getIdType(symbol.Name,symbolTable).Type
+        setObjectsType(symbol.Default[0],realType)
+        str=objectsToString(symbol.Default[0])
     else:
-        typeSymbol=thisEnv.getSymbol(type)
-        if typeSymbol!=None:
-            return getParamsInitValue(typeSymbol.Type)
+        realType = getIdType(symbol.Name, symbolTable).Type
+        print("realType=",realType)
+        if realType in intArr:
+            str="kcg_lit_%s(0)"%realType
+        elif realType in floatArr:
+            str="kcg_lit_%s(0.0)" % realType
+    return str
+
+# def getParamsInitValue(type):
+#     if type in intArr:
+#         return "kcg_lit_%s(0)" % type
+#     elif type in floatArr:
+#         return "kcg_lit_%s(0.0)" % type
+#     elif type=="bool":
+#         return "kcg_true"
+#     else:
+#         typeSymbol=thisEnv.getSymbol(type)
+#         if typeSymbol!=None:
+#             return getParamsInitValue(typeSymbol.Type)
 
 def type_initial(type,value):
     content=""
@@ -148,12 +163,15 @@ def objectsToString(objects,num=0):
     # type=""
     sstr=""
     for elem in objects:
+        print("objectsToString",elem.strs,elem.type)
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
             # type=symbol.Type
             sstr+=symbol.changeName()
         elif elem.strs=='integernum':
             sstr += "kcg_lit_%s(%s)" % (elem.type,str(elem.value))
+        elif elem.strs=='floatnum':
+            sstr+="kcg_lit_%s(%s)"%(elem.type,str(elem.value))
         elif elem.strs=='lnot_lv6id':
             sstr += "kcg_lnot_%s" % elem.type
         elif elem.strs=='true':
@@ -169,8 +187,8 @@ def objectsToString(objects,num=0):
         else:
             sstr+=elem.value
     return sstr
-def getIdType(value,symbolTable):
-    symbol=symbolTable.getSymbol(value)
+def getIdType(symbolName,symbolTable):
+    symbol=symbolTable.getSymbol(symbolName)
     if symbol.Type not in typeArr:
         rootSymbolTable=getRootSymbolTable(symbolTable)
         return getIdType(symbol.Type,symbolTable)
@@ -306,15 +324,20 @@ def isNormalFormat(objects):
             return False
     return True
 
-def structInitial(c_content,structName,symbol,level):
+def structInitial(c_content,structName,symbol):
     if symbol.Type=="struct":
-        if level!=0:
-            structName+=".%s"%symbol.Name
         for elemK,elemV in symbol.FieldList.items():
-            if elemV.Type !="struct":
-                c_content+="%s=%s;\n"%(structName,getParamsInitValue(elemV.Type))
+            if elemV.Type not in typeArr:
+                rootEnv=getRootSymbolTable(thisEnv)
+                realSymbol=getIdType(elemV.Type,rootEnv)
+                structName+=".%s"%(elemV.Name)
+                c_content=structInitial(c_content,structName,realSymbol)
             else:
-                c_content=structInitial(c_content,structName,elemV,level+1)
+                if elemV.Type !="struct":
+                    c_content+="%s=%s;\n"%(structName+"."+elemV.Name,symbolInit(elemV,thisEnv))
+                else:
+                    structName+=".%s"%symbol.Name
+                    c_content=structInitial(c_content,structName,elemV)
         return c_content
 
 
@@ -907,7 +930,6 @@ def p_var_decls(p):
     typeName=p[4].value
     if p[4].strs=="struct":
         #此处生成的临时结构体，作用域应在根结点的符号表内
-        print("Var_decls:struct")
         tmpStructName=getName("tmpStruct")
         structSymbol=Symbol(tmpStructName,'Type','struct')
         structSymbol.FieldList=objectsToStruct(p[4].structObjects)
@@ -919,11 +941,16 @@ def p_var_decls(p):
 
     symbol = thisEnv.getSymbol(p[1].value)
     symbol.Type = typeName
-    # symbol.arrSize.extend(p[4].objects)
+    symbol.arrSize.extend(p[4].objects)
+    print("Var_decls",p[7].strs)
+    if p[7].strs!='Empty':
+        symbol.Default.extend(p[7].objects)
     for i in range(len(p[2].objects)):
         symbol=thisEnv.getSymbol(p[2].objects[i].value)
         symbol.Type=typeName
-        # symbol.arrSize.extend(p[4].objects)
+        symbol.arrSize.extend(p[4].objects)
+        if p[7].strs!='Empty':
+            symbol.Default.extend(p[7].objects)
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
 
@@ -961,7 +988,14 @@ def p_var_decls_3(p):
     'Var_decls_3 : empty'
 
 def p_var_decls_4(p):
-    'Var_decls_4 : empty'
+    '''Var_decls_4 : Last_decl
+    | empty'''
+    p[0]=p[1]
+
+def p_last_decl(p):
+    '''Last_decl : LAST EQU Expr'''
+    p[0]=lex_value("Last_decl")
+    p[0].objects.extend(p[3].objects)
 
 def p_package(p):
     'Package : PACKAGE'
@@ -1048,9 +1082,10 @@ def p_sensor_block_1(p):
 def p_sensor_decl(p):
     'Sensor_decl : Id_one_or_more_with_comma COLON Type_expr'
     for item in p[1].objects:
+        print("p[3].strs=",p[3].strs)
         if p[3].strs=='struct':
             typeName=getName("tmpStruct")
-            typeSymbol=Symbol(type,"Type",'struct')
+            typeSymbol=Symbol(typeName,"Type",'struct')
             thisEnv.setSymbol(typeName,typeSymbol)
             typeSymbol.FieldList=objectsToStruct(p[3].structObjects)
         else:
@@ -1202,7 +1237,7 @@ def p_id_expr(p):
         afterList.extend([lex_value("lv6id",lastName),lex_value("=","=")])
         afterList.append(p[3])
         afterList.append(lex_value("",";\n"))
-        p[0].afterList.append(afterList)
+        p[0].afterObjects.append(afterList)
     elif len(p)==3:
         pass
 

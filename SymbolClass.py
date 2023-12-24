@@ -45,8 +45,8 @@ class Symbol:
         self.StateList = list() # 状态机所有可能状态名列表
         self.Params = list()  # 函数标识符的参数列表
         self.Returns = list()  # 函数标识符的返回值列表
-        self.StaticParams = list()  # 函数的静态参数列表
-        self.StaticArgs = list()
+        self.Last=list() #变量的last属性列表
+        self.Default=list() #变量的default属性列表
         self.Code = list()  # 函数标识符的代码
 
     def changeName(self):

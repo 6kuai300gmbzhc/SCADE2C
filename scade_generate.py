@@ -1,7 +1,7 @@
 import os
 import copy
 import scade_compile
-from scade_compile import getArrSize,type_change,getRootSymbolTable
+from scade_compile import getArrSize,type_change,getRootSymbolTable,objectsToString
 
 def gen_struct_elem(elem):
     str=""
@@ -80,19 +80,26 @@ class Scade_generate:
 
 
 if __name__=='__main__':
-#     strs='''function test7(in1:int8) returns(out1:int8)
-# let
-# 	out1=in1+1;
-# tel'''
-    strs='''type type12={tt3:bool};
-type type11={tt1:int8,tt2:{tt3:bool}};
-node test6(in1:int8;in2:bool;in3:type12) returns(out1,out2:type11;out3:type12)
+    strs='''node testPara(in1:int32^2;in2:float32) returns(out1:int32;out2,out3:float32 last=0.5;out4:float32)
 let
-	out2={tt1:8,tt2:{tt3:false}};
-	out1={tt1:in1+1,tt2:out3};
-	out3=in3;
-tel
-'''
+	out1=1;
+	out2=in2;
+	out3=last 'out2;
+	out4=last 'out3;
+tel'''
+#     strs='''
+# sensor sensor1:{tt1:bool,tt2:int32};
+# const c3:int32=4;
+# const imported c5:unsigned<<8>>;
+# type type12={tt3:bool};
+# type type11={tt1:int8,tt2:{tt3:bool}};
+# node test6(in1:int8;in2:bool;in3:type12) returns(out1,out2:type11;out3:type12)
+# let
+# 	out2={tt1:8,tt2:{tt3:false}};
+# 	out1={tt1:in1+1,tt2:out3};
+# 	out3=in3;
+# tel
+# '''
 #     strs='''const imported c1:int32^2;
 # const c3:int32=4;
 # const imported c4:int32^2^(1+2);
