@@ -80,13 +80,19 @@ class Scade_generate:
 
 
 if __name__=='__main__':
-    strs='''node testPara(in1:int32^2;in2:float32) returns(out1:int32;out2,out3:float32 last=0.5;out4:float32)
-let
-	out1=1;
-	out2=in2;
-	out3=last 'out2;
-	out4=last 'out3;
-tel'''
+    # file=open('source_program/PFD.txt','r')
+    # strs=file.read()
+#     strs='''node testInputLast(in1:int8 last=0) returns(out1:int8)
+# let
+# 	out1=last 'in1+1;
+# tel'''
+#测试类型转化
+#     strs='''type type1=float64;
+# node testChange(in1:float32) returns(out1:float64)
+# let
+# 	out1=(in1+1:type1)+2;
+# tel'''
+# 测试结构体
 #     strs='''
 # sensor sensor1:{tt1:bool,tt2:int32};
 # const c3:int32=4;
@@ -100,6 +106,11 @@ tel'''
 # 	out3=in3;
 # tel
 # '''
+    strs='''type struct1={tt1:int8,tt2:{tt3:bool,tt4:float32,tt5:float32}};
+node testStruct(in1:struct1) returns(out1:float32)
+let
+	out1=in1.tt2.tt4+in1.tt2.tt5;
+tel'''
 #     strs='''const imported c1:int32^2;
 # const c3:int32=4;
 # const imported c4:int32^2^(1+2);

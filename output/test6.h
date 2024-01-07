@@ -1,4 +1,4 @@
-_test6_H_
+#ifndef _test6_H_
 #define _test6_H_
 #include "kcg_types.h"
 
@@ -20,3 +20,4 @@ extern void test6(inC_test6 *inC, outC_test6 *outC);
 extern void test6_reset(outC_test6 *outC);
 
 extern void test6_init(outC_test6 *outC);
+#endif

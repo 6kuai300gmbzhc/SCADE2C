@@ -12,7 +12,7 @@ class Symbol:
                          #如属于PathId，其Code记录了该Path_id的路径
                          #Type(用于Type_block)
                         #FbyIdx，FbyArray
-                        #ifExpr,switchExpr,structElem
+                        #structElem
 
         self.Type = Type  # Type类型(int , float,enum,array,struct)
                             #Node还是function,struct
@@ -49,41 +49,45 @@ class Symbol:
         self.Default=list() #变量的default属性列表
         self.Code = list()  # 函数标识符的代码
 
-    def changeName(self):
+    def changeName(self,params):
         if self.IsInput==True:
-            return "inC->"+self.Name
+            name="inC->"+self.Name
         elif self.IsReturn==True:
-            return "outC->"+self.Name
+            name="outC->"+self.Name
         elif self.Kind=="PathId":
             name=self.Name
             for elem in self.Code:
                 name+="_"+elem.value
-            return name
+            self.Code.clear()
         else:
-            return self.Name
+            name=self.Name
+        if len(params)!=0:
+            for elem in params:
+                name+=".%s"%elem.value
+        return name
     #为类指定输出格式
-    def __repr__(self) -> str:
-        strs = '#' + self.Name + '(' + self.Kind + ')'
-        if self.Kind == 'Const':
-            strs += '(' + repr(self.Type) + ':' + str(self.Value) + ')'
-        elif self.Kind == 'Var':
-            strs += '(' + repr(self.Type) + ')'
-        elif self.Kind == 'Type':
-            if self.Type:
-                if self.Type.Type == 'Enum' or self.Type.Type == 'Struct':
-                    strs += '(' + repr(self.Type) + ':' + str(self.FieldList) + ')'
-                    if self.FieldValueList:
-                        strs += '(' + str(self.FieldValueList) + ')'
-                else:
-                    if self.Type.Type:
-                        strs += '(' + repr(self.Type) + ')'
-        elif self.Kind == 'Node' or self.Kind == 'UndefineRed':
-            strs += 'Params:' + str(self.Params) + 'Returns:' + str(self.Returns)
-            if self.StaticParams:
-                strs += 'StaticParams:' + str(self.StaticParams)
-            strs += '\n'
-
-        return strs
+    # def __repr__(self) -> str:
+    #     strs = '#' + self.Name + '(' + self.Kind + ')'
+    #     if self.Kind == 'Const':
+    #         strs += '(' + repr(self.Type) + ':' + str(self.Value) + ')'
+    #     elif self.Kind == 'Var':
+    #         strs += '(' + repr(self.Type) + ')'
+    #     elif self.Kind == 'Type':
+    #         if self.Type:
+    #             if self.Type.Type == 'Enum' or self.Type.Type == 'Struct':
+    #                 strs += '(' + repr(self.Type) + ':' + str(self.FieldList) + ')'
+    #                 if self.FieldValueList:
+    #                     strs += '(' + str(self.FieldValueList) + ')'
+    #             else:
+    #                 if self.Type.Type:
+    #                     strs += '(' + repr(self.Type) + ')'
+    #     elif self.Kind == 'Node' or self.Kind == 'UndefineRed':
+    #         strs += 'Params:' + str(self.Params) + 'Returns:' + str(self.Returns)
+    #         if self.StaticParams:
+    #             strs += 'StaticParams:' + str(self.StaticParams)
+    #         strs += '\n'
+    #
+    #     return strs
 
 
 class SymbolTable:

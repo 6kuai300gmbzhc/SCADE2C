@@ -1,6 +1,7 @@
 from ply.yacc import yacc
 from scade_lex import scade_lex,get_tokens,tokens,lex_value
 from SymbolClass import *
+import re
 isPackage=0
 # global isStatemachine
 isStatemachine=0
@@ -25,7 +26,7 @@ def generate_head_file():
     op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     name=op_kind_symbol.Name
     head_content=""
-    head_content+="_"+name+"_H_\n"+"#define _"+name+"_H_\n"
+    head_content+="#ifndef _"+name+"_H_\n"+"#define _"+name+"_H_\n"
     head_content+="#include \"kcg_types.h\"\n\n"
     head_content+="typedef struct {\n"
     #input_params
@@ -48,7 +49,6 @@ def generate_head_file():
         fbyIdx=thisEnv.getSymbol(fbyElem.fbyIdx)
         fbyArr=thisEnv.getSymbol(fbyElem.fbyArr)
         head_content += type_change(fbyIdx.Type)+" "+fbyIdx.Name + ";\n"
-        print("fbyIdx.Code",fbyIdx.Code)
         head_content += "%s %s%s;\n"%(type_change(fbyArr.Type),fbyArr.Name,getArrSize([fbyIdx.Code]))
     # automata
     if isStatemachine==1:
@@ -58,7 +58,7 @@ def generate_head_file():
     #function
     head_content+="\nextern void "+name+"(inC_"+name+" *inC, outC_"+name+" *outC);\n"
     head_content+="\nextern void "+name+"_reset(outC_"+name+" *outC);\n"
-    head_content += "\nextern void " + name + "_init(outC_" + name + " *outC);\n"
+    head_content += "\nextern void " + name + "_init(outC_" + name + " *outC);\n#endif"
     filename="./output/"+name+".h"
     print(head_content)
     with open(filename,'w') as f:
@@ -90,7 +90,7 @@ def generate_c_file(body):
         c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.StateList[0]
 
     for elem in op_kind_symbol.fbyList:
-        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(),symbolInit(thisEnv.getSymbol(elem.fbyArr),thisEnv))
+        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(None),symbolInit(thisEnv.getSymbol(elem.fbyArr),thisEnv))
     c_content += "}\n"
 
     #重置函数
@@ -124,50 +124,40 @@ def getName(initStr):
     return initStr
 def symbolInit(symbol,symbolTable):
     str=""
-    print("symbolInit",symbol.Name,symbol.Type)
     if len(symbol.Default)!=0:
         realType=getIdType(symbol.Name,symbolTable).Type
         setObjectsType(symbol.Default[0],realType)
         str=objectsToString(symbol.Default[0])
-    else:
+    elif len(symbol.Last)!=0:
         realType = getIdType(symbol.Name, symbolTable).Type
-        print("realType=",realType)
+        setObjectsType(symbol.Last[0], realType)
+        str = objectsToString(symbol.Last[0])
+    else:
+        realType = symbol.Type
         if realType in intArr:
             str="kcg_lit_%s(0)"%realType
         elif realType in floatArr:
             str="kcg_lit_%s(0.0)" % realType
+        elif realType=='bool':
+            str="kcg_true"
+        else:
+            symbolInit(getIdType(realType,thisEnv),thisEnv)
     return str
-
-# def getParamsInitValue(type):
-#     if type in intArr:
-#         return "kcg_lit_%s(0)" % type
-#     elif type in floatArr:
-#         return "kcg_lit_%s(0.0)" % type
-#     elif type=="bool":
-#         return "kcg_true"
-#     else:
-#         typeSymbol=thisEnv.getSymbol(type)
-#         if typeSymbol!=None:
-#             return getParamsInitValue(typeSymbol.Type)
-
-def type_initial(type,value):
-    content=""
-    if type=="bool":
-        content+="kcg_"+value
-    else:
-        content+="kcg_lit_"+type+"("+str(value)+")"
-    return content
-
 
 def objectsToString(objects,num=0):
     # type=""
     sstr=""
+    print("objectsToString",objects)
     for elem in objects:
-        print("objectsToString",elem.strs,elem.type)
+        print('elem.strs=',elem.strs,'elem.value=',elem.value,' ',elem.objects)
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
             # type=symbol.Type
-            sstr+=symbol.changeName()
+            if len(elem.objects)!=0:
+                if checkElemInStruct(symbol.Name,elem.objects,0):
+                    sstr += symbol.changeName(elem.objects)
+            else:
+                sstr+=symbol.changeName(elem.objects)
         elif elem.strs=='integernum':
             sstr += "kcg_lit_%s(%s)" % (elem.type,str(elem.value))
         elif elem.strs=='floatnum':
@@ -187,11 +177,12 @@ def objectsToString(objects,num=0):
         else:
             sstr+=elem.value
     return sstr
+#存在typedef别名情况
 def getIdType(symbolName,symbolTable):
     symbol=symbolTable.getSymbol(symbolName)
-    if symbol.Type not in typeArr:
+    if symbol!=None and symbol.Type not in typeArr:
         rootSymbolTable=getRootSymbolTable(symbolTable)
-        return getIdType(symbol.Type,symbolTable)
+        return getIdType(symbol.Type,rootSymbolTable)
     else:
         return symbol
 
@@ -203,6 +194,9 @@ def getTypefromObjects(objects):
             if symbol.Type in typeArr:
                 type=symbol.Type
                 return type
+            elif symbol.Type!='':
+                rootSymbolTable=getRootSymbolTable(thisEnv)
+                type=getIdType(symbol.Type,rootSymbolTable).Type
     return type
 
 def setObjectsType(objects,type):
@@ -340,6 +334,45 @@ def structInitial(c_content,structName,symbol):
                     c_content=structInitial(c_content,structName,elemV)
         return c_content
 
+def checkType(expr1,expr2):
+    type1=getTypefromObjects(expr1.objects[0])
+    type2=getTypefromObjects(expr2.objects[0])
+    if type1!='' and type2!='' and type1!=type2:
+        print("checkType error")
+        exit(0)
+    elif type1=='' and type2=='':
+        return
+    elif type1!='' and type2=='':
+        setObjectsType(expr2.objects[0],type1)
+    elif type1=='' and type2!='':
+        setObjectsType(expr1.objects[0],type2)
+#判断params里面的元素是否是symbolName表示的结构体里面的
+def checkElemInStruct(symbolName,params,idx):
+    if idx >= len(params):
+        return True
+    realSymbol=getIdType(symbolName,thisEnv)
+    if params[idx].value not in realSymbol.FieldList:
+        return False
+    else:
+        return checkElemInStruct(realSymbol.FieldList[params[idx].value].Type,params,idx+1)
+
+#优先级从低到高
+precedence=(
+    ('left','ARROW'),
+    ('left','LOR','LXOR'),
+    ('left','LAND'),
+    ('left','OR','XOR'),
+    ('left','AND'),
+    ('left','EQU','NOEQU','LESSEQU','GREATEREQU','LESS','GREATER'),
+    ('left','LSL','LSR'),
+    ('left','PLUS','MINUS'),
+    ('left','STAR','MOD','DIVIDE'),
+    ('right','UMINUS','UPLUS'),
+    ('left','PRE'),
+    ('right','NOT','LNOT'),
+    ('left','EXPONENT'),
+    ('left','POINT')
+)
 
 def p_program(p):
     'Program : Decls_zero_or_more'
@@ -412,7 +445,6 @@ def p_type_def(p):
     else:
         p[0]=p[3]
         p[0].strs='Enum'
-        print(p[0].objects)
 def p_numeric_kind(p):
     '''Numeric_kind : NUMERIC
     | FLOAT
@@ -498,7 +530,10 @@ def p_opt_body(p):
                 p[0].value+="kcg_%s %s;\n"%(symbol.Type,symbol.Name)
         for elem in thisEnv.SymbolTable.values():#在程序中使用到的临时变量
             if elem.Kind=="TmpVar":
-                p[0].value+="kcg_%s %s;\n"%(elem.Type,elem.Name)
+                if len(elem.Code)==0:
+                    p[0].value+="kcg_%s %s;\n"%(elem.Type,elem.Name)
+                else:
+                    p[0].value+="kcg_%s %s=%s;\n"%(elem.Type,elem.Name,objectsToString(elem.Code))
         if len(p)==3:
             # p[0].value+=defToString(p[1].beforeObjects)
             # p[0].value+=defToString(p[1].objects)
@@ -528,6 +563,11 @@ def p_local_block_zero_or_one(p):
 def p_local_block(p):
     '''Local_block : VAR Local_block_1'''
     p[0]=p[2]
+    for obj in p[2].objects:
+        symbol=thisEnv.getSymbol(obj.value)
+        if symbol!=None and symbol.IsReturn==True:
+            thisEnv.getSymbol(op_kind_id).Returns.append(symbol.Name)
+
 
 def p_local_block_1(p):
     '''Local_block_1 : Var_decls SEMICOLON Local_block_1
@@ -564,7 +604,6 @@ def p_equation(p):
         p[0].value+=defToString(p[1].beforeObjects)+defToString(p[1].objects)+defToString(p[1].afterObjects)
     elif len(p)==3: # TODO: 添加控制流等式, 改写为 objects before objects, afterObjects
         p[0].value+=p[1].value+p[2].value
-        print("p[2]",p[2])
         # print("Control block, p[1],p[2] value: ", p[1].value, ", ", p[2].value)
 
 
@@ -576,7 +615,6 @@ def p_control_block(p):
 
 def p_return(p):
     '''Return : RETURNS Returns_var'''
-    print("Return")
     p[0]=lex_value("Return")
     # node以及function定义的时候已经写了return的参数列表，C代码使用 outC->var_name = 为返回值赋值，所以这里的return语句不需要再生成
 
@@ -749,7 +787,6 @@ def p_if_block(p):
     p[0].value+="}else{\n"
     p[0].value+=p[6].value
     p[0].value+="}\n"
-    print("p[0].value",p[0].value)
 
 def p_if_block_1(p):
     '''If_block_1 : Data_def
@@ -823,11 +860,11 @@ def p_simple_equation(p):
         else:
             type=typeSymbol.Type
             setObjectsType(p[3].objects[idx],type)
-            if idx==0:
-                for elem in p[3].beforeObjects:
-                    setObjectsType(elem, type)
-                for elem in p[3].afterObjects:
-                    setObjectsType(elem,type)
+            # if idx==0:
+            #     for elem in p[3].beforeObjects:
+            #         setObjectsType(elem, type)
+            #     for elem in p[3].afterObjects:
+            #         setObjectsType(elem,type)
 
             defList = list()
             defList.append(p[1].objects[idx])
@@ -942,15 +979,19 @@ def p_var_decls(p):
     symbol = thisEnv.getSymbol(p[1].value)
     symbol.Type = typeName
     symbol.arrSize.extend(p[4].objects)
-    print("Var_decls",p[7].strs)
     if p[7].strs!='Empty':
-        symbol.Default.extend(p[7].objects)
+        symbol.Last.extend(p[7].objects)
+        symbol.IsReturn=True
+        # thisEnv.getSymbol(op_kind_id).Returns.append(symbol.Name)
     for i in range(len(p[2].objects)):
         symbol=thisEnv.getSymbol(p[2].objects[i].value)
         symbol.Type=typeName
         symbol.arrSize.extend(p[4].objects)
         if p[7].strs!='Empty':
-            symbol.Default.extend(p[7].objects)
+            symbol.Last.extend(p[7].objects)
+            symbol.IsReturn=True
+            # thisEnv.getSymbol(op_kind_id).Returns.append(symbol.Name)
+
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
 
@@ -1082,7 +1123,6 @@ def p_sensor_block_1(p):
 def p_sensor_decl(p):
     'Sensor_decl : Id_one_or_more_with_comma COLON Type_expr'
     for item in p[1].objects:
-        print("p[3].strs=",p[3].strs)
         if p[3].strs=='struct':
             typeName=getName("tmpStruct")
             typeSymbol=Symbol(typeName,"Type",'struct')
@@ -1227,22 +1267,18 @@ def p_id_expr(p):
     if len(p)==2:
         p[0].objects.append(p[1])
     elif len(p)==4:
-        lastName = getName("mem_last")
-        symbol.Returns.append(lastName)
-        lastSymbol = Symbol(lastName, "Last", "")
-        lastSymbol.IsReturn = True
-        thisEnv.setSymbol(lastName, lastSymbol)
-        p[0].objects.append(lex_value("lv6id", lastName))
-        afterList=list()
-        afterList.extend([lex_value("lv6id",lastName),lex_value("=","=")])
-        afterList.append(p[3])
-        afterList.append(lex_value("",";\n"))
-        p[0].afterObjects.append(afterList)
+        symbol=thisEnv.getSymbol(p[3].value)
+        if symbol !=None:
+            p[0].objects.append(p[3])
+        else:
+            realType=getIdType(p[3].value,thisEnv)
+            lastName = getName("lastTmp")
+            lastSymbol = Symbol(lastName, "TmpVar", realType.Type)
+            thisEnv.setSymbol(lastName, lastSymbol)
+            p[0].objects.append(lex_value("lv6id", lastName))
+            lastSymbol.Code.append(p[3])
     elif len(p)==3:
         pass
-
-
-
 
 #not finish
 #若是Arith_expr,则是各个object相加，否则直接赋值
@@ -1400,33 +1436,46 @@ def p_tempo_expr(p):
         #     print("fby",elem)
 
 def p_relation_expr(p):
-    '''Relation_expr : Expr Bin_relation_op Expr'''
+    '''Relation_expr : Expr EQU Expr
+    | Expr NOEQU Expr
+    | Expr LESS Expr
+    | Expr GREATER Expr
+    | Expr LESSEQU Expr
+    | Expr GREATEREQU Expr'''
+
     p[0]=lex_value("Relation_expr")
+    if p[2].strs=='<>':
+        p[2].value='!='
+    elif p[2].strs=='=':
+        p[2].value='=='
     p[0].beforeObjects.extend(p[1].beforeObjects)
     p[0].beforeObjects.extend(p[3].beforeObjects)
 
     if len(p[1].objects)!=len(p[3].objects) and len(p[1].objects)!=1:
         print("relation_epxr:error")
         exit(0)
+    checkType(p[1],p[3])
+    p[0].objects.append(lex_value("","("))
     p[0].objects.extend(p[1].objects[0])
     p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects[0])
+    p[0].objects.append(lex_value("",")"))
 
     p[0].afterObjects.extend(p[1].afterObjects)
     p[0].afterObjects.extend(p[3].afterObjects)
 
-def p_bin_relation_op(p):
-    '''Bin_relation_op : EQU
-    | NOEQU
-    | LESS
-    | GREATER
-    | LESSEQU
-    | GREATEREQU'''
-    p[0]=p[1]
-    if p[1].strs=='<>':
-        p[0].value='!='
-    elif p[1].strs=='=':
-        p[0].value='=='
+# def p_bin_relation_op(p):
+#     '''Bin_relation_op : EQU
+#     | NOEQU
+#     | LESS
+#     | GREATER
+#     | LESSEQU
+#     | GREATEREQU'''
+#     p[0]=p[1]
+#     if p[1].strs=='<>':
+#         p[0].value='!='
+#     elif p[1].strs=='=':
+#         p[0].value='=='
 
 
 def judgeIsEnum(objects):
@@ -1474,7 +1523,7 @@ def p_switch_expr(p):
         p[0].beforeObjects += p[2].beforeObjects + p[4].beforeObjects + p[6].beforeObjects
         for idx in range(len(p[4].objects)):
             ifTmp = getName("ifTmp")
-            ifSymbol = Symbol(ifTmp, "ifExpr")
+            ifSymbol = Symbol(ifTmp, "TmpVar")
             thisEnv.setSymbol(ifTmp, ifSymbol)
             befDefList=list()
             befDefList.append(lex_value("", "if("))
@@ -1505,7 +1554,7 @@ def p_switch_expr(p):
                 exit(0)
         for idx in range(len(p[5].objects)):
             caseName=getName("caseTmp")
-            caseSymbol=Symbol(caseName,"switchExpr")
+            caseSymbol=Symbol(caseName,"TmpVar")
             thisEnv.setSymbol(caseName,caseSymbol)
             defList=list()
             defList.append(lex_value("","switch("))
@@ -1578,27 +1627,74 @@ def p_pattern_1(p):
 
 #Arith_expr还要添加(Expr:Type_expr) 文法
 def p_arith_expr(p):
-    '''Arith_expr : Unary_arith_op Expr
-    | Expr Bin_arith_op Expr'''
+    '''Arith_expr : LPARENTHESE Expr COLON Type_expr RPARENTHESE'''
     p[0]=lex_value("Arith_expr")
-    if len(p)==4:
-        p[0].objects.extend(p[1].objects[0])
-        p[0].objects.append(p[2])
-        p[0].objects.extend(p[3].objects[0])
-        p[0].beforeObjects.extend(p[1].beforeObjects)
-        p[0].beforeObjects.extend(p[3].beforeObjects)
-        p[0].afterObjects.extend(p[1].afterObjects)
-        p[0].afterObjects.extend(p[3].afterObjects)
-    elif len(p)==3:
-        p[0].beforeObjects.extend(p[2].beforeObjects)
-        if p[1].strs=='-':
-            p[0].objects.extend(p[1])
-        elif p[1].strs=='lnot':
-            #新增一个变量，将其strs设置为lnot_lv6id。当遍历到这个变量时，将其转化为kcg_lnot_type
-            p[0].objects.extend([lex_value("lnot_lv6id"),lex_value("(","(")])
-            p[0].objects.extend(p[2].objects[0])
-            p[0].objects.append(lex_value(")",")"))
-        p[0].afterObjects.extend(p[2].afterObjects)
+    realType=p[4].value
+    if realType not in typeArr:
+        realType=getIdType(p[4].value,getRootSymbolTable(thisEnv)).Type
+    p[0].objects.append(lex_value("","(kcg_%s)"%(realType)))
+    if len(p[2].objects[0])!=1:
+        p[0].objects.append(lex_value("","("))
+    setObjectsType(p[2].objects[0],realType)
+    p[0].objects.extend(p[2].objects[0])
+
+    if len(p[2].objects[0]) != 1:
+        p[0].objects.append(lex_value("", ")"))
+
+def p_arith_expr_unary(p):
+    '''Arith_expr : MINUS Expr %prec UMINUS
+    | PLUS Expr %prec UPLUS
+    | LNOT Expr'''
+    p[0]=lex_value("Arith_expr")
+    p[0].beforeObjects.extend(p[2].beforeObjects)
+    type=getTypefromObjects(p[2].objects[0])
+    setObjectsType(p[2].objects[0],type)
+    if p[1].strs == '-':
+        p[0].objects.append(lex_value("", "("))
+        p[0].objects.append(p[1])
+        p[0].objects.extend(p[2].objects[0])
+        p[0].objects.append(lex_value("", ")"))
+    elif p[1].strs == 'lnot':
+        # 新增一个变量，将其strs设置为lnot_lv6id。当遍历到这个变量时，将其转化为kcg_lnot_type
+        p[0].objects.extend([lex_value("lnot_lv6id"), lex_value("(", "(")])
+        p[0].objects.extend(p[2].objects[0])
+        p[0].objects.append(lex_value(")", ")"))
+    p[0].afterObjects.extend(p[2].afterObjects)
+def p_arith_expr_binOp(p):
+    '''Arith_expr : Expr PLUS Expr
+    | Expr MINUS Expr
+    | Expr STAR Expr
+    | Expr DIVIDE Expr
+    | Expr MOD Expr
+    | Expr LAND Expr
+    | Expr LOR Expr
+    | Expr LXOR Expr
+    | Expr LSL Expr
+    | Expr LSR Expr'''
+    p[0] = lex_value("Arith_expr")
+    checkType(p[1],p[3])
+    if p[2].strs=='mod':
+        p[2].value=' % '
+    elif p[2].strs=='land':
+        p[2].value=' & '
+    elif p[2].strs=='lor':
+        p[2].value=' | '
+    elif p[2].strs == 'lxor':
+        p[2].value = ' ^ '
+    elif p[2].strs=='lsl':
+        p[2].value=' << '
+    elif p[2].strs=='lsr':
+        p[2].value=' >> '
+    print("Arith_expr:",p[1].objects,p[3].objects,p[2].strs)
+    p[0].objects.append(lex_value("", "("))
+    p[0].objects.extend(p[1].objects[0])
+    p[0].objects.append(p[2])
+    p[0].objects.extend(p[3].objects[0])
+    p[0].objects.append(lex_value("", ")"))
+    p[0].beforeObjects.extend(p[1].beforeObjects)
+    p[0].beforeObjects.extend(p[3].beforeObjects)
+    p[0].afterObjects.extend(p[1].afterObjects)
+    p[0].afterObjects.extend(p[3].afterObjects)
 
 
 def p_list_expr(p):
@@ -1639,39 +1735,6 @@ def p_list_2(p):
         p[0].beforeObjects.extend(p[3].beforeObjects)
         p[0].afterObjects.extend(p[3].afterObjects)
 
-
-def p_unary_arith_op(p):
-    '''Unary_arith_op : MINUS
-    | PLUS
-    | LNOT'''
-    p[0]=p[1]
-
-def p_bin_arith_op(p):
-    '''Bin_arith_op : PLUS
-    | MINUS
-    | STAR
-    | DIVIDE
-    | MOD
-    | LAND
-    | LOR
-    | LXOR
-    | LSL
-    | LSR'''
-    p[0]=p[1]
-    #当操作符是除了+-*/以外的，需要转化成C对应的操作符
-    if p[1].strs=='MOD':
-        p[0].value=' % '
-    elif p[1].strs==' LAND ':
-        p[0].value='&'
-    elif p[1].strs=='LOR':
-        p[0].value=' | '
-    elif p[1].strs=='LXOR':
-        p[0].value=' ^ '
-    elif p[1].strs=='LSL':
-        p[0].value=' << '
-    elif p[1].strs=='LSR':
-        p[0].value=' >> '
-
 #typed_integer和typed_float未添加
 def p_atom(p):
     '''Atom : Bool_atom
@@ -1690,7 +1753,6 @@ def p_bool_atom(p):
 
 def p_bool_expr(p):
     '''Bool_expr : NOT Expr
-    | Expr Bin_bool_op Expr
     | HASHTAG LPARENTHESE List RPARENTHESE'''
     p[0]=lex_value("Bool_expr")
     if len(p)==3:
@@ -1699,12 +1761,6 @@ def p_bool_expr(p):
         p[0].objects.extend(p[2].objects[0])
         p[0].beforeObjects.extend(p[2].beforeObjects)
         p[0].afterObjects.extend(p[2].afterObjects)
-    elif len(p)==4:
-        p[0].objects+=p[1].objects[0]
-        p[0].objects.append(p[2])
-        p[0].objects+=p[3].objects[0]
-        p[0].beforeObjects+=p[1].beforeObjects+p[3].beforeObjects
-        p[0].afterObjects+=p[1].afterObjects+p[3].afterObjects
     elif len(p)==5:
         for idx in range(len(p[3].objects)):
             p[0].objects.append(lex_value("","("))
@@ -1714,17 +1770,35 @@ def p_bool_expr(p):
                 p[0].objects.append(lex_value("","+"))
         p[0].objects.append(lex_value("","<=1"))
 
-def p_bin_bool_op(p):
-    '''Bin_bool_op : AND
-    | OR
-    | XOR'''
-    if p[1].strs=='and':
-        p[1].value=' & '
-    elif p[1].strs=='or':
-        p[1].value=' | '
-    elif p[1].strs=='xor':
-        p[1].value=' ^ '
-    p[0]=p[1]
+def p_bool_expr_bin(p):
+    '''Bool_expr : Expr AND Expr
+    | Expr OR Expr
+    | Expr XOR Expr'''
+    p[0]=lex_value('Bool_expr')
+    if p[2].strs=='and':
+        p[2].value=' & '
+    elif p[2].strs=='or':
+        p[2].value=' | '
+    elif p[2].strs=='xor':
+        p[2].value=' ^ '
+    p[0].objects.append(lex_value("", "("))
+    p[0].objects += p[1].objects[0]
+    p[0].objects.append(p[2])
+    p[0].objects += p[3].objects[0]
+    p[0].objects.append(lex_value("", ")"))
+    p[0].beforeObjects += p[1].beforeObjects + p[3].beforeObjects
+    p[0].afterObjects += p[1].afterObjects + p[3].afterObjects
+# def p_bin_bool_op(p):
+#     '''Bin_bool_op : AND
+#     | OR
+#     | XOR'''
+#     if p[1].strs=='and':
+#         p[1].value=' & '
+#     elif p[1].strs=='or':
+#         p[1].value=' | '
+#     elif p[1].strs=='xor':
+#         p[1].value=' ^ '
+#     p[0]=p[1]
 
 def p_struct_expr(p):
     '''Struct_expr : Expr POINT LV6ID
@@ -1737,7 +1811,13 @@ def p_struct_expr(p):
         p[0].afterObjects.extend(p[3].afterObjects)
         p[0].objects.extend(p[2].objects)
         p[0].objects.extend(p[3].objects)
-
+    elif len(p)==4:
+        idx1=len(p[1].objects)-1
+        idx2=len(p[1].objects[idx1])-1
+        p[1].objects[idx1][idx2].objects.append(p[3])
+        p[0].objects.extend(p[1].objects[0])
+        print("Sturct_expr",p[1].objects[idx1],p[1].objects[idx1][idx2],p[1].objects[idx1][idx2].objects)
+        # print("Struct_expr",p[1].objects,type(p[1].objects[0][0]))
 def p_struct_expr_1(p):
     '''Struct_expr_1 : COMMA Label_expr Struct_expr_1
     | empty'''
@@ -1771,6 +1851,9 @@ def get_parse(strs):
     global program
     parser=yacc(debug=1)
     parse=yacc(debug=1)
+    pattern = r'\#[\w]+'
+    strs=re.sub(pattern,'',strs)
+    print("=======strs=====\n",strs)
     string_tokens=get_tokens(strs)
     scade_lexer.set_tokens(string_tokens)
     nodes=parser.parse(strs,lexer=scade_lexer)
@@ -1778,17 +1861,6 @@ def get_parse(strs):
 
 if __name__=='__main__':
     parser=yacc(debug=1)
-    #define e kcg_true  define d(kcg_lit_int32(0)) extern const kcg_int32 c
-    #extern const kcg_int8 f;
-    # strs = str("package NoPackage\
-    #         const e:bool=true;\
-    #         const d:int32=0;\
-    #         const imported c:int32;\
-    #         const private imported f:int8;\
-    #         end;")
-    # strs=str("function plus_two (x:int8) returns (y:int8) y=x+2;")
-    # strs = str("sensor Sensor1:int32;\
-    # sensor Sensor2:int32;")
     strs = """
     node simple_automaton (i: int32; c: bool; d: bool) returns (o: int32)
     automaton

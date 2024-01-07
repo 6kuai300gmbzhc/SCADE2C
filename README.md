@@ -193,9 +193,10 @@ TODO：Symbol创建子类，Var, Package, Node, Function, Statemachine, 实例�
 
 2023-10-09: 实现node, function等`.c, .h`代码文件生成，Simple_equation, automaton的until弱迁移函数主体
 
-| 时间      | 任务                                                         |
-| --------- | ------------------------------------------------------------ |
-| 2023-12-3 | 修改了init问题，使每个->和fby对应不同的init（后续可以优化，不同的作用域对应不同的init），完成了Control_block中的Clocked_block文法，修改了Equation中的Control_block Return中Return的文法(Return文法貌似没什么用处...) |
+| 时间       | 任务                                                         |
+| ---------- | ------------------------------------------------------------ |
+| 2023-12-3  | 修改了init问题，使每个->和fby对应不同的init（后续可以优化，不同的作用域对应不同的init），完成了Control_block中的Clocked_block文法，修改了Equation中的Control_block Return中Return的文法(Return文法貌似没什么用处...) |
+| 2024-01-07 | 完成了struct_expr文法，并仿真测试PFD程序，修改遇到的问题后，代码生成正确。 |
 
 
 Author: Shanshan Wang, Qianhui Xu
