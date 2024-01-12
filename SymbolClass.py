@@ -42,6 +42,8 @@ class Symbol:
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
         self.arrSize=list()  #数组长度的表达式
 
+        self.initState = None  # 初始状态
+        self.StrongOrWeak = None # 强迁移: 1, 弱迁移: 0
         self.StateList = list() # 状态机所有可能状态名列表
         self.Params = list()  # 函数标识符的参数列表
         self.Returns = list()  # 函数标识符的返回值列表
