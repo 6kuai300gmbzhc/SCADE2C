@@ -2,6 +2,7 @@ from ply.yacc import yacc
 from scade_lex import scade_lex,get_tokens,tokens,lex_value
 from SymbolClass import *
 import re
+from topology import Topology,topologyReady
 isPackage=0
 # global isStatemachine
 isStatemachine=0
@@ -90,7 +91,7 @@ def generate_c_file(body):
         c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.initState
 
     for elem in op_kind_symbol.fbyList:
-        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName(None),symbolInit(thisEnv.getSymbol(elem.fbyArr),thisEnv))
+        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n"%(objectsToString(thisEnv.getSymbol(elem.fbyIdx).Code),thisEnv.getSymbol(elem.fbyArr).changeName([]),symbolInit(thisEnv.getSymbol(elem.fbyArr),thisEnv))
     c_content += "}\n"
 
     #重置函数
@@ -147,9 +148,7 @@ def symbolInit(symbol,symbolTable):
 def objectsToString(objects,num=0):
     # type=""
     sstr=""
-    print("objectsToString",objects)
     for elem in objects:
-        print('elem.strs=',elem.strs,'elem.value=',elem.value,' ',elem.objects)
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
             # type=symbol.Type
@@ -334,18 +333,21 @@ def structInitial(c_content,structName,symbol):
                     c_content=structInitial(c_content,structName,elemV)
         return c_content
 
-def checkType(expr1,expr2):
-    type1=getTypefromObjects(expr1.objects[0])
-    type2=getTypefromObjects(expr2.objects[0])
+def checkType(expr1,expr2,idx):
+    type1=getTypefromObjects(expr1.objects[idx])
+    type2=getTypefromObjects(expr2.objects[idx])
     if type1!='' and type2!='' and type1!=type2:
-        print("checkType error")
-        exit(0)
+        raise NotImplementedError("checkType error")
     elif type1=='' and type2=='':
-        return
+        return type1
     elif type1!='' and type2=='':
         setObjectsType(expr2.objects[0],type1)
+        return type1
     elif type1=='' and type2!='':
         setObjectsType(expr1.objects[0],type2)
+        return type2
+    else:
+        return type1
 #判断params里面的元素是否是symbolName表示的结构体里面的
 def checkElemInStruct(symbolName,params,idx):
     if idx >= len(params):
@@ -355,6 +357,48 @@ def checkElemInStruct(symbolName,params,idx):
         return False
     else:
         return checkElemInStruct(realSymbol.FieldList[params[idx].value].Type,params,idx+1)
+
+def topologyToString(elem):
+    str=''
+    if elem.type=='equation':
+        str+=objectsToString(elem.left)
+        str+='='
+        str+=objectsToString(elem.right)
+        str+=';\n'
+    elif elem.type=='ifBlock':
+        for idx in range(len(elem.condition)):
+            if idx==0:
+                str+='if(%s){\n%s=%s;\n'%(objectsToString(elem.condition[idx][0]),objectsToString(elem.left),objectsToString(elem.condition[idx][1]))
+                if elem.init==True:
+                    str+="%s=kcg_false;\n}"%(objectsToString(elem.condition[0][0]))
+            else:
+                if len(elem.condition[idx][0])!=0:
+                    str+="else if(%s){\n%s=%s;\n}\n"%(objectsToString(elem.condition[idx][0]),objectsToString(elem.left),objectsToString(elem.condition[idx][1]))
+                else:
+                    str+="else{\n%s=%s;\n}\n"%(objectsToString(elem.left),objectsToString(elem.condition[idx][1]))
+    elif elem.type=='fbyBlock':
+        str+="if(%s){\n for(int idx=0;idx<%s;idx++){\n"%(objectsToString(elem.condition[0]),objectsToString(elem.condition[4]))
+        str+="%s[idx]=%s;\n}\n"%(objectsToString(elem.condition[2]),objectsToString(elem.condition[5]))
+        str+="%s=0;\n"%(objectsToString(elem.condition[1]))
+        if elem.init:
+            str+="%s=kcg_false;\n}\n"%(objectsToString(elem.condition[0]))
+        else:
+            str+="}\n"
+        str+="%s=%s[%s];\n"%(objectsToString(elem.left),objectsToString(elem.condition[2]),objectsToString(elem.condition[1]))
+        str+="%s[%s]=%s;\n"%(objectsToString(elem.condition[2]),objectsToString(elem.condition[1]),objectsToString(elem.condition[3]))
+        str+="%s=(%s+1)%%(%s);\n"%(objectsToString(elem.condition[1]),objectsToString(elem.condition[1]),objectsToString(elem.condition[4]))
+    elif elem.type=='switchBlock':
+        str+="switch(%s){\n"%(objectsToString(elem.condition[0]))
+        for idx in range(1,len(elem.condition)):
+            if len(elem.condition[idx][0])!=0:
+                str+="case %s : \n %s = %s;\nbreak;\n"%(objectsToString(elem.condition[idx][0]),objectsToString(elem.left),objectsToString(elem.condition[idx][1]))
+            elif len(elem.condition[idx][0])==0 and len(elem.condition[idx][1])!=0:
+                str+="default :\n %s = %s;\nbreak;\n"%(objectsToString(elem.left),objectsToString(elem.condition[idx][1]))
+            else:
+                str += "default : \n break;\n"
+        str+="}\n"
+    return str
+
 
 #优先级从低到高
 precedence=(
@@ -524,6 +568,7 @@ def p_opt_body(p):
     if len(p)==2:
         pass
     else:
+        #TODO:在此处进行拓扑排序，调整语句的顺序
         if len(p)==6 or len(p)==7:
             for elem in p[2].objects:
                 symbol=thisEnv.getSymbol(elem.value)
@@ -541,14 +586,12 @@ def p_opt_body(p):
             # NOTE:加上Equation Control block的控制流代码
             p[0].value+=p[1].value
             print("Debug info: Opt_body len(p)==3, p[0].value is: ", p[0].value)
+            #TODO:此处需将equation的topology类转换为string
         else:
-            # p[0].value+=defToString(p[4].beforeObjects)
-            # p[0].value+=defToString(p[4].objects)
-            # p[0].value+=defToString(p[4].afterObjects)
-            p[0].value+=p[4].value
-        # if op_kind_symbol.InitName!="":
-        #     initSymbol=thisEnv.getSymbol(op_kind_symbol.InitName)
-        #     p[0].value+="if(%s){%s=kcg_false;}"%(initSymbol.changeName(),initSymbol.changeName())
+            objs=topologyReady(p[4].objects)
+            for elem in objs:
+                p[0].value+=topologyToString(elem)
+            # p[0].value+=p[4].value
 
 
 def p_signal_block_zero_or_one(p):
@@ -583,25 +626,18 @@ def p_equation_zero_or_more_with_semicolon(p):
     | empty'''
     p[0]=lex_value("Equation_zero_or_more_with_semicolon")
     if len(p)==4:
-        p[0].value+=p[1].value+p[3].value
-        # p[0].objects.extend(p[1].objects)
-        # p[0].beforeObjects.extend(p[1].beforeObjects)
-        # p[0].afterObjects.extend(p[1].afterObjects)
-        # p[0].objects.extend(p[3].objects)
-        # p[0].beforeObjects.extend(p[3].beforeObjects)
-        # p[0].afterObjects.extend(p[3].afterObjects)
+        p[0].objects.extend(p[1].objects)
+        p[0].objects.extend(p[3].objects)
+        # p[0].value+=p[1].value+p[3].value
 
 def p_equation(p):
     '''Equation : Simple_equation
                 | Control_block Return'''
     p[0]=lex_value("Equation")
+    #在此处创建拓扑排序所需的类
     if len(p) == 2:
-        # print("Equation\n",p[0].value, ' end of p[0].value')
-        # print("Equation\n",p[1].value, ' end of p[1].value')
-        # p[0].objects.extend(p[1].objects)
-        # p[0].beforeObjects.extend(p[1].beforeObjects)
-        # p[0].afterObjects.extend(p[1].afterObjects)
-        p[0].value+=defToString(p[1].beforeObjects)+defToString(p[1].objects)+defToString(p[1].afterObjects)
+        p[0].objects.extend(p[1].objects)
+        # p[0].value+=defToString(p[1].beforeObjects)+defToString(p[1].objects)+defToString(p[1].afterObjects)
     elif len(p)==3: # TODO: 添加控制流等式, 改写为 objects before objects, afterObjects
         p[0].value+=p[1].value+p[2].value
         # print("Control block, p[1],p[2] value: ", p[1].value, ", ", p[2].value)
@@ -789,6 +825,7 @@ def p_data_def(p):
     #     p[0].value+=defToString(p[2].afterObjects)
         # 不用额外加分号结尾
     p[0].value+=p[1].value
+    #TODO:此处需要将Equation的topology转化为string
 def p_scope(p):
     '''Scope : Signal_block_zero_or_one Local_block_zero_or_one Eqs
     | Signal_block_zero_or_one Local_block_zero_or_one'''
@@ -800,6 +837,7 @@ def p_eqs(p):
     'Eqs : LET Equation_zero_or_more_with_semicolon TEL'
     p[0]=lex_value("Eqs")
     p[0].value+=p[2].value
+    #此处需要进行拓扑排序，转化顺序。并将其转化为string
 
 def p_state_decl_4(p):
     '''State_decl_4 : UNTIL Weak_transition SEMICOLON
@@ -903,8 +941,7 @@ def p_simple_equation(p):
     p[0]=lex_value('Simple_equation')
     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
     if len(p[1].objects)!=len(p[3].objects):
-        print("Simple_equation error")
-        exit(0)
+        raise NotImplementedError('Simple_equation error')
     for idx in range(len(p[1].objects)):
         #修改此处，若左边为结构体，右边是非struct_expr,则展开依次初始化
         #否则使用memcpy
@@ -920,8 +957,7 @@ def p_simple_equation(p):
                 p[0].objects.append(defList)
             else:
                 if checkStructInitial(typeSymbol,p[3].objects[idx])==False:
-                    print("checkStructInitial error")
-                    exit(0)
+                    raise NotImplementedError("checkStructInitial error")
                 leftName = p[1].objects[idx].value
                 if thisEnv.getSymbol(p[1].objects[idx].value).IsReturn ==True:
                     leftName="outC->"+ leftName
@@ -930,21 +966,17 @@ def p_simple_equation(p):
         else:
             type=typeSymbol.Type
             setObjectsType(p[3].objects[idx],type)
-            # if idx==0:
-            #     for elem in p[3].beforeObjects:
-            #         setObjectsType(elem, type)
-            #     for elem in p[3].afterObjects:
-            #         setObjectsType(elem,type)
 
-            defList = list()
-            defList.append(p[1].objects[idx])
-            defList.append(p[2])
-            defList.extend(p[3].objects[idx])
-            defList.append(lex_value("", ";\n"))
-            p[0].objects.append(defList)
+            tp=Topology(p[1].objects[idx].value,'equation')
+            tp.left.append(p[1].objects[idx])
+            tp.right.extend(p[3].objects[idx])
+            tp.setRely(thisEnv)
+            p[0].objects.extend(p[3].beforeObjects)
+            p[0].objects.append(tp)
+            p[0].objects.extend(p[3].afterObjects)
 
-    p[0].beforeObjects.extend(p[3].beforeObjects)
-    p[0].afterObjects.extend(p[3].afterObjects)
+    # p[0].beforeObjects.extend(p[3].beforeObjects)
+    # p[0].afterObjects.extend(p[3].afterObjects)
 
 
 
@@ -1096,7 +1128,12 @@ def p_var_decls_2(p):
     'Var_decls_2 : empty'
 
 def p_var_decls_3(p):
-    'Var_decls_3 : empty'
+    '''Var_decls_3 : Default_decl
+    | empty'''
+    pass
+def p_default_decl(p):
+    '''Default_decl : DEFAULT EQU Expr'''
+    pass
 
 def p_var_decls_4(p):
     '''Var_decls_4 : Last_decl
@@ -1381,8 +1418,7 @@ def p_tempo_expr(p):
     p[0] = lex_value("Tempo_expr")
     if len(p)==4 and p[2].value=='->':
         if len(p[1].objects)!=len(p[3].objects):
-            print("tempo_expr arrow:error")
-            exit()
+            raise NotImplementedError("tempo_expr arrow:error")
 
         p[0].beforeObjects.extend(p[1].beforeObjects)
         p[0].beforeObjects.extend(p[3].beforeObjects)
@@ -1394,21 +1430,24 @@ def p_tempo_expr(p):
             thisEnv.setSymbol(initName,initSymbol)
             symbol.Returns.append(initName)
 
-            # initName = symbol.InitName     # FIXME: 'init变量不会自增' BUG
-            initElem = getName("initElem")
-            initLex = lex_value("initElem", initElem)
-            thisEnv.setSymbol(initElem, Symbol(initElem, "TmpVar"))
-            befDefList = list()
-            befDefList.extend([lex_value("if(", "if(", "str"), lex_value("lv6id", initName), lex_value("){\n", "){\n")])
-            befDefList.extend([lex_value("lv6id", initElem), lex_value("=", "=")])
-            befDefList.extend(p[1].objects[idx])
-            befDefList.append(lex_value("",";\n"))
-            befDefList.extend([lex_value("lv6id",initName),lex_value("=","="),lex_value("","kcg_false;\n")])
-            befDefList.append(lex_value("", "}else{\n"))
-            befDefList.extend([lex_value("lv6id", initElem), lex_value("=", "=")])
-            befDefList.extend(p[3].objects[idx])
-            befDefList.append(lex_value(";\n}\n", ";\n}\n"))
-            p[0].beforeObjects.append(befDefList)
+            initTmp = getName("initTmp")
+            initLex = lex_value("lv6id", initTmp)
+            thisEnv.setSymbol(initTmp, Symbol(initTmp, "TmpVar"))
+
+            checkType(p[1],p[3],idx)
+            tp=Topology(initTmp,'ifBlock')
+            tList=list()
+            tList.append([lex_value('lv6id',initName)])
+            tList.append(p[1].objects[idx])
+            fList=list()
+            fList.append([])
+            fList.append(p[3].objects[idx])
+            tp.condition.append(tList)
+            tp.condition.append(fList)
+            tp.left.append(initLex)
+            tp.setRely(thisEnv)
+            tp.init=True
+            p[0].beforeObjects.append(tp)
 
             p[0].objects.append([initLex])
 
@@ -1421,27 +1460,33 @@ def p_tempo_expr(p):
         #则此时只需要输出上一个周期的值。可能出现pre(2)
         #expr可能是列表
         for idx in range(len(p[2].objects)):
+            type=getTypefromObjects(p[2].objects[idx])
             preName = getName("mem_pre")
             symbol.Returns.append(preName)
-            preSymbol = Symbol(preName, "Pre", "")
+            preSymbol = Symbol(preName, "Pre", type)
             preSymbol.IsReturn = True
             thisEnv.setSymbol(preName, preSymbol)
 
-            p[0].objects.append([lex_value("lv6id", preName, "")])
-            afterDefList = list()
-            afterDefList.extend([lex_value("lv6id", preName), lex_value("=", "=")])
-            afterDefList.extend(p[2].objects[idx])
-            afterDefList.append(lex_value("", ";\n"))
+            tmpPreName=getName("tmp_pre")
+            tmpPreSymbol=Symbol(tmpPreName,"TmpVar",type)
+            tmpPreSymbol.Code.append(lex_value("lv6id",preName))
+            thisEnv.setSymbol(tmpPreName,tmpPreSymbol)
+
+            p[0].objects.append([lex_value("lv6id", tmpPreName, "")])
+
+            tp=Topology(preName,'equation')
+            tp.left.append(lex_value("lv6id",preName))
+            tp.right.extend(p[2].objects[idx])
+            tp.setRely(thisEnv)
             p[0].afterObjects.extend(p[2].afterObjects)
-            p[0].afterObjects.append( afterDefList)
+            p[0].afterObjects.append(tp)
 
         p[0].beforeObjects.extend(p[2].beforeObjects)
     elif len(p)==9:
         #若是fby操作符，首先在outC结构体中添加一个idx和数组
         #fby(input1;cycle;input2) cycle必须是静态表达式
         if len(p[3].objects)!=len(p[7].objects):
-            print("tempo_expr fby:error")
-            exit()
+            raise NotImplementedError("tempo_expr fby:error")
 
         p[0].beforeObjects += p[3].beforeObjects + p[5].beforeObjects + p[7].beforeObjects
         p[0].afterObjects += p[3].afterObjects + p[5].afterObjects + p[7].afterObjects
@@ -1471,39 +1516,27 @@ def p_tempo_expr(p):
             symbol.Returns.append(fbyIdx)
             symbol.Returns.append(fbyArr)
             symbol.fbyList.append(fbyClass(fbyIdx, fbyArr))
+            type=checkType(p[3],p[7],idx)
+            fbyArrSymbol.Type=type
 
-            p[0].objects.append(
-                [lex_value("lv6id", fbyArr, ""), lex_value("[", "[", "str"), lex_value("lv6id", fbyIdx, "int32"),
-                 lex_value("]", "]", "str")])
+            fbyTmp=getName('fbyTmp')
+            fbyTmpSymbol=Symbol(fbyTmp,"TmpVar",type)
+            thisEnv.setSymbol(fbyTmp,fbyTmpSymbol)
 
-            befDefList = list()
+            p[0].objects.append([lex_value('lv6id',fbyTmp)])
 
-            befDefList.extend([lex_value("", "if("), lex_value("lv6id", initName),
-                               lex_value(")\n{\n", ")\n{\n")])
-            befDefList.append(lex_value("", "for(int idx=0;idx<%s;idx++){\n" % objectsToString(p[5].objects[0])))
-            befDefList.extend([lex_value("lv6id", fbyArr), lex_value("", "["), lex_value("", "idx"), lex_value("", "]=")])
-            befDefList.extend(p[7].objects[idx])
-            befDefList.append(lex_value("",";\n}\n"))
+            tp=Topology(fbyTmp,'fbyBlock')
+            tp.init=True
+            tp.left.append(lex_value('lv6id',fbyTmp))
+            tp.condition.append([lex_value('lv6id',initName)])
+            tp.condition.append([lex_value('lv6id',fbyIdx)])
+            tp.condition.append([lex_value('lv6id',fbyArr)])
+            tp.condition.append(p[3].objects[idx])
+            tp.condition.append(p[5].objects[0])
+            tp.condition.append(p[7].objects[idx])
+            tp.setRely(thisEnv)
 
-            befDefList.extend([lex_value("lv6id",initName),lex_value("","="),lex_value("","kcg_false;\n")])
-            befDefList.extend([lex_value("lv6id",fbyIdx),lex_value("","="),lex_value("","0;\n")])
-            befDefList.append(lex_value("", "}\n"))
-            p[0].beforeObjects.append(befDefList)
-
-
-            aftDefList = list()
-            aftDefList.extend(
-                [lex_value("lv6id", fbyArr), lex_value("", "["), lex_value("lv6id", fbyIdx), lex_value("", "]=")])
-            aftDefList.extend(p[3].objects[idx])
-            aftDefList.append(lex_value("", ";\n"))
-            aftDefList.extend(
-                [lex_value("lv6id", fbyIdx), lex_value("", "=("), lex_value("lv6id", fbyIdx), lex_value("", "+1)%(")])
-            aftDefList.extend(p[5].objects[0])
-            aftDefList.append(lex_value("", ");\n"))
-            p[0].afterObjects.append( aftDefList)
-
-        # for elem in p[0].beforeObjects:
-        #     print("fby",elem)
+            p[0].beforeObjects.append(tp)
 
 def p_relation_expr(p):
     '''Relation_expr : Expr EQU Expr
@@ -1522,9 +1555,8 @@ def p_relation_expr(p):
     p[0].beforeObjects.extend(p[3].beforeObjects)
 
     if len(p[1].objects)!=len(p[3].objects) and len(p[1].objects)!=1:
-        print("relation_epxr:error")
-        exit(0)
-    checkType(p[1],p[3])
+        raise NotImplementedError("relation_epxr:error")
+    checkType(p[1],p[3],0)
     p[0].objects.append(lex_value("","("))
     p[0].objects.extend(p[1].objects[0])
     p[0].objects.append(p[2])
@@ -1533,20 +1565,6 @@ def p_relation_expr(p):
 
     p[0].afterObjects.extend(p[1].afterObjects)
     p[0].afterObjects.extend(p[3].afterObjects)
-
-# def p_bin_relation_op(p):
-#     '''Bin_relation_op : EQU
-#     | NOEQU
-#     | LESS
-#     | GREATER
-#     | LESSEQU
-#     | GREATEREQU'''
-#     p[0]=p[1]
-#     if p[1].strs=='<>':
-#         p[0].value='!='
-#     elif p[1].strs=='=':
-#         p[0].value='=='
-
 
 def judgeIsEnum(objects):
     symName=""
@@ -1588,24 +1606,25 @@ def p_switch_expr(p):
     p[0] = lex_value("Switch_expr")
     if p[1].value=='if':
         if len(p[4].objects)!=len(p[6].objects):
-            print("switch_expr if error")
-            exit(0)
+            raise NotImplementedError("switch_expr if error")
         p[0].beforeObjects += p[2].beforeObjects + p[4].beforeObjects + p[6].beforeObjects
         for idx in range(len(p[4].objects)):
             ifTmp = getName("ifTmp")
             ifSymbol = Symbol(ifTmp, "TmpVar")
             thisEnv.setSymbol(ifTmp, ifSymbol)
-            befDefList=list()
-            befDefList.append(lex_value("", "if("))
-            befDefList.extend(p[2].objects[0])
-            befDefList.extend([lex_value("", "){\n"), lex_value("lv6id", ifTmp), lex_value("", "=")])
-            befDefList.extend(p[4].objects[idx])
-            befDefList.append(lex_value("", ";\n}else{\n"))
-            befDefList.append(lex_value("lv6id", ifTmp))
-            befDefList.append(lex_value("", "="))
-            befDefList.extend(p[6].objects[idx])
-            befDefList.append(lex_value("", ";\n}\n"))
-            p[0].beforeObjects.append(befDefList)
+
+            tp=Topology(ifTmp,'ifBlock')
+            tp.left.append(lex_value('lv6id',ifTmp))
+            tList=list()
+            tList.append(p[2].objects[0])
+            tList.append(p[4].objects[idx])
+            fList=list()
+            fList.append([])
+            fList.append(p[6].objects[idx])
+            tp.condition.append(tList)
+            tp.condition.append(fList)
+            tp.setRely(thisEnv)
+            p[0].beforeObjects.append(tp)
 
             p[0].objects.append([lex_value("lv6id", ifTmp)])
 
@@ -1616,37 +1635,33 @@ def p_switch_expr(p):
         symName=judgeIsEnum(p[3].objects[0])
         exprSymbol=thisEnv.getSymbol(symName)
         if exprSymbol==None:
-            print("Switch_expr Error")
-            exit(0)
+            raise NotImplementedError("Switch_expr Error")
         if exprSymbol.Type=="enum":
             if checkEnum(exprSymbol.Name,p[5].objects[0])==False:
-                print("Switch_expr enum Error")
-                exit(0)
+                raise NotImplementedError("Switch_expr enum Error")
         for idx in range(len(p[5].objects)):
             caseName=getName("caseTmp")
             caseSymbol=Symbol(caseName,"TmpVar")
             thisEnv.setSymbol(caseName,caseSymbol)
-            defList=list()
-            defList.append(lex_value("","switch("))
-            defList.extend(p[3].objects[0])
-            defList.append(lex_value("","){\n"))
+
+            tp=Topology(caseName,'switchBlock')
+            tp.left.append(lex_value('lv6id',caseName))
+            tp.condition.append(p[3].objects[0])
+
+            isDefault=False
             for elem in p[5].objects[idx]:
+                defList=list()
                 if elem[0][0].value!='_':
-                    defList.append(lex_value("", "case "))
-                    defList.extend(elem[0])
+                    defList.append(elem[0])
                 else:
                     isDefault=True
-                    defList.append(lex_value("","default "))
-                defList.append(lex_value("", " :\n"))
-                defList.append(lex_value("lv6id", caseName))
-                defList.append(lex_value("", " = "))
-                defList.extend(elem[1])
-                defList.append(lex_value("", ";\nbreak;\n"))
+                    defList.append([])
+                defList.append(elem[1])
+                tp.condition.append(defList)
             if isDefault==False:
-                defList.append(lex_value("","default :\nbreak;\n}\n"))
-            else:
-                defList.append(lex_value("","}\n"))
-            p[0].beforeObjects.append(defList)
+                tp.condition.append([[],[]])
+            tp.setRely(thisEnv)
+            p[0].beforeObjects.append(tp)
             p[0].objects.append([lex_value("lv6id", caseName)])
 
 
@@ -1742,7 +1757,7 @@ def p_arith_expr_binOp(p):
     | Expr LSL Expr
     | Expr LSR Expr'''
     p[0] = lex_value("Arith_expr")
-    checkType(p[1],p[3])
+    checkType(p[1],p[3],0)
     if p[2].strs=='mod':
         p[2].value=' % '
     elif p[2].strs=='land':
@@ -1755,7 +1770,6 @@ def p_arith_expr_binOp(p):
         p[2].value=' << '
     elif p[2].strs=='lsr':
         p[2].value=' >> '
-    print("Arith_expr:",p[1].objects,p[3].objects,p[2].strs)
     p[0].objects.append(lex_value("", "("))
     p[0].objects.extend(p[1].objects[0])
     p[0].objects.append(p[2])
@@ -1886,7 +1900,6 @@ def p_struct_expr(p):
         idx2=len(p[1].objects[idx1])-1
         p[1].objects[idx1][idx2].objects.append(p[3])
         p[0].objects.extend(p[1].objects[0])
-        print("Sturct_expr",p[1].objects[idx1],p[1].objects[idx1][idx2],p[1].objects[idx1][idx2].objects)
         # print("Struct_expr",p[1].objects,type(p[1].objects[0][0]))
 def p_struct_expr_1(p):
     '''Struct_expr_1 : COMMA Label_expr Struct_expr_1

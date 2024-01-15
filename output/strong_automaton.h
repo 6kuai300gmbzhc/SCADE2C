@@ -1,4 +1,4 @@
-_strong_automaton_H_
+#ifndef _strong_automaton_H_
 #define _strong_automaton_H_
 #include "kcg_types.h"
 
@@ -22,3 +22,4 @@ extern void strong_automaton(inC_strong_automaton *inC, outC_strong_automaton *o
 extern void strong_automaton_reset(outC_strong_automaton *outC);
 
 extern void strong_automaton_init(outC_strong_automaton *outC);
+#endif

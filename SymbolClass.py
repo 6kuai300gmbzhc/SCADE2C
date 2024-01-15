@@ -7,12 +7,8 @@ class fbyClass:
 class Symbol:
     def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='',isStatemachine=False,StatemachineName='') -> None:
         self.Name = Name  # 标识符的名字
-        self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点或函数(OpKind) 包(Package)
-                          # Sensor Pre Init LocalVar(在local_block中定义的变量) TmpVar(if和init操作符使用的局部变量)
-                         #如属于PathId，其Code记录了该Path_id的路径
-                         #Type(用于Type_block)
-                        #FbyIdx，FbyArray
-                        #structElem
+        self.Kind = Kind  # FbyIdx,FbyArr,Pre(重置函数中使用了),TmpVar,PathId
+        #Type.structElem,OpKind,Sensor,State,Const,Var,Init
 
         self.Type = Type  # Type类型(int , float,enum,array,struct)
                             #Node还是function,struct

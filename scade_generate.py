@@ -82,48 +82,40 @@ class Scade_generate:
 if __name__=='__main__':
     # file=open('source_program/PFD.txt','r')
     # strs=file.read()
-#     strs='''node testInputLast(in1:int8 last=0) returns(out1:int8)
+#     strs='''node vwtovr(vw : float64 last = 70)
+#   returns (vr : float64 default = 70 last = 70)
+# var
+#   _L1 : float64;
+#   _L2 : float64;
+#   _L3 : float64;
+#   _L4 : float64;
+#   _L5 : float64;
+#   _L6 : float64;
+#   _L8 : bool;
 # let
-# 	out1=last 'in1+1;
+#   _L1= (70)  -> (_L2);
+#   _L2=  pre (_L5);
+#   _L3= _L1  - _L4;
+#   _L4= 0.09;
+#   _L5=  if _L8 then (_L6) else (_L3);
+#   _L6= vw;
+#   _L8= _L3  < _L6;
+#   vr= _L5;
 # tel'''
-#测试类型转化
-#     strs='''type type1=float64;
-# node testChange(in1:float32) returns(out1:float64)
-# let
-# 	out1=(in1+1:type1)+2;
-# tel'''
-# 测试结构体
-#     strs='''
-# sensor sensor1:{tt1:bool,tt2:int32};
-# const c3:int32=4;
-# const imported c5:unsigned<<8>>;
-# type type12={tt3:bool};
-# type type11={tt1:int8,tt2:{tt3:bool}};
-# node test6(in1:int8;in2:bool;in3:type12) returns(out1,out2:type11;out3:type12)
-# let
-# 	out2={tt1:8,tt2:{tt3:false}};
-# 	out1={tt1:in1+1,tt2:out3};
-# 	out3=in3;
-# tel
-# '''
-    strs='''type struct1={tt1:int8,tt2:{tt3:bool,tt4:float32,tt5:float32}};
-node testStruct(in1:struct1) returns(out1:float32)
-let
-	out1=in1.tt2.tt4+in1.tt2.tt5;
-tel'''
-#     strs='''const imported c1:int32^2;
-# const c3:int32=4;
-# const imported c4:int32^2^(1+2);
-# sensor s1:float32^2;
-# type Tstr1={t1:int32};
-# const imported c5:unsigned<<8>>;
-# type t1=int32^2;
-# type t2={tt1:bool,tt2:int32,tt3:float32};
-# type t3={tt1:bool,tt2:int32,tt3:float32}^2;
-# type t4={tt1:bool,tt2:{tt3:int8,tt4:float32}};
-# type t5={tt1:bool,tt2:int32^2};
-# const imported c6:{tt1:bool,tt2:int32};
-# '''
+    strs='''node strong_automaton (i: int32; c: bool; d: bool) returns (o: int32)
+    automaton
+        initial state ADD1
+        unless if c and d restart MINUS1;
+        let
+            o = 100 -> i + 1 ;
+        tel
+    
+        state MINUS1
+        unless if c or d restart ADD1;
+        let
+            o = 2 -> i - 1 ;
+        tel
+    returns o;'''
     program,symboltable=scade_compile.get_parse(strs)
     print("*************************************")
     print(program)
