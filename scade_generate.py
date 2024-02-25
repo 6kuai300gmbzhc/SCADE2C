@@ -80,7 +80,7 @@ class Scade_generate:
 
 
 if __name__=='__main__':
-    # file=open('source_program/PFD.txt','r')
+    # file=open('source_program/PFD_bat.txt','r')
     # strs=file.read()
 #     strs='''node vwtovr(vw : float64 last = 70)
 #   returns (vr : float64 default = 70 last = 70)
@@ -102,20 +102,39 @@ if __name__=='__main__':
 #   _L8= _L3  < _L6;
 #   vr= _L5;
 # tel'''
-    strs='''node strong_automaton (i: int32; c: bool; d: bool) returns (o: int32)
-    automaton
-        initial state ADD1
-        unless if c and d restart MINUS1;
-        let
-            o = 100 -> i + 1 ;
-        tel
-    
-        state MINUS1
-        unless if c or d restart ADD1;
-        let
-            o = 2 -> i - 1 ;
-        tel
-    returns o;'''
+    strs='''node testControlBlockIf2(in1,in2,in5:float32;in3,in4:int32;in6:enum_case) returns(out2,out3:int32)
+let
+	activate if in1<in2 then
+	let
+	out2=1->pre(in3);
+	activate when in6 match
+	|TT:
+	let
+	out3=in3;
+	tel
+	|FF:
+	let
+	out3=in4;
+	tel
+	|XX:
+	let
+	out3=in3+in4;
+	tel
+	returns ..;
+	tel
+	else
+	if in2>in5 then
+	let
+	out2=in3->pre(in4);
+	out3=fby(in3;5;in4);
+	tel
+	else
+	let
+	out2=1->pre(in4);
+	out3=in4;
+	tel
+	returns ..;
+tel'''
     program,symboltable=scade_compile.get_parse(strs)
     print("*************************************")
     print(program)

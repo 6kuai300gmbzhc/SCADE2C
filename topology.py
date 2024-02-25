@@ -1,7 +1,7 @@
 class Topology:
     def __init__(self,name='',type=''):
         self.name=name
-        self.type=type  #equation,ifBlock,switchBlock,fbyBlock
+        self.type=type  #equation,ifBlock,switchBlock,fbyBlock,structNormal
         self.left=list()
         self.right=list()
         self.rely=list()
@@ -35,8 +35,8 @@ class Node:
         self.outNum=outNum
         self.finish=False
 
-def topologySort(topologyObjs,adjList,nodeDict,nodeList):
-    print("====topologySort")
+def topologySort(topologyObjs,adjList,nodeList):
+    print("====topologySort",len(topologyObjs),len(nodeList))
     sum=len(nodeList)
     retList=[]
     for i in range(sum):
@@ -80,4 +80,4 @@ def topologyReady(topologyObjs):
                 nodeList[adjIdx1].inNum+=1
                 nodeList[adjIdx2].outNum+=1
                 adjList[adjIdx2].append(adjIdx1)
-    return topologySort(topologyObjs,adjList,nodeDict,nodeList)
+    return topologySort(topologyObjs,adjList,nodeList)

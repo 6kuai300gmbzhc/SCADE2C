@@ -13,26 +13,26 @@ kcg_bool _L8;
 kcg_float64 initTmp;
 kcg_float64 tmp_pre=outC->mem_pre;
 kcg_float64 ifTmp;
-_L2=tmp_pre;
-_L4=kcg_lit_float64(0.09);
-_L6=inC->vw;
+_L2 = tmp_pre;
+_L4 = kcg_lit_float64(0.09);
+_L6 = inC->vw;
 if(outC->init){
-initTmp=kcg_lit_float64(70);
-outC->init=kcg_false;
+initTmp = kcg_lit_float64(70);
 }else{
-initTmp=_L2;
+initTmp = _L2;
 }
-_L1=initTmp;
-_L3=(_L1-_L4);
-_L8=(_L3<_L6);
+_L1 = initTmp;
+_L3 = (_L1-_L4);
+_L8 = (_L3<_L6);
 if(_L8){
-ifTmp=_L6;
-else{
-ifTmp=_L3;
+ifTmp = _L6;
+}else{
+ifTmp = _L3;
 }
-_L5=ifTmp;
-outC->vr=_L5;
-outC->mem_pre=_L5;
+_L5 = ifTmp;
+outC->vr = _L5;
+outC->mem_pre = _L5;
+if(outC->init){outC->init=kcg_false;}
 
 }
 void vwtovr_init(outC_vwtovr *outC)

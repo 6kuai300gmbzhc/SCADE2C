@@ -1,5 +1,6 @@
 # 1.使用一个符号表存储变量、函数、类型
 # 2.使用符号表树实现作用域
+from scade_compile_otherFunc import objectsToString
 class fbyClass:
     def __init__(self, idx='', arr=''):
         self.fbyIdx = idx
@@ -29,6 +30,7 @@ class Symbol:
 
         self.IsInput = False
         self.IsReturn = False
+        self.StateType='' #ifBlock(变量赋值为if块),equation(变量赋值为等式),switchBlock,fbyBlock,structNormal
 
         self.Value = None  # 常量、变量等的值
 
@@ -37,6 +39,8 @@ class Symbol:
         self.FieldList = dict()  # 结构体变量名，和该名对应的symbol
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
         self.arrSize=list()  #数组长度的表达式
+        self.arrValueList=list()
+        self.relyList=list()
 
         self.initState = None  # 初始状态
         self.StrongOrWeak = None # 强迁移: 1, 弱迁移: 0
@@ -45,7 +49,7 @@ class Symbol:
         self.Returns = list()  # 函数标识符的返回值列表
         self.Last=list() #变量的last属性列表
         self.Default=list() #变量的default属性列表
-        self.Code = list()  # 函数标识符的代码
+        self.Code = list()  # 变量对应的值
 
     def changeName(self,params):
         if self.IsInput==True:
@@ -63,29 +67,48 @@ class Symbol:
             for elem in params:
                 name+=".%s"%elem.value
         return name
-    #为类指定输出格式
-    # def __repr__(self) -> str:
-    #     strs = '#' + self.Name + '(' + self.Kind + ')'
-    #     if self.Kind == 'Const':
-    #         strs += '(' + repr(self.Type) + ':' + str(self.Value) + ')'
-    #     elif self.Kind == 'Var':
-    #         strs += '(' + repr(self.Type) + ')'
-    #     elif self.Kind == 'Type':
-    #         if self.Type:
-    #             if self.Type.Type == 'Enum' or self.Type.Type == 'Struct':
-    #                 strs += '(' + repr(self.Type) + ':' + str(self.FieldList) + ')'
-    #                 if self.FieldValueList:
-    #                     strs += '(' + str(self.FieldValueList) + ')'
-    #             else:
-    #                 if self.Type.Type:
-    #                     strs += '(' + repr(self.Type) + ')'
-    #     elif self.Kind == 'Node' or self.Kind == 'UndefineRed':
-    #         strs += 'Params:' + str(self.Params) + 'Returns:' + str(self.Returns)
-    #         if self.StaticParams:
-    #             strs += 'StaticParams:' + str(self.StaticParams)
-    #         strs += '\n'
-    #
-    #     return strs
+    def symbolToString(self,subList,thisEnv):
+        str=""
+        if self.StateType=='equation':
+            str+=self.Name
+            str+=' = '
+            str+=objectsToString(self.Code,thisEnv)
+            str+=';\n'
+        elif self.StateType=='ifBlock':
+            for idx in range(len(self.Code)):
+                if idx==0:
+                    str+='if(%s){\n %s=%s;\n'%(objectsToString(self.Code[idx][0],thisEnv),self.Name,objectsToString(self.Code[idx][1],thisEnv))
+                    if self.IsInit==True:
+                        str+="%s = kcg_false;\n}"%(objectsToString(self.Code[0][0],thisEnv))
+                    else:
+                        str+="}\n"
+                else:
+                    if len(self.Code[idx][0])!=0:
+                        str+="else if(%s){\n %s=%s;\n}"%(objectsToString(self.Code[idx][0],thisEnv),self.Name,objectsToString(self.Code[idx][1],thisEnv))
+                    else:
+                        str+="else{\n%s=%s;\n}\n"%(self.Name,objectsToString(self.Code[idx][1],thisEnv))
+        elif self.StateType=='fbyBlock':
+            str+="if(%s){\n for(int idx=0;idx<%s;idx++){\n"%(objectsToString(self.Code[0],thisEnv),objectsToString(self.Code[4],thisEnv))
+            str+="%s[idx]=%s;\n}"%(objectsToString(self.Code[2],thisEnv),objectsToString(self.Code[5],thisEnv))
+            str+="%s=0;\n"%(objectsToString(self.Code[1],thisEnv))
+            if self.initState:
+                str+="%s=kcg_false;\n}\n"%(objectsToString(self.Code[0],thisEnv))
+            else:
+                str+="}\n"
+            str+="%s=%s[%s];\n"%(self.Name,objectsToString(self.Code[2],thisEnv),objectsToString(self.Code[1],thisEnv))
+            str+="%s[%s]=%s;"%(objectsToString(self.Code[2],thisEnv),objectsToString(self.Code[1],thisEnv),objectsToString(self.Code[3],thisEnv))
+            str+="%s=(%s+1)%%(%s);\n"%(objectsToString(self.Code[1],thisEnv),objectsToString(self.Code[1],thisEnv),objectsToString(self.Code[4],thisEnv))
+        elif self.StateType=='switchBlock':
+            str+="switch(%s){\n"%(objectsToString(self.Code[0],thisEnv))
+            for idx in range(1,len(self.Code)):
+                if len(self.Code[idx][0])!=0:
+                    str+="case %s : \n %s = %s;\n break;\n"%(objectsToString(self.Code[idx][0],thisEnv),self.Name,objectsToString(self.Code[idx][1],thisEnv))
+                elif len(self.Code[idx][0])==0 and len(self.Code[idx][1])!=0:
+                    str+="default :\n %s=%s;\nbreak;\n"%(self.Name,objectsToString(self.Code[idx][1],thisEnv))
+                else:
+                    str+="default : \n break;\n"
+            str+="}\n"
+        return str
 
 
 class SymbolTable:
