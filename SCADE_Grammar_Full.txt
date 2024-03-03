@@ -433,8 +433,7 @@ Mixed_constructor_2 ::= Label_or_index Mixed_constructor_2
 
 Label_expr ::= id : Expr
 
-Index ::= Expr
-       ::= $
+Index ::= [ Expr ]
 
 Label_or_index ::= . id
                 ::= Index

@@ -184,3 +184,7 @@ typedef enum kcg_tag_TruthTableValues_truthtables {
 
 
 
+typedef struct {
+kcg_int8 tt1;
+kcg_bool tt2;
+}typename1;

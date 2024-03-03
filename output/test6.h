@@ -6,7 +6,6 @@ typedef struct {
 kcg_int8 in1;
 kcg_bool in2;
 type12 in3;
-kcg_float32 in4;
 } inC_test6;
 
 

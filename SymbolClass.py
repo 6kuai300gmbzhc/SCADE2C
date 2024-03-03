@@ -36,7 +36,8 @@ class Symbol:
 
         self.fbyList = list()
 
-        self.FieldList = dict()  # 结构体变量名，和该名对应的symbol
+        self.FieldList = dict()  # 若该变量的Kind是Type，则为结构体变量名，和该名对应的symbol。
+                                 #若该变量是结构体，则为结构体变量名，以及对应的类型
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
         self.arrSize=list()  #数组长度的表达式
         self.arrValueList=list()
@@ -51,7 +52,7 @@ class Symbol:
         self.Default=list() #变量的default属性列表
         self.Code = list()  # 变量对应的值
 
-    def changeName(self,params):
+    def changeName(self):
         if self.IsInput==True:
             name="inC->"+self.Name
         elif self.IsReturn==True:
@@ -63,9 +64,6 @@ class Symbol:
             self.Code.clear()
         else:
             name=self.Name
-        if len(params)!=0:
-            for elem in params:
-                name+=".%s"%elem.value
         return name
     def symbolToString(self,subList,thisEnv):
         str=""

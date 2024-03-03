@@ -32,7 +32,7 @@ class Scade_generate:
                 if v.External==True:
                     content+="extern const %s %s%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize))
                 else:#此处有问题，没有考虑数组的情况
-                    content+="const %s %s%s=%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize),objectsToString(v.Code))
+                    content+="const %s %s%s=%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize),objectsToString(v.Code,self.symboltable))
         content+="\n\n#endif"
         print("====const")
         print(content)
@@ -78,7 +78,6 @@ class Scade_generate:
         writeFile=open('output/kcg_types.h','w')
         writeFile.write(content)
 
-
 if __name__=='__main__':
     # file=open('source_program/PFD_bat.txt','r')
     # strs=file.read()
@@ -102,38 +101,17 @@ if __name__=='__main__':
 #   _L8= _L3  < _L6;
 #   vr= _L5;
 # tel'''
-    strs='''node testControlBlockIf2(in1,in2,in5:float32;in3,in4:int32;in6:enum_case) returns(out2,out3:int32)
+
+#     strs='''node arrayTextTest1(in1,in2,in3:int8) returns(o1,o2:int8^3;o3:int8)
+# let
+# 	o1=[in1,in2,in3];
+# 	o3=o2[1];
+# 	o2=reverse o1;
+# tel'''
+    strs='''type typename1={tt1:int8,tt2:bool};
+node arrayStructTest1(in1,in2:int8;in3:bool;in4,in5:typename1) returns(o1,o2:typename1^3;o3:int8)
 let
-	activate if in1<in2 then
-	let
-	out2=1->pre(in3);
-	activate when in6 match
-	|TT:
-	let
-	out3=in3;
-	tel
-	|FF:
-	let
-	out3=in4;
-	tel
-	|XX:
-	let
-	out3=in3+in4;
-	tel
-	returns ..;
-	tel
-	else
-	if in2>in5 then
-	let
-	out2=in3->pre(in4);
-	out3=fby(in3;5;in4);
-	tel
-	else
-	let
-	out2=1->pre(in4);
-	out3=in4;
-	tel
-	returns ..;
+	o3=o1[0].tt1;
 tel'''
     program,symboltable=scade_compile.get_parse(strs)
     print("*************************************")

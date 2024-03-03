@@ -3,38 +3,28 @@
 #include "simple_automaton.h"
 void simple_automaton(inC_simple_automaton *inC, outC_simple_automaton *outC)
 {
-kcg_int32 initElem;
-kcg_int32 initElem1;
+kcg_int32 initTmp;
+kcg_int32 initTmp1;
 SSM_ST state_sel = outC->state_nxt;
 switch (state_sel)
 {
 case ADD1:
-if(outC->init){
-initElem=kcg_lit_int32(100);
-outC->init=kcg_false;
-}else{
-initElem=inC->i+kcg_lit_int32(1);
-}
-outC->o=initElem;
+{
 
-if(inC->c & inC->d){
+if((inC->c & inC->d)){
   outC->state_nxt = MINUS1;
 }
 break;
+}
 
 case MINUS1:
-if(outC->init1){
-initElem1=kcg_lit_int32(2);
-outC->init1=kcg_false;
-}else{
-initElem1=inC->i-kcg_lit_int32(1);
-}
-outC->o=initElem1;
+{
 
-if(inC->c | inC->d){
+if((inC->c | inC->d)){
   outC->state_nxt = ADD1;
 }
 break;
+}
 
 }
 

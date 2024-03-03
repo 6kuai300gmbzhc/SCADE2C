@@ -2,13 +2,6 @@ import copy
 import queue
 
 typeArr=['bool','int8','int16','int64','int32','uint8','uint16','uint32','uint64','float32','float64','char','enum','array','struct']
-# class IfNode:
-#     def __init__(self,type=''):
-#         self.type=type#type可能为equation,condition,fbyBlock,ifBlock
-#         self.left=None
-#         self.right=None
-#         self.initList=list()
-#         self.value=list()
 class Node:
     def __init__(self,type=''):
         self.type=type#type能为ifCondition,switchCondition,equation,fbyBlock,ifBlock
@@ -76,6 +69,18 @@ def getIdType(symbolName,symbolTable):
         return getIdType(symbol.Type,rootSymbolTable)
     else:
         return symbol
+
+def getStructElemType(lex,symtable):
+    symbol = getIdType(lex.value, symtable)
+    for idx in range(len(lex.objects)):
+        if idx != len(lex.objects) - 1:
+            symbol = symbol.FieldList[lex.objects[idx].value]
+            while symbol.Type not in typeArr:
+                symbol = getRootSymbolTable(symtable).getSymbol(symbol.Type)
+        else:
+            type = symbol.FieldList[lex.objects[idx].value].Type
+    return type
+
 def checkElemInStruct(symbolName,params,idx,thisEnv):
     if idx >= len(params):
         return True
@@ -83,7 +88,7 @@ def checkElemInStruct(symbolName,params,idx,thisEnv):
     if params[idx].value not in realSymbol.FieldList:
         return False
     else:
-        return checkElemInStruct(realSymbol.FieldList[params[idx].value].Type,params,idx+1)
+        return checkElemInStruct(realSymbol.FieldList[params[idx].value].Type,params,idx+1,thisEnv)
 def objectsToString(objects,thisEnv):
     # type=""
     sstr=""
@@ -91,11 +96,13 @@ def objectsToString(objects,thisEnv):
         if elem.strs=='lv6id':
             symbol=thisEnv.getSymbol(elem.value)
             # type=symbol.Type
+            sstr+=symbol.changeName()
+            if len(elem.arrSize)!=0:
+                sstr+=objectsToString(elem.arrSize,thisEnv)
             if len(elem.objects)!=0:
-                if checkElemInStruct(symbol.Name,elem.objects,0):
-                    sstr += symbol.changeName(elem.objects)
-            else:
-                sstr+=symbol.changeName(elem.objects)
+                if checkElemInStruct(symbol.Name,elem.objects,0,thisEnv):
+                    for structElem in elem.objects:
+                        sstr+=".%s"%structElem.value
         elif elem.strs=='integernum':
             sstr += "kcg_lit_%s(%s)" % (elem.type,str(elem.value))
         elif elem.strs=='floatnum':
@@ -116,15 +123,15 @@ def objectsToString(objects,thisEnv):
             sstr+=elem.value
     return sstr
 #最初的转换时，node是symbol.ifTree。但若switch中嵌套if。则node是switch节点中value[0]
-def typeToString(type,leftLex,rightList,symtable):
+def typeToString(type,leftName,rightList,symtable,sizeofType=''):
     str=""
-    if len(leftLex.objects)==0:
-        leftName=objectsToString([leftLex],symtable)
     if type=='equation':
         str+=leftName
         str+=' = '
         str+=objectsToString(rightList,symtable)
         str+=';\n'
+    elif type=='memcpy':
+        str+='memcpy(&%s,&%s,sizeof(%s));\n'%(leftName,objectsToString(rightList,symtable),sizeofType)
     elif type=='ifCondition':
         ifNode=rightList[0]
         str+=blockToString(ifNode,leftName,symtable)
@@ -201,13 +208,13 @@ def deepSearchForSwitch(leftLex,node,symtable):
             str+="default :\nbreak;\n}\n"
     return str
 
-def setRely(type,node,tmpList):
+def recursiveGetRely(type,node,tmpList):
     if type=='ifCondition':
         tmpList.extend(node.value)
         tmpList.extend(node.pattern)
         for elem in node.childNodeList:
             tmpNode=elem
-            setRely(tmpNode.type,tmpNode,tmpList)
+            recursiveGetRely(tmpNode.type,tmpNode,tmpList)
     elif type=='equation':
         tmpList.extend(node.pattern)
         tmpList.extend(node.value)
@@ -215,7 +222,7 @@ def setRely(type,node,tmpList):
         tmpList.extend(node.value)
         for elem in node.childNodeList:
             tmpNode=elem
-            setRely(tmpNode.type,tmpNode,tmpList)
+            recursiveGetRely(tmpNode.type,tmpNode,tmpList)
     elif type=='fbyBlock':
         tmpList.extend(node.value[3])
         tmpList.extend(node.value[4])
@@ -224,7 +231,7 @@ def setRely(type,node,tmpList):
 def getRely(symbol,symtable,relyList):
     tmpList=list()
     if symbol.StateType=='ifCondition':
-        setRely(symbol.StateType,symbol.Code[0],tmpList)
+        recursiveGetRely(symbol.StateType,symbol.Code[0],tmpList)
     elif symbol.StateType=='equation':
         tmpList.extend(symbol.Code)
     elif symbol.StateType=='fbyBlock':
@@ -232,7 +239,12 @@ def getRely(symbol,symtable,relyList):
         tmpList.extend(symbol.Code[4])
         tmpList.extend(symbol.Code[5])
     elif symbol.StateType=='switchCondition':
-        setRely(symbol.StateType,symbol.Code[0],tmpList)
+        recursiveGetRely(symbol.StateType,symbol.Code[0],tmpList)
+    elif symbol.StateType=='memcpy':
+        tmpList.extend(symbol.Code)
+    elif symbol.StateType=='struct':
+        for key,value in symbol.FieldValueList.items():
+            tmpList.extend(value)
     for elem in tmpList:
         if elem.strs=='lv6id':
             tmpSymbol = symtable.getSymbol(elem.value)
