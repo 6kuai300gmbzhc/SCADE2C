@@ -16,6 +16,9 @@ GlobalEnv=SymbolTable('Global')
 thisEnv=GlobalEnv
 program=None
 
+# 全局变量，用于存储被调用过的函数名称
+calledOperators = []
+
 def generate_head_file():
     op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     name=op_kind_symbol.Name
@@ -56,8 +59,11 @@ def generate_head_file():
 def generate_c_file(body):
     op_kind_symbol = thisEnv.getSymbol(op_kind_id)
     c_content = "#include \"kcg_consts.h\"\n#include \"kcg_sensors.h\"\n"
+    c_content += "#include \"macro_libmathext64.h\"\n"
     name = op_kind_symbol.Name
     c_content += "#include \"%s.h\"\n" % name
+    for callOperator in op_kind_symbol.callOperators:
+        c_content += "#include \"%s.h\"\n" % callOperator
     c_content += "void %s(inC_%s *inC, outC_%s *outC)\n{\n" % (name,name,name)
     c_content += body
     c_content += "\n}\n"
@@ -83,6 +89,81 @@ def generate_c_file(body):
     if op_kind_symbol.isStatemachine:
         c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.StateList[0]
     c_content += "}\n"
+    filename = "./output/%s.c" %(name)
+    print(c_content)
+    with open(filename,'w') as f:
+        f.write(c_content)
+
+# Generate Head file for called operators
+def generate_head_file_for_called_operator():
+    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
+    name=op_kind_symbol.Name
+    head_content=""
+    head_content+="#ifndef _"+name+"_H_\n"+"#define _"+name+"_H_\n"
+    head_content+="#include \"kcg_types.h\"\n\n"
+    
+    # extern kcg_float64 Square(kcg_float64 Square_In);
+    head_content+="extern "
+    # 目前只支持单输出
+    for output_name in op_kind_symbol.Returns:
+        symbol=thisEnv.getSymbol(output_name)
+        head_content += type_change(symbol.Type) + " "
+
+    head_content += name + "("
+
+    #input_params
+    for input_name in op_kind_symbol.Params:
+        symbol = thisEnv.getSymbol(input_name)
+        head_content += type_change(symbol.Type) + " " + input_name + ");\n"
+
+    # endif 
+    head_content += "#endif\n"
+    
+    filename="./output/"+name+".h"
+    print(head_content)
+    with open(filename,'w') as f:
+        f.write(head_content)
+
+# Generate C file for called operators
+def generate_c_file_for_called_operator(body):
+    op_kind_symbol = thisEnv.getSymbol(op_kind_id)
+    c_content = "#include \"kcg_consts.h\"\n#include \"kcg_sensors.h\"\n"
+    c_content += "#include \"macro_libmathext64.h\"\n"
+    name = op_kind_symbol.Name
+    c_content += "#include \"%s.h\"\n" % name
+    # kcg_float64 Square(kcg_float64 Square_In)
+    # {
+    #     kcg_float64 Square_Out;
+    #     Square_Out = Square_In * Square_In;
+    #     return Square_Out;
+    # }
+     #out_params
+    
+    # 目前只支持单输出
+    for output_name in op_kind_symbol.Returns:
+        symbol=thisEnv.getSymbol(output_name)
+        c_content += type_change(symbol.Type) + " "
+
+    c_content += name + "("
+
+    #input_params
+    for input_name in op_kind_symbol.Params:
+        symbol = thisEnv.getSymbol(input_name)
+        c_content += type_change(symbol.Type) + " " + input_name
+        if not input_name == op_kind_symbol.Params[-1]:
+            c_content += ","
+    c_content += ")\n{\n"
+    
+    for output_name in op_kind_symbol.Returns:
+        symbol=thisEnv.getSymbol(output_name)
+        c_content += type_change(symbol.Type) + " " + output_name + ";"+"\n"
+
+    c_content += body # 这里body也需要进行相应更改，因为没有in_c和out_c了
+    for output_name in op_kind_symbol.Returns:
+        symbol=thisEnv.getSymbol(output_name)
+        c_content += "return " + output_name + ";"+"\n"
+    c_content += "\n}\n"
+
     filename = "./output/%s.c" %(name)
     print(c_content)
     with open(filename,'w') as f:
@@ -127,10 +208,17 @@ def type_initial(type,value):
 def objectsToString(objects,num=0):
     # type=""
     sstr=""
+    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
     for elem in objects:
-        if elem.strs=='lv6id':
+        if elem.strs=='lv6id' and not op_kind_symbol.isCalled:
             symbol=thisEnv.getSymbol(elem.value)
             # type=symbol.Type
+            sstr+=symbol.changeName()
+        elif elem.strs=='lv6id':
+            symbol=thisEnv.getSymbol(elem.value)
+            sstr+=symbol.Name
+        elif elem.strs=='Path_id':
+            symbol=thisEnv.getSymbol(elem.value)
             sstr+=symbol.changeName()
         elif elem.strs=='integernum':
             sstr += "kcg_lit_%s(%s)" % (elem.type,str(elem.value))
@@ -308,8 +396,12 @@ def p_user_op_decl(p):
         symbol.Params.append(idx.value)
     for idx in p[7].objects:
         symbol.Returns.append(idx.value)
-    generate_head_file()
-    generate_c_file(p[10].value)
+    if symbol.isCalled:
+        generate_head_file_for_called_operator()
+        generate_c_file_for_called_operator(p[10].value)
+    else:
+        generate_head_file()
+        generate_c_file(p[10].value)
 
     thisEnv=thisEnv.PrevTable
 
@@ -324,6 +416,8 @@ def p_user_op_decl_Lv6id(p):
     # 上层作用域将该 id 加入自己的符号表，以备后续使用 PrevTable.getSymbol(id) 获取该符号
     global thisEnv
     symbol=Symbol(p[1].value,'OpKind')
+    if p[1].value in calledOperators: 
+        symbol.isCalled = True
     thisEnv.setSymbol(p[1].value,symbol)
     global op_kind_id
     op_kind_id=p[1].value
@@ -356,7 +450,7 @@ def p_opt_body(p):
     | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL SEMICOLON
     | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL'''
     p[0]=lex_value("Opt_body")
-    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
+    op_kind_symbol=thisEnv.getSymbol(op_kind_id) # NOTE: 通过全局变量op_kind_id确定当前解析的函数
     if len(p)==2:
         pass
     else:
@@ -450,7 +544,7 @@ def p_return(p):
     print("Return")
     p[0]=lex_value("Return")
     # node以及function定义的时候已经写了return的参数列表，C代码使用 outC->var_name = 为返回值赋值，所以这里的return语句不需要再生成
-
+    # TODO：被调用函数需要实现Return
 
 def p_returns_var(p):
     '''Returns_var : Returns_var_1 Returns_var_2'''
@@ -1009,6 +1103,8 @@ def p_type_expr_2(p):
     if len(p)==4:
         p[0].objects.append(p[2].objects[0])
         p[0].objects.extend(p[3].objects)
+
+# y = mathext::CosR(x);
 def p_path_1(p):
     '''Path_1 : DOUBLECOLON LV6ID Path_1
     | empty '''
@@ -1023,15 +1119,76 @@ def p_path_id(p):
     '''Path_id : LV6ID Path_1'''
     if p[2]!=None and len(p[2].objects)!=0:
         elem=p[2].objects[-1]
-        symbol=Symbol(elem.value,"PathId")
-        symbol.Kind="PathId"
+        symbol = Symbol()
         symbol.Code.append(p[1])
         symbol.Code.extend(p[2].objects[:-1])
-        thisEnv.setSymbol(elem.value, symbol)
-        p[0]=lex_value("lv6id",elem.value)
+        symbol.Name = symbol.changeName()
+        symbol.Kind = "PathId"
+        thisEnv.setSymbol(symbol.Name, symbol) 
+        p[0]=lex_value("Path_id",symbol.Name) 
     else:
+        symbol = Symbol(p[1].value, "PathId")
+        thisEnv.setSymbol(p[1].value, symbol)
         p[0]=p[1]
 
+def p_apply_expr(p):
+    '''Apply_expr : Operator LPARENTHESE List RPARENTHESE'''
+    p[0] = lex_value("Apply_expr")
+    p[0].objects.append([p[1], lex_value("LPARENTHESE", "(")])
+    p[0].objects[0].extend(p[3].objects[0]) # 这里是否只意味着一个参数？
+    p[0].objects[0].extend([lex_value("RPARENTHESE", ")")])
+    calledOperators.append(p[1].value) # p[1].value应该是Operator的名称
+    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
+    op_kind_symbol.callOperators.append(p[1].value)
+    
+# not finish
+def p_prefix(p):
+    '''Prefix : Path_id'''
+    p[0] = p[1]
+
+# not finish
+def p_operator(p):
+    '''Operator : Prefix'''
+    p[0] = p[1]
+
+def p_list_expr(p):
+    '''List_expr : LPARENTHESE List RPARENTHESE'''
+    p[0]=lex_value("List_expr")
+    p[0].objects.extend(p[2].objects)
+    
+    p[0].beforeObjects.extend(p[2].beforeObjects)
+    p[0].afterObjects.extend(p[2].afterObjects) 
+
+def p_list(p):
+    '''List : List_1
+    | empty'''
+    p[0] = lex_value("List")
+    if p[1].strs=="List_1":
+        p[0].objects.extend(p[1].objects)
+        p[0].beforeObjects.extend(p[1].beforeObjects)
+        p[0].afterObjects.extend(p[1].afterObjects)
+
+def p_list_1(p):
+    '''List_1 : Expr List_2'''
+    p[0]=lex_value("List_1")
+    p[0].objects.extend(p[1].objects)
+    p[0].beforeObjects.extend(p[1].beforeObjects) # TODO: 搞清楚beforeObjects和afterObjects如何使用
+    p[0].afterObjects.extend(p[1].afterObjects)
+    p[0].objects.extend(p[2].objects)
+    p[0].beforeObjects.extend(p[2].beforeObjects)
+    p[0].afterObjects.extend(p[2].afterObjects)
+
+def p_list_2(p):
+    '''List_2 : COMMA Expr List_2
+    | empty'''
+    p[0]=lex_value("List_2")
+    if len(p)==4:
+        p[0].objects.extend(p[2].objects)
+        p[0].beforeObjects.extend(p[2].beforeObjects)
+        p[0].afterObjects.extend(p[2].afterObjects)
+        p[0].objects.extend(p[3].objects)
+        p[0].beforeObjects.extend(p[3].beforeObjects)
+        p[0].afterObjects.extend(p[3].afterObjects)
 
 def p_id_expr(p):
     '''Id_expr : Path_id
@@ -1070,9 +1227,10 @@ def p_expr(p):
     | List_expr
     | Switch_expr
     | Bool_expr
-    | Struct_expr'''
+    | Struct_expr
+    | Apply_expr''' 
     p[0]=lex_value("Expr")
-    if p[1].strs!='List_expr' and p[1].strs!='Tempo_expr' and p[1].strs!='Switch_expr':
+    if p[1].strs!='List_expr' and p[1].strs!='Tempo_expr' and p[1].strs!='Switch_expr' and p[1].strs!='Apply_expr':
         p[0].objects=[p[1].objects]
     else:
         p[0].objects=p[1].objects
@@ -1414,46 +1572,6 @@ def p_arith_expr(p):
             p[0].objects.extend(p[2].objects[0])
             p[0].objects.append(lex_value(")",")"))
         p[0].afterObjects.extend(p[2].afterObjects)
-
-
-def p_list_expr(p):
-    '''List_expr : LPARENTHESE List RPARENTHESE'''
-    p[0]=lex_value("List_expr")
-    p[0].objects.extend(p[2].objects)
-    p[0].beforeObjects.extend(p[2].beforeObjects)
-    p[0].afterObjects.extend(p[2].afterObjects)
-
-def p_list(p):
-    '''List : List_1
-    | empty'''
-    p[0] = lex_value("List")
-    if p[1].strs=="List_1":
-        p[0].objects.extend(p[1].objects)
-        p[0].beforeObjects.extend(p[1].beforeObjects)
-        p[0].afterObjects.extend(p[1].afterObjects)
-
-def p_list_1(p):
-    '''List_1 : Expr List_2'''
-    p[0]=lex_value("List_1")
-    p[0].objects.extend(p[1].objects)
-    p[0].beforeObjects.extend(p[1].beforeObjects)
-    p[0].afterObjects.extend(p[1].afterObjects)
-    p[0].objects.extend(p[2].objects)
-    p[0].beforeObjects.extend(p[2].beforeObjects)
-    p[0].afterObjects.extend(p[2].afterObjects)
-
-def p_list_2(p):
-    '''List_2 : COMMA Expr List_2
-    | empty'''
-    p[0]=lex_value("List_2")
-    if len(p)==4:
-        p[0].objects.extend(p[2].objects)
-        p[0].beforeObjects.extend(p[2].beforeObjects)
-        p[0].afterObjects.extend(p[2].afterObjects)
-        p[0].objects.extend(p[3].objects)
-        p[0].beforeObjects.extend(p[3].beforeObjects)
-        p[0].afterObjects.extend(p[3].afterObjects)
-
 
 def p_unary_arith_op(p):
     '''Unary_arith_op : MINUS

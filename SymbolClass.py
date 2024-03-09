@@ -48,6 +48,7 @@ class Symbol:
         self.StaticParams = list()  # 函数的静态参数列表
         self.StaticArgs = list()
         self.Code = list()  # 函数标识符的代码
+        self.callOperators = list() # 该函数所调用的函数名称列表，可用于在C文件中添加相应的宏定义引用
 
     def changeName(self):
         if self.IsInput==True:

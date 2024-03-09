@@ -91,6 +91,13 @@ class Scade_generate:
         writeFile = open('output/kcg_imported_types.h','w')
         writeFile.write(content)
 
+    # macro_libmathext64.h提供三角函数等基础函数的实现，目前的生成只需要简单拷贝
+    def gen_macro_libmathext64_file(self):
+        file = open('source_program/macro_libmathext64.h', 'r')
+        content = file.read()
+        writeFile = open('output/macro_libmathext64.h', 'w')
+        writeFile.write(content)
+
 if __name__=='__main__':
 #     strs='''const imported c1:int32^2;
 # const c3:int32=4;
@@ -106,12 +113,19 @@ if __name__=='__main__':
 # const imported c6:{tt1:bool,tt2:int32};
 # '''
     strs = '''
-        node activateIf(in1,in2:int32) returns(out:int32)
+        function testCosR(x : float64) returns (y : float64)
+        let 
+            y = Square(x);
+        tel
+
+        function Square(Square_In : float64) returns (Square_Out : float64)
+        var
+        _L1 : float64;
+        _L2 : float64;
         let
-            activate if in1>0
-            then out=fby(in1;5;in2);
-            else out=in1;
-            returns out;
+            _L1= Square_In;
+            _L2= _L1 * _L1;
+            Square_Out= _L2;
         tel
     '''
     program,symboltable=scade_compile.get_parse(strs)
@@ -124,6 +138,7 @@ if __name__=='__main__':
     gen.gen_types_file()
     gen.gen_assign_file()
     gen.gen_imported_types_file()
+    gen.gen_macro_libmathext64_file()
 
 
 
