@@ -77,42 +77,65 @@ class Scade_generate:
         print(typeContent)
         writeFile=open('output/kcg_types.h','w')
         writeFile.write(content)
+    
+    def gen_macro_libmathext64_file(self):
+        file = open('source_program/macro_libmathext64.h', 'r')
+        content = file.read()
+        writeFile = open('output/macro_libmathext64.h', 'w')
+        writeFile.write(content)
 
+def testInputDirFiles():
+    dir_path='./input'
+    for root,dirs,files in os.walk(dir_path):
+        for fileIdx in files:
+            fileName=os.path.join(root,fileIdx)
+            file=open(fileName,'r')
+            strs=file.read()
+            program,symboltable=scade_compile.get_parse(strs)
+            print("**************%s***********************",fileName)
+            print(program)
+            print("*************************************")
+            gen=Scade_generate(program,symboltable)
+            gen.gen_const_file()
+            gen.gen_sensor_file()
+            gen.gen_types_file()
+            gen.gen_macro_libmathext64_file()
+        
 if __name__=='__main__':
-    # file=open('source_program/PFD_bat.txt','r')
-    # strs=file.read()
-#     strs='''node vwtovr(vw : float64 last = 70)
-#   returns (vr : float64 default = 70 last = 70)
-# var
-#   _L1 : float64;
-#   _L2 : float64;
-#   _L3 : float64;
-#   _L4 : float64;
-#   _L5 : float64;
-#   _L6 : float64;
-#   _L8 : bool;
-# let
-#   _L1= (70)  -> (_L2);
-#   _L2=  pre (_L5);
-#   _L3= _L1  - _L4;
-#   _L4= 0.09;
-#   _L5=  if _L8 then (_L6) else (_L3);
-#   _L6= vw;
-#   _L8= _L3  < _L6;
-#   vr= _L5;
-# tel'''
-
-#     strs='''node arrayTextTest1(in1,in2,in3:int8) returns(o1,o2:int8^3;o3:int8)
-# let
-# 	o1=[in1,in2,in3];
-# 	o3=o2[1];
-# 	o2=reverse o1;
-# tel'''
-    strs='''type typename1={tt1:int8,tt2:bool};
-node arrayStructTest1(in1,in2:int8;in3:bool;in4,in5:typename1) returns(o1,o2:typename1^3;o3:int8)
+    #test files in input dir
+    # testInputDirFiles()
+    strs='''node arrayTextTest1(in1,in2,in3:int8) returns(o1:int8^3;o3:int8)
 let
-	o3=o1[0].tt1;
+	o1=[in1,in2,in3];
+	o3=o1[1];
 tel'''
+#     strs='''
+#         function testCosR(x : float64) returns (y,y2 : float64)
+#         let 
+#             y = Square(x);
+#         tel
+
+#         function Square(Square_In : float64) returns (Square_Out : float64)
+#         var
+#         _L1 : float64;
+#         _L2 : float64;
+#         let
+#             _L1= Square_In;
+#             _L2= _L1 * _L1;
+#             Square_Out= _L2;
+#         tel
+# '''
+#     strs='''type struct5={tt1:int8,tt2:bool};
+# node arrayTextTest9(in1:int8;in3:bool;in2:struct5) returns(o1:struct5^2)
+# let
+# 	o1=[{tt1:in1,tt2:in3},in2];
+# tel'''
+#     strs='''type struct5={tt1:int8,tt2:bool};
+# node arrayTextTest9(in1,in2:int8;in3,in4:bool;in5,in6:struct5) returns(o1:struct5^2^3;o2:int8)
+# let
+# 	o1=[[{tt1:o2,tt2:in3},in5],[in5,in6],[in6,{tt1:in2,tt2:in4}]];
+# 	o2=in1+in2;
+# tel'''
     program,symboltable=scade_compile.get_parse(strs)
     print("*************************************")
     print(program)
@@ -121,7 +144,7 @@ tel'''
     gen.gen_const_file()
     gen.gen_sensor_file()
     gen.gen_types_file()
-
+    gen.gen_macro_libmathext64_file()
 
 
 

@@ -8,7 +8,7 @@ class fbyClass:
 class Symbol:
     def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='',isStatemachine=False,StatemachineName='') -> None:
         self.Name = Name  # 标识符的名字
-        self.Kind = Kind  # FbyIdx,FbyArr,Pre(重置函数中使用了),TmpVar,PathId
+        self.Kind = Kind  # FbyIdx,FbyArr,Pre(重置函数中使用了),TmpVar
         #Type.structElem,OpKind,Sensor,State,Const,Var,Init
 
         self.Type = Type  # Type类型(int , float,enum,array,struct)
@@ -20,6 +20,7 @@ class Symbol:
         self.IsPackage = isPackage
         self.PackageName = PackageName
         self.isCalled=False   #用于标识一个node是否被调用
+        self.isPathId=False
 
         self.isStatemachine=isStatemachine
         self.StateMachineName=StatemachineName
@@ -37,7 +38,6 @@ class Symbol:
         self.fbyList = list()
 
         self.FieldList = dict()  # 若该变量的Kind是Type，则为结构体变量名，和该名对应的symbol。
-                                 #若该变量是结构体，则为结构体变量名，以及对应的类型
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
         self.arrSize=list()  #数组长度的表达式
         self.arrValueList=list()
@@ -51,13 +51,14 @@ class Symbol:
         self.Last=list() #变量的last属性列表
         self.Default=list() #变量的default属性列表
         self.Code = list()  # 变量对应的值
+        self.callOperators = list() # 该函数所调用的函数名称列表，可用于在C文件中添加相应的宏定义引用
 
     def changeName(self):
         if self.IsInput==True:
             name="inC->"+self.Name
         elif self.IsReturn==True:
             name="outC->"+self.Name
-        elif self.Kind=="PathId":
+        elif self.isPathId==True:
             name=self.Name
             for elem in self.Code:
                 name+="_"+elem.value

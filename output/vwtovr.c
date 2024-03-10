@@ -1,5 +1,6 @@
 #include "kcg_consts.h"
 #include "kcg_sensors.h"
+#include "macro_libmathext64.h"
 #include "vwtovr.h"
 void vwtovr(inC_vwtovr *inC, outC_vwtovr *outC)
 {
