@@ -104,36 +104,45 @@ def testInputDirFiles():
 if __name__=='__main__':
     #test files in input dir
     # testInputDirFiles()
-    strs='''node arrayTextTest1(in1,in2,in3:int8) returns(o1:int8^3;o3:int8)
-let
-	o1=[in1,in2,in3];
-	o3=o1[1];
-tel'''
-#     strs='''
-#         function testCosR(x : float64) returns (y,y2 : float64)
-#         let 
-#             y = Square(x);
-#         tel
+#     strs='''node arrayTextTest1(in1,in2,in3:int8) returns(o1:int8^3;o3:int8)
+# let
+# 	o1=[in1,in2,in3];
+# 	o3=o1[1];
+# tel'''
+#     strs='''node arrayTextTest5(in1:int8^2^3^4) returns(o1:int8^2^3^4)
+# let
+# 	o1=in1;
+# tel'''
+#     strs='''type struct6={tt1:int8^2};
+# node arrayTextTest10(in1,in2:int8) returns(o1:struct6)
+# let
+# 	o1={tt1:[in1,in2]};
+# tel'''
+    strs='''
+        function testCosR(x : float64) returns (y,y2 : float64)
+        let 
+            y = Square(x);
+        tel
 
-#         function Square(Square_In : float64) returns (Square_Out : float64)
-#         var
-#         _L1 : float64;
-#         _L2 : float64;
-#         let
-#             _L1= Square_In;
-#             _L2= _L1 * _L1;
-#             Square_Out= _L2;
-#         tel
-# '''
+        function Square(Square_In : float64) returns (Square_Out : float64)
+        var
+        _L1 : float64;
+        _L2 : float64;
+        let
+            _L1= Square_In;
+            _L2= _L1 * _L1;
+            Square_Out= _L2;
+        tel
+'''
 #     strs='''type struct5={tt1:int8,tt2:bool};
 # node arrayTextTest9(in1:int8;in3:bool;in2:struct5) returns(o1:struct5^2)
 # let
 # 	o1=[{tt1:in1,tt2:in3},in2];
 # tel'''
 #     strs='''type struct5={tt1:int8,tt2:bool};
-# node arrayTextTest9(in1,in2:int8;in3,in4:bool;in5,in6:struct5) returns(o1:struct5^2^3;o2:int8)
+# node arrayTextTest9(in1,in2:int8;in3,in4:bool;in5,in6:struct5;in7:struct5^2) returns(o1:struct5^2^3;o2:int8)
 # let
-# 	o1=[[{tt1:o2,tt2:in3},in5],[in5,in6],[in6,{tt1:in2,tt2:in4}]];
+# 	o1=[[{tt1:o2,tt2:in3},in5],in7,[in6,{tt1:in2,tt2:in4}]];
 # 	o2=in1+in2;
 # tel'''
     program,symboltable=scade_compile.get_parse(strs)

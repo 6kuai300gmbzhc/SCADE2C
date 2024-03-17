@@ -79,8 +79,7 @@ def getStructElemType(lex,symtable):
             while symbol.Type not in typeArr:
                 symbol = getRootSymbolTable(symtable).getSymbol(symbol.Type)
         else:
-            type = symbol.FieldList[lex.objects[idx].value].Type
-    return type
+            return symbol.FieldList[lex.objects[idx].value]
 
 def checkElemInStruct(symbolName,params,idx,thisEnv):
     if idx >= len(params):

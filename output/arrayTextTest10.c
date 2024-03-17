@@ -4,7 +4,8 @@
 #include "arrayTextTest10.h"
 void arrayTextTest10(inC_arrayTextTest10 *inC, outC_arrayTextTest10 *outC)
 {
-outC->o1.tt1 = (inC->in1+inC->in2);
+outC->o1.tt1[0] = inC->in1;
+outC->o1.tt1[1] = inC->in2;
 
 }
 void arrayTextTest10_init(outC_arrayTextTest10 *outC)

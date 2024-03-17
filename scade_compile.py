@@ -269,7 +269,7 @@ def getTypefromObjects(objects):
                 rootSymbolTable = getRootSymbolTable(thisEnv)
                 type = getIdType(symbol.Type, rootSymbolTable).Type
         elif obj.strs=='lv6id' and len(obj.objects)!=0:
-            type=getStructElemType(obj,thisEnv)
+            type=getStructElemType(obj,thisEnv).Type
     return type
 
 
@@ -344,8 +344,9 @@ def structAssign(leftLex,leftSymbol, typeSymbol, elem):
                 tmpName+=leftLex.objects[idx].value
                 if idx!=len(leftLex.objects)-1:
                     tmpName+="."
-            type=getStructElemType(leftLex,thisEnv)
+            type=getStructElemType(leftLex,thisEnv).Type
             leftLex.type=type
+            print("memcpy setObjectsType=",elem[1]," type",type)
             setObjectsType(elem[1],type)
             leftSymbol.StateType='struct'
             elemSymbol=Symbol()
@@ -359,19 +360,33 @@ def structAssign(leftLex,leftSymbol, typeSymbol, elem):
             tmpName+=leftLex.objects[idx].value
             if idx!=len(leftLex.objects)-1:
                 tmpName+="."
-        type=getStructElemType(leftLex,thisEnv)
-        setObjectsType(elem[1],type)
-        leftLex.type=type
-        leftSymbol.StateType='struct'
+        typeSymbol=getStructElemType(leftLex,thisEnv)
+        
         elemSymbol=Symbol()
-        elemSymbol.StateType='equation'
-        elemSymbol.Code.extend(elem[1])
+        leftSymbol.StateType='struct'
+        leftLex.type=typeSymbol.Type
+        if len(typeSymbol.arrSize)!=0:  #结构体元素是数组
+            arrSizeList=getArrSizeList(typeSymbol.arrSize)
+            for obj in elem[1]:
+                setObjectsType(obj,typeSymbol.Type)
+            elemSymbol.StateType='arrayList'
+            elemSymbol.arrSize=typeSymbol.arrSize
+            fillArrValueList(elem[1],arrSizeList,0,elemSymbol.arrValueList,typeSymbol)
+        else:
+            setObjectsType(elem[1],typeSymbol.Type)
+            elemSymbol.StateType='equation'
+            elemSymbol.Code.extend(elem[1])
+        # setObjectsType(elem[1],typeSymbol.Type)
+        # leftLex.type=typeSymbol.Type
+        # elemSymbol.StateType='equation'
+        # elemSymbol.Code.extend(elem[1])
         leftSymbol.FieldValueList[tmpName]=elemSymbol
 
     leftLex.objects.pop()
 
 
 def isNormalFormat(objects):
+    print("isNormalFormat",objects)
     if type(objects[0]) == list:
         return isNormalFormat(objects[0])
     else:
@@ -1169,6 +1184,7 @@ def fillArrValueList(objects,arrSizeList,st,arrValueList,typeSymbol):
             arrValueList.append(symbol)
         return
     for idx in range(arrSizeList[st]):
+        print("fill",objects[idx],"arrSizeList[st]=",arrSizeList[st])
         fillArrValueList(objects[idx],arrSizeList,st+1,arrValueList,typeSymbol)
 
 def p_simple_equation(p):
@@ -1181,21 +1197,23 @@ def p_simple_equation(p):
         # 修改此处，若左边为结构体，右边是非struct_expr,则展开依次初始化
         # 否则使用memcpy
         typeSymbol = getIdType(p[1].objects[idx].value, thisEnv)
-        symbol=thisEnv.getSymbol(p[1].objects[idx].value)
-        arrSizeList=getArrSizeList(symbol.arrSize)
+        leftSymbol=thisEnv.getSymbol(p[1].objects[idx].value)
+        arrSizeList=getArrSizeList(leftSymbol.arrSize)
         if len(arrSizeList)!=0:
             if p[3].strs=='Array_list_expr':
-                symbol.StateType='arrayList'
-                fillArrValueList(p[3].objects[idx],arrSizeList,0,symbol.arrValueList,typeSymbol)
+                leftSymbol.StateType='arrayList'
+                fillArrValueList(p[3].objects[idx],arrSizeList,0,leftSymbol.arrValueList,typeSymbol)
                 p[0].objects.append(p[1].objects[idx])
             else:
                 #使用memcpy
-                pass
+                print("memcpy")
+                leftSymbol.StateType='memcpy'
+                leftSymbol.Code.extend(p[3].objects[idx])
+                p[0].objects.append(p[1].objects[idx])
         else:
             if typeSymbol.Type == "struct":
                 if isNormalFormat(p[3].objects[idx]) == False:
                 #此处需要使用memcpy,等式两边都是明确的结构体类型
-                    leftSymbol=thisEnv.getSymbol(p[1].objects[idx].value)
                     leftSymbol.Code.extend(p[3].objects[idx])
                     leftSymbol.StateType='memcpy'
                     p[0].objects.append(p[1].objects[idx])
@@ -1206,7 +1224,6 @@ def p_simple_equation(p):
                         raise NotImplementedError("checkStructInitial error")
                     for elem in p[3].objects[idx]:
                         # 结构体的元素放在lex_value()的objects中
-                        leftSymbol=thisEnv.getSymbol(p[1].objects[idx].value)
                         structAssign(p[1].objects[idx], leftSymbol,typeSymbol, elem)
                     p[0].objects.append(p[1].objects[idx])
             else:
@@ -1215,7 +1232,6 @@ def p_simple_equation(p):
                 setObjectsType(p[3].beforeObjects, type)
                 setObjectsType(p[3].afterObjects, type)
 
-                leftSymbol = thisEnv.getSymbol(p[1].objects[idx].value)
                 leftSymbol.Code.extend(p[3].objects[idx])
                 leftSymbol.StateType = 'equation'
 
@@ -2239,7 +2255,7 @@ def p_array_expr(p):
     | Expr Index'''
     p[0]=lex_value("Array_expr")
     if len(p)==4:
-        # print("array_expr",p[2].objects)
+        print("array_expr",p[2].objects)
         p[0].strs='Array_list_expr'
         p[0].objects.extend(p[2].objects)
     else:
