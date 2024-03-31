@@ -119,11 +119,6 @@ if __name__=='__main__':
 # 	o1={tt1:[in1,in2]};
 # tel'''
     strs='''
-        function testCosR(x : float64) returns (y,y2 : float64)
-        let 
-            y = Square(x);
-        tel
-
         function Square(Square_In : float64) returns (Square_Out : float64)
         var
         _L1 : float64;
@@ -132,6 +127,11 @@ if __name__=='__main__':
             _L1= Square_In;
             _L2= _L1 * _L1;
             Square_Out= _L2;
+        tel
+
+        function testCosR(x : float64) returns (y : float64)
+        let 
+            y = Square(x);
         tel
 '''
 #     strs='''type struct5={tt1:int8,tt2:bool};

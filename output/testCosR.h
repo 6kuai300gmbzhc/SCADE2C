@@ -9,7 +9,6 @@ kcg_float64 x;
 
 typedef struct {
 kcg_float64 y;
-kcg_float64 y2;
 } outC_testCosR;
 
 extern void testCosR(inC_testCosR *inC, outC_testCosR *outC);

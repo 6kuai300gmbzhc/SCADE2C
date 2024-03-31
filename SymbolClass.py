@@ -47,7 +47,7 @@ class Symbol:
         self.StrongOrWeak = None # 强迁移: 1, 弱迁移: 0
         self.StateList = list() # 状态机所有可能状态名列表
         self.Params = list()  # 函数标识符的参数列表
-        self.Returns = list()  # 函数标识符的返回值列表
+        self.Returns = list()  # 函数标识符的返回值列表。不包括在转换过程中生成的中间的返回变量。
         self.Last=list() #变量的last属性列表
         self.Default=list() #变量的default属性列表
         self.Code = list()  # 变量对应的值
