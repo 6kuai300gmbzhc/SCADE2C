@@ -33,14 +33,13 @@ ifTmp = _L3;
 _L5 = ifTmp;
 outC->vr = _L5;
 outC->mem_pre = _L5;
-if(outC->init){outC->init=kcg_false;}
 
 }
 void vwtovr_init(outC_vwtovr *outC)
 {
+outC->vr=kcg_lit_float64(70);
 outC->init=kcg_true;
 outC->mem_pre=kcg_lit_float64(0.0);
-outC->vr=kcg_lit_float64(70);
 }
 void vwtovr_reset(outC_vwtovr *outC)
 {

@@ -8,9 +8,9 @@ kcg_float64 vw;
 
 
 typedef struct {
+kcg_float64 vr;
 kcg_bool init;
 kcg_float64 mem_pre;
-kcg_float64 vr;
 } outC_vwtovr;
 
 extern void vwtovr(inC_vwtovr *inC, outC_vwtovr *outC);

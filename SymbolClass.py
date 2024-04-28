@@ -9,18 +9,19 @@ class Symbol:
     def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='',isStatemachine=False,StatemachineName='') -> None:
         self.Name = Name  # 标识符的名字
         self.Kind = Kind  # FbyIdx,FbyArr,Pre(重置函数中使用了),TmpVar
-        #Type.structElem,OpKind,Sensor,State,Const,Var,Init
+        #Type.structElem,OpKind,Sensor,State,Const,Var,Init,ApplyOp
 
         self.Type = Type  # Type类型(int , float,enum,array,struct)
                             #Node还是function,struct
                             #起别名之后的类型名
         self.Public = Public
         self.External = External
+        self.hasInternalState = False
 
         self.IsPackage = isPackage
         self.PackageName = PackageName
-        self.isCalled=False   #用于标识一个node是否被调用
-        self.isPathId=False
+        self.isCalled = False   #用于标识一个node是否被调用
+        self.isPathId = False
 
         self.isStatemachine=isStatemachine
         self.StateMachineName=StatemachineName
@@ -31,7 +32,7 @@ class Symbol:
 
         self.IsInput = False
         self.IsReturn = False
-        self.StateType='' #ifBlock(变量赋值为if块),equation(变量赋值为等式),switchBlock,fbyBlock,structNormal
+        self.StateType='' #ifBlock(变量赋值为if块),equation(变量赋值为等式),switchBlock,fbyBlock,structNormal,ApplyExpr
 
         self.Value = None  # 常量、变量等的值
 
@@ -53,7 +54,7 @@ class Symbol:
         self.Code = list()  # 变量对应的值
         self.callOperators = list() # 该函数所调用的函数名称列表，可用于在C文件中添加相应的宏定义引用
 
-    def changeName(self):
+    def changeName(self,thisEnv):
         if self.IsInput==True:
             name="inC->"+self.Name
         elif self.IsReturn==True:
@@ -66,48 +67,6 @@ class Symbol:
         else:
             name=self.Name
         return name
-    def symbolToString(self,subList,thisEnv):
-        str=""
-        if self.StateType=='equation':
-            str+=self.Name
-            str+=' = '
-            str+=objectsToString(self.Code,thisEnv)
-            str+=';\n'
-        elif self.StateType=='ifBlock':
-            for idx in range(len(self.Code)):
-                if idx==0:
-                    str+='if(%s){\n %s=%s;\n'%(objectsToString(self.Code[idx][0],thisEnv),self.Name,objectsToString(self.Code[idx][1],thisEnv))
-                    if self.IsInit==True:
-                        str+="%s = kcg_false;\n}"%(objectsToString(self.Code[0][0],thisEnv))
-                    else:
-                        str+="}\n"
-                else:
-                    if len(self.Code[idx][0])!=0:
-                        str+="else if(%s){\n %s=%s;\n}"%(objectsToString(self.Code[idx][0],thisEnv),self.Name,objectsToString(self.Code[idx][1],thisEnv))
-                    else:
-                        str+="else{\n%s=%s;\n}\n"%(self.Name,objectsToString(self.Code[idx][1],thisEnv))
-        elif self.StateType=='fbyBlock':
-            str+="if(%s){\n for(int idx=0;idx<%s;idx++){\n"%(objectsToString(self.Code[0],thisEnv),objectsToString(self.Code[4],thisEnv))
-            str+="%s[idx]=%s;\n}"%(objectsToString(self.Code[2],thisEnv),objectsToString(self.Code[5],thisEnv))
-            str+="%s=0;\n"%(objectsToString(self.Code[1],thisEnv))
-            if self.initState:
-                str+="%s=kcg_false;\n}\n"%(objectsToString(self.Code[0],thisEnv))
-            else:
-                str+="}\n"
-            str+="%s=%s[%s];\n"%(self.Name,objectsToString(self.Code[2],thisEnv),objectsToString(self.Code[1],thisEnv))
-            str+="%s[%s]=%s;"%(objectsToString(self.Code[2],thisEnv),objectsToString(self.Code[1],thisEnv),objectsToString(self.Code[3],thisEnv))
-            str+="%s=(%s+1)%%(%s);\n"%(objectsToString(self.Code[1],thisEnv),objectsToString(self.Code[1],thisEnv),objectsToString(self.Code[4],thisEnv))
-        elif self.StateType=='switchBlock':
-            str+="switch(%s){\n"%(objectsToString(self.Code[0],thisEnv))
-            for idx in range(1,len(self.Code)):
-                if len(self.Code[idx][0])!=0:
-                    str+="case %s : \n %s = %s;\n break;\n"%(objectsToString(self.Code[idx][0],thisEnv),self.Name,objectsToString(self.Code[idx][1],thisEnv))
-                elif len(self.Code[idx][0])==0 and len(self.Code[idx][1])!=0:
-                    str+="default :\n %s=%s;\nbreak;\n"%(self.Name,objectsToString(self.Code[idx][1],thisEnv))
-                else:
-                    str+="default : \n break;\n"
-            str+="}\n"
-        return str
 
 
 class SymbolTable:
@@ -155,3 +114,10 @@ class SymbolTable:
         if self.SymbolTable.get(name):
             symbol = self.SymbolTable.pop(name)
         return symbol
+
+    def printSymbol(self):
+        print("=======EnvName",self.EnvName)
+        print(self.EnvName)
+        for name,symbol in self.SymbolTable.items():
+            print("name=",symbol.Name," kind=",symbol.Kind," IsInput",symbol.IsInput)
+        print("=======End")

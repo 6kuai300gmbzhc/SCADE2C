@@ -2,6 +2,8 @@ import copy
 import queue
 from scade_lex import scade_lex, get_tokens, tokens, lex_value
 
+intArr = ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]
+floatArr = ["float32", "float64"]
 typeArr=['bool','int8','int16','int64','int32','uint8','uint16','uint32','uint64','float32','float64','char','enum','array','struct']
 class Node:
     def __init__(self,type=''):
@@ -63,8 +65,9 @@ def getRootSymbolTable(thisEnv):
         return getRootSymbolTable(thisEnv.PrevTable)
     else:
         return thisEnv
+    
 def getIdType(symbolName,symbolTable):
-    symbol=symbolTable.getSymbol(symbolName)
+    symbol=symbolTable.getSymbolInThisEnv(symbolName)
     if symbol!=None and symbol.Type not in typeArr:
         rootSymbolTable=getRootSymbolTable(symbolTable)
         return getIdType(symbol.Type,rootSymbolTable)
@@ -77,7 +80,7 @@ def getStructElemType(lex,symtable):
         if idx != len(lex.objects) - 1:
             symbol = symbol.FieldList[lex.objects[idx].value]
             while symbol.Type not in typeArr:
-                symbol = getRootSymbolTable(symtable).getSymbol(symbol.Type)
+                symbol = getRootSymbolTable(symtable).getSymbolInThisEnv(symbol.Type)
         else:
             return symbol.FieldList[lex.objects[idx].value]
 
@@ -91,14 +94,13 @@ def checkElemInStruct(symbolName,params,idx,thisEnv):
         return checkElemInStruct(realSymbol.FieldList[params[idx].value].Type,params,idx+1,thisEnv)
     
 def objectsToString(objects,thisEnv,op_kind_id):
-    # type=""
     sstr=""
-    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
+    globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
     for elem in objects:
-        if elem.strs=='lv6id' and not op_kind_symbol.isCalled:
-            symbol=thisEnv.getSymbol(elem.value)
+        if elem.strs=='lv6id' and (not globalSymbol.isCalled or (globalSymbol.isCalled and globalSymbol.hasInternalState==True) ):
+            symbol=thisEnv.getSymbolInThisEnv(elem.value)
             # type=symbol.Type
-            sstr+=symbol.changeName()
+            sstr+=symbol.changeName(thisEnv)
             if len(elem.arrSize)!=0:
                 sstr+=objectsToString(elem.arrSize,thisEnv,op_kind_id)
             if len(elem.objects)!=0:
@@ -106,11 +108,14 @@ def objectsToString(objects,thisEnv,op_kind_id):
                     for structElem in elem.objects:
                         sstr+=".%s"%structElem.value
         elif elem.strs=='lv6id':
-            symbol=thisEnv.getSymbol(elem.value)
+            symbol=thisEnv.getSymbolInThisEnv(elem.value)
+            if len(globalSymbol.Returns) != 1:
+                if symbol.Name in globalSymbol.Returns and (symbol.Type in intArr or symbol.Type in floatArr or symbol.Type=='bool'):
+                    sstr+="*"
             sstr+=symbol.Name
         elif elem.strs=='Path_id':
-            symbol=thisEnv.getSymbol(elem.value)
-            sstr+=symbol.changeName()
+            symbol=thisEnv.getSymbolInThisEnv(elem.value)
+            sstr+=symbol.changeName(thisEnv)
         elif elem.strs=='integernum':
             sstr += "kcg_lit_%s(%s)" % (elem.type,str(elem.value))
         elif elem.strs=='floatnum':
@@ -210,6 +215,19 @@ def typeToString(symbol,leftLex,symtable,op_kind_id):
             symbol.arrValueList[idx].Type=symbol.Type
             str+=typeToString(symbol.arrValueList[idx],leftLex,symtable,op_kind_id)
             leftLex.pop()
+    elif symbol.StateType=='ApplyExpr':
+        str+="%s("%symbol.Name
+        for idx in range(len(symbol.Params)):
+            if idx==0:
+                str+="%s"%objectsToString([symbol.Params[idx]],symtable,op_kind_id)
+            else:
+                str+=",%s"%objectsToString([symbol.Params[idx]],symtable,op_kind_id)
+        for idx in range(len(symbol.Returns)):
+            if len(symbol.Params)==0:
+                str+="&%s"%objectsToString([symbol.Returns[idx]],symtable,op_kind_id)
+            else:
+                str+=",&%s"%objectsToString([symbol.Returns[idx]],symtable,op_kind_id)
+        str+=");\n"
     return str
 
 def blockToString(root,leftName,symtable,op_kind_id):
@@ -290,9 +308,11 @@ def getRely(symbol,symtable,relyList):
     elif symbol.StateType=='struct':
         for key,value in symbol.FieldValueList.items():
             tmpList.extend(value.Code)
+    elif symbol.StateType=='ApplyExpr':
+        tmpList.extend(symbol.Params)
     for elem in tmpList:
         if elem.strs=='lv6id':
-            tmpSymbol = symtable.getSymbol(elem.value)
+            tmpSymbol = symtable.getSymbolInThisEnv(elem.value)
             if tmpSymbol != None:
                 if tmpSymbol.IsInput != True and tmpSymbol.Kind != 'Const' and tmpSymbol.Kind != 'Sensor':
                     relyList.append(elem.value)

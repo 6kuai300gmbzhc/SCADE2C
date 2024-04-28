@@ -1,6 +1,0 @@
-type struct5={tt1:int8,tt2:bool};
-node arrayTextTest9(in1,in2:int8;in3,in4:bool;in5,in6:struct5) returns(o1:struct5^2^3;o2:int8)
-let
-	o1=[[{tt1:o2,tt2:in3},in5],[in5,in6],[in6,{tt1:in2,tt2:in4}]];
-	o2=in1+in2;
-tel
