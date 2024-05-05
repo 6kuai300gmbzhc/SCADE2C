@@ -2,7 +2,7 @@
 #include "kcg_sensors.h"
 #include "macro_libmathext64.h"
 #include "vwtovr.h"
-void vwtovr(inC_vwtovr *inC, outC_vwtovr *outC)
+void vwtovr(kcg_float64 vw,outC_vwtovr *outC)
 {
 kcg_float64 _L1;
 kcg_float64 _L2;
@@ -16,7 +16,7 @@ kcg_float64 tmp_pre=outC->mem_pre;
 kcg_float64 ifTmp;
 _L2 = tmp_pre;
 _L4 = kcg_lit_float64(0.09);
-_L6 = inC->vw;
+_L6 = vw;
 if(outC->init){
 initTmp = kcg_lit_float64(70);
 }else{

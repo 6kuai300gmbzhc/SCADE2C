@@ -36,7 +36,7 @@ class Scade_generate:
         content+="\n\n#endif"
         print("====const")
         print(content)
-        with open('./output/kcg_const.h','w') as f:
+        with open('./output/kcg_consts.h','w') as f:
             f.write(content)
 
     def gen_sensor_file(self):
@@ -103,33 +103,33 @@ def testInputDirFiles():
         
 if __name__=='__main__':
     #test files in input dir
-    # testInputDirFiles()
-    strs='''
-function Square(in1,in2 : float64 last = 0.3) returns (out1,out2 : float64)
-var
-_L1 : float64;
-_L2 : float64;
-let
-	_L1= in1+in2;
-    _L2= _L1 * _L1;
-    out1= _L2;
-	out2= _L1;
-tel
+    testInputDirFiles()
+#     strs='''
+# function Square(in1,in2 : float64 last = 0.3) returns (out1,out2 : float64)
+# var
+# _L1 : float64;
+# _L2 : float64;
+# let
+# 	_L1= in1+in2;
+#     _L2= _L1 * _L1;
+#     out1= _L2;
+# 	out2= _L1;
+# tel
 
-node testCosR(x,y : float64) returns (y1,y2 : float64)
-let 
-	y1,y2 = Square(x,y);
-tel
-'''
-    program,symboltable=scade_compile.get_parse(strs)
-    print("*************************************")
-    print(program)
-    print("*************************************")
-    gen=Scade_generate(program,symboltable)
-    gen.gen_const_file()
-    gen.gen_sensor_file()
-    gen.gen_types_file()
-    gen.gen_macro_libmathext64_file()
+# node testCosR(x,y : float64) returns (y1,y2 : float64)
+# let 
+# 	y1,y2 = Square(x,y);
+# tel
+# '''
+#     program,symboltable=scade_compile.get_parse(strs)
+#     print("*************************************")
+#     print(program)
+#     print("*************************************")
+#     gen=Scade_generate(program,symboltable)
+#     gen.gen_const_file()
+#     gen.gen_sensor_file()
+#     gen.gen_types_file()
+#     gen.gen_macro_libmathext64_file()
 
 
 

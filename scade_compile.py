@@ -997,9 +997,9 @@ def p_scope(p):
     '''Scope : Signal_block_zero_or_one Local_block_zero_or_one Eqs
     | Signal_block_zero_or_one Local_block_zero_or_one'''
     p[0] = lex_value("Scope")
-    for elem in p[2].objects:
-        symbol = thisEnv.getSymbolInThisEnv(elem.value)
-        p[0].value += "kcg_%s %s;\n" % (symbol.Type, symbol.Name)
+    # for elem in p[2].objects:
+    #     symbol = thisEnv.getSymbolInThisEnv(elem.value)
+    #     p[0].value += "kcg_%s %s;\n" % (symbol.Type, symbol.Name)
     if len(p) == 4:
         p[0].objects = p[3].objects
 
@@ -1305,7 +1305,7 @@ def p_simple_equation(p):
                 for elem in applySym.Returns:
                     leftSymbol=thisEnv.getSymbolInThisEnv(p[1].objects[leftIdx].value)
                     leftSymbol.StateType='equation'
-                    leftSymbol.Code.extend([lex_value("","outC_"),lex_value("lv6id",opSym.Name),lex_value("","."),lex_value("",elem)])
+                    leftSymbol.Code.extend([lex_value("",outStrucName),lex_value("","."),lex_value("",elem)])
                     p[0].objects.append(p[1].objects[leftIdx])
                     leftIdx+=1
             else:
@@ -2220,6 +2220,7 @@ def p_apply_expr(p):
     p[0].objects.append(p[4])
     # calledOperators.append(p[1].value) # p[1].value应该是Operator的名称
     # print("thisEnv.PrevTable",thisEnv.PrevTable.EnvName)
+    print("====apply_expr",p[1].value)
     thisEnv.PrevTable.getSymbolInThisEnv(p[1].value).isCalled=True
     globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
     globalSymbol.callOperators.append(p[1].value)
