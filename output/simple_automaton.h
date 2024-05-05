@@ -1,4 +1,4 @@
-_simple_automaton_H_
+#ifndef _simple_automaton_H_
 #define _simple_automaton_H_
 #include "kcg_types.h"
 
@@ -22,3 +22,4 @@ extern void simple_automaton(inC_simple_automaton *inC, outC_simple_automaton *o
 extern void simple_automaton_reset(outC_simple_automaton *outC);
 
 extern void simple_automaton_init(outC_simple_automaton *outC);
+#endif

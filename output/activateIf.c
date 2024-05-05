@@ -7,7 +7,7 @@ if(inC->in1>kcg_lit_int32(0)){
 if(outC->init)
 {
 for(int idx=0;idx<kcg_lit_int32(5);idx++){
-outC->fbyArray[outC->fbyIdx]=inC->in2;
+outC->fbyArray[idx]=inC->in2;
 }
 outC->init=kcg_false;
 outC->fbyIdx=0;

@@ -10,9 +10,9 @@ kcg_int32 in2;
 
 typedef struct {
 kcg_bool init;
-kcg_int32 fbyIdx;
-kcg_int32 fbyArray;
 kcg_int32 out;
+kcg_int32 fbyIdx;
+kcg_int32 fbyArray[5];
 } outC_activateIf;
 
 extern void activateIf(inC_activateIf *inC, outC_activateIf *outC);

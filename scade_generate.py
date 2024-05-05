@@ -1,7 +1,7 @@
 import os
 import copy
 import scade_compile
-from scade_compile import type_change,type_initial,objectsToString,getArrSize
+from scade_compile import getArrSize,type_change,getRootSymbolTable,objectsToString
 
 def gen_struct_elem(elem):
     str=""
@@ -32,7 +32,7 @@ class Scade_generate:
                 if v.External==True:
                     content+="extern const %s %s%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize))
                 else:#此处有问题，没有考虑数组的情况
-                    content+="const %s %s%s=%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize),objectsToString(v.Code))
+                    content+="const %s %s%s=%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize),objectsToString(v.Code,self.symboltable,self.symboltable.EnvName))
         content+="\n\n#endif"
         print("====const")
         print(content)
@@ -55,7 +55,8 @@ class Scade_generate:
         content=file.read()
         content+="\n"
         typeContent=""
-        for k,v in self.symboltable.SymbolTable.items():
+        symbolTable=getRootSymbolTable(self.symboltable)
+        for k,v in symbolTable.SymbolTable.items():
             if v.Kind=="Type":
                 if v.Type=='enum':
                     typeContent+="typedef enum {"
@@ -76,8 +77,7 @@ class Scade_generate:
         print(typeContent)
         writeFile=open('output/kcg_types.h','w')
         writeFile.write(content)
-    
-    # kcg_types.h需要依赖kcg_assign.h, 目前的生成只需要简单的拷贝
+        
     def gen_assign_file(self):
         file=open('source_program/kcg_assign.txt','r')
         content=file.read()
@@ -98,36 +98,45 @@ class Scade_generate:
         writeFile = open('output/macro_libmathext64.h', 'w')
         writeFile.write(content)
 
-if __name__=='__main__':
-#     strs='''const imported c1:int32^2;
-# const c3:int32=4;
-# const imported c4:int32^2^(1+2);
-# sensor s1:float32^2;
-# type Tstr1={t1:int32};
-# const imported c5:unsigned<<8>>;
-# type t1=int32^2;
-# type t2={tt1:bool,tt2:int32,tt3:float32};
-# type t3={tt1:bool,tt2:int32,tt3:float32}^2;
-# type t4={tt1:bool,tt2:{tt3:int8,tt4:float32}};
-# type t5={tt1:bool,tt2:int32^2};
-# const imported c6:{tt1:bool,tt2:int32};
-# '''
-    strs = '''
-        function testCosR(x : float64) returns (y : float64)
-        let 
-            y = Square(x);
-        tel
+def testInputDirFiles():
+    dir_path='./input'
+    for root,dirs,files in os.walk(dir_path):
+        for fileIdx in files:
+            fileName=os.path.join(root,fileIdx)
+            file=open(fileName,'r')
+            strs=file.read()
+            program,symboltable=scade_compile.get_parse(strs)
+            print("**************%s***********************",fileName)
+            print(program)
+            print("*************************************")
+            gen=Scade_generate(program,symboltable)
+            gen.gen_const_file()
+            gen.gen_sensor_file()
+            gen.gen_types_file()
+            gen.gen_macro_libmathext64_file()
+            # kcg_types.h需要依赖kcg_assign.h, 目前的生成只需要简单的拷贝
 
-        function Square(Square_In : float64) returns (Square_Out : float64)
-        var
-        _L1 : float64;
-        _L2 : float64;
-        let
-            _L1= Square_In;
-            _L2= _L1 * _L1;
-            Square_Out= _L2;
-        tel
-    '''
+
+if __name__=='__main__':
+    #test files in input dir
+    # testInputDirFiles()
+    strs='''
+function Square(in1,in2 : float64 last = 0.3) returns (out1,out2 : float64)
+var
+_L1 : float64;
+_L2 : float64;
+let
+	_L1= in1+in2;
+    _L2= _L1 * _L1;
+    out1= _L2;
+	out2= _L1;
+tel
+
+node testCosR(x,y : float64) returns (y1,y2 : float64)
+let 
+	y1,y2 = Square(x,y);
+tel
+'''
     program,symboltable=scade_compile.get_parse(strs)
     print("*************************************")
     print(program)

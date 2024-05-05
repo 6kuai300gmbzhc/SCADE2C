@@ -9,7 +9,8 @@ class lex_value:
         self.objects = list()
         self.beforeObjects = list()
         self.afterObjects = list()
-        self.structObjects=list()
+        self.arrSize=list()
+        # self.structObjects=list()
         # self.values1 = list()
         self.scope = scope
 

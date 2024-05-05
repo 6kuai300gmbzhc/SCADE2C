@@ -1,5 +1,6 @@
 # 1.使用一个符号表存储变量、函数、类型
 # 2.使用符号表树实现作用域
+from scade_compile_otherFunc import objectsToString
 class fbyClass:
     def __init__(self, idx='', arr=''):
         self.fbyIdx = idx
@@ -7,21 +8,20 @@ class fbyClass:
 class Symbol:
     def __init__(self, Name='', Kind='', Type='',Public=True,External=False,isPackage=False,PackageName='',isStatemachine=False,StatemachineName='') -> None:
         self.Name = Name  # 标识符的名字
-        self.Kind = Kind  # 标识符的类型：常量(Const) 变量(Var) 类型(Type) 节点或函数(OpKind) 包(Package)
-                          # Sensor Pre Init LocalVar(在local_block中定义的变量) TmpVar(if和init操作符使用的局部变量)
-                         #如属于PathId，其Code记录了该Path_id的路径
-                         #Type(用于Type_block)
-                        #fbyIdx，fbyArray
-                        #ifExpr,switchExpr,structElem
+        self.Kind = Kind  # FbyIdx,FbyArr,Pre(重置函数中使用了),TmpVar
+        #Type.structElem,OpKind,Sensor,State,Const,Var,Init,ApplyOp
 
-        self.Type = Type  # Type类型(int , float,enum,array)
+        self.Type = Type  # Type类型(int , float,enum,array,struct)
                             #Node还是function,struct
+                            #起别名之后的类型名
         self.Public = Public
         self.External = External
+        self.hasInternalState = False
 
         self.IsPackage = isPackage
         self.PackageName = PackageName
-        self.isCalled=False   #用于标识一个node是否被调用
+        self.isCalled = False   #用于标识一个node是否被调用
+        self.isPathId = False
 
         self.isStatemachine=isStatemachine
         self.StateMachineName=StatemachineName
@@ -32,59 +32,41 @@ class Symbol:
 
         self.IsInput = False
         self.IsReturn = False
-        self.IsArray = False
+        self.StateType='' #ifBlock(变量赋值为if块),equation(变量赋值为等式),switchBlock,fbyBlock,structNormal,ApplyExpr
 
         self.Value = None  # 常量、变量等的值
 
         self.fbyList = list()
 
-        self.FieldList = dict()  # 结构体变量的成员-类型和枚举变量的名字-整数值
+        self.FieldList = dict()  # 若该变量的Kind是Type，则为结构体变量名，和该名对应的symbol。
         self.FieldValueList = dict()  # 结构体变量的成员-默认值
         self.arrSize=list()  #数组长度的表达式
+        self.arrValueList=list()
+        self.relyList=list()
 
+        self.initState = None  # 初始状态
+        self.StrongOrWeak = None # 强迁移: 1, 弱迁移: 0
         self.StateList = list() # 状态机所有可能状态名列表
         self.Params = list()  # 函数标识符的参数列表
-        self.Returns = list()  # 函数标识符的返回值列表
-        self.StaticParams = list()  # 函数的静态参数列表
-        self.StaticArgs = list()
-        self.Code = list()  # 函数标识符的代码
+        self.Returns = list()  # 函数标识符的返回值列表。不包括在转换过程中生成的中间的返回变量。
+        self.Last=list() #变量的last属性列表
+        self.Default=list() #变量的default属性列表
+        self.Code = list()  # 变量对应的值
         self.callOperators = list() # 该函数所调用的函数名称列表，可用于在C文件中添加相应的宏定义引用
 
-    def changeName(self):
+    def changeName(self,thisEnv):
         if self.IsInput==True:
-            return "inC->"+self.Name
+            name="inC->"+self.Name
         elif self.IsReturn==True:
-            return "outC->"+self.Name
-        elif self.Kind=="PathId":
+            name="outC->"+self.Name
+        elif self.isPathId==True:
             name=self.Name
             for elem in self.Code:
                 name+="_"+elem.value
-            return name
+            self.Code.clear()
         else:
-            return self.Name
-    #为类指定输出格式
-    def __repr__(self) -> str:
-        strs = '#' + self.Name + '(' + self.Kind + ')'
-        if self.Kind == 'Const':
-            strs += '(' + repr(self.Type) + ':' + str(self.Value) + ')'
-        elif self.Kind == 'Var':
-            strs += '(' + repr(self.Type) + ')'
-        elif self.Kind == 'Type':
-            if self.Type:
-                if self.Type.Type == 'Enum' or self.Type.Type == 'Struct':
-                    strs += '(' + repr(self.Type) + ':' + str(self.FieldList) + ')'
-                    if self.FieldValueList:
-                        strs += '(' + str(self.FieldValueList) + ')'
-                else:
-                    if self.Type.Type:
-                        strs += '(' + repr(self.Type) + ')'
-        elif self.Kind == 'Node' or self.Kind == 'UndefineRed':
-            strs += 'Params:' + str(self.Params) + 'Returns:' + str(self.Returns)
-            if self.StaticParams:
-                strs += 'StaticParams:' + str(self.StaticParams)
-            strs += '\n'
-
-        return strs
+            name=self.Name
+        return name
 
 
 class SymbolTable:
@@ -132,3 +114,10 @@ class SymbolTable:
         if self.SymbolTable.get(name):
             symbol = self.SymbolTable.pop(name)
         return symbol
+
+    def printSymbol(self):
+        print("=======EnvName",self.EnvName)
+        print(self.EnvName)
+        for name,symbol in self.SymbolTable.items():
+            print("name=",symbol.Name," kind=",symbol.Kind," IsInput",symbol.IsInput)
+        print("=======End")

@@ -4,11 +4,13 @@
 
 typedef struct {
 kcg_float64 x;
+kcg_float64 y;
 } inC_testCosR;
 
 
 typedef struct {
-kcg_float64 y;
+kcg_float64 y1;
+kcg_float64 y2;
 } outC_testCosR;
 
 extern void testCosR(inC_testCosR *inC, outC_testCosR *outC);

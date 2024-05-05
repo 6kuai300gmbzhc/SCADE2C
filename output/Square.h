@@ -2,5 +2,5 @@
 #define _Square_H_
 #include "kcg_types.h"
 
-extern kcg_float64 Square(kcg_float64 Square_In);
+extern void Square(kcg_float64 in1,kcg_float64 in2,kcg_float64 *out1,kcg_float64 *out2);
 #endif
