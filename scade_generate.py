@@ -2,6 +2,7 @@ import os
 import copy
 import scade_compile
 from scade_compile import getArrSize,type_change,getRootSymbolTable,objectsToString
+from queue import Queue
 
 def gen_struct_elem(elem):
     str=""
@@ -27,12 +28,25 @@ class Scade_generate:
     #此时没有考虑包的因素
     def gen_const_file(self):
         content="#ifndef _KCG_CONSTS_H_\n#define _KCG_CONSTS_H_\n#include \"kcg_types.h\"\n\n"
-        for k,v in self.symboltable.SymbolTable.items():
-            if v.Kind=="Const":
-                if v.External==True:
-                    content+="extern const %s %s%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize))
-                else:#此处有问题，没有考虑数组的情况
-                    content+="const %s %s%s=%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize),objectsToString(v.Code,self.symboltable,self.symboltable.EnvName))
+        temp = self.symboltable
+        que = Queue()
+        que.put(temp)
+        while not que.empty(): # 广搜，处理存在包的情况下，符号表层层嵌套的情况
+            temp = que.get()
+            for k,v in temp.SymbolTable.items():
+                if v.Kind=="Const":
+                    if v.External==True:
+                        content+="extern const %s %s%s;\n"%(type_change(v.Type),k + v.PackageName,getArrSize(v.arrSize))
+                    else:#此处有问题，没有考虑数组的情况
+                        content+="const %s %s%s = %s;\n"%(type_change(v.Type),k + v.PackageName,getArrSize(v.arrSize),objectsToString(v.Code,temp,temp.EnvName))
+            for table in temp.ChildTableList:
+                que.put(table)
+        # for k,v in self.symboltable.SymbolTable.items():
+        #     if v.Kind=="Const":
+        #         if v.External==True:
+        #             content+="extern const %s %s%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize))
+        #         else:#此处有问题，没有考虑数组的情况
+        #             content+="const %s %s%s=%s;\n"%(type_change(v.Type),k,getArrSize(v.arrSize),objectsToString(v.Code,self.symboltable,self.symboltable.EnvName))
         content+="\n\n#endif"
         print("====const")
         print(content)
@@ -119,35 +133,26 @@ def testInputDirFiles():
 
 if __name__=='__main__':
     #test files in input dir
-    # testInputDirFiles()
-    strs='''
-function Square(in1,in2 : float64 last = 0.3) returns (out1,out2 : float64)
-var
-_L1 : float64;
-_L2 : float64;
-let
-	_L1= in1+in2;
-    _L2= _L1 * _L1;
-    out1= _L2;
-	out2= _L1;
-tel
-
-node testCosR(x,y : float64) returns (y1,y2 : float64)
-let 
-	y1,y2 = Square(x,y);
-tel
-'''
-    program,symboltable=scade_compile.get_parse(strs)
-    print("*************************************")
-    print(program)
-    print("*************************************")
-    gen=Scade_generate(program,symboltable)
-    gen.gen_const_file()
-    gen.gen_sensor_file()
-    gen.gen_types_file()
-    gen.gen_assign_file()
-    gen.gen_imported_types_file()
-    gen.gen_macro_libmathext64_file()
+    testInputDirFiles()
+    # strs='''
+# package P2
+#     function plus(x: int32) returns (y: int32) 
+#     let
+#         y = x + x;
+#     tel
+# end;
+# '''
+#     program,symboltable=scade_compile.get_parse(strs)
+#     print("*************************************")
+#     print(program)
+#     print("*************************************")
+#     gen=Scade_generate(program,symboltable)
+#     gen.gen_const_file()
+#     gen.gen_sensor_file()
+#     gen.gen_types_file()
+#     gen.gen_assign_file()
+#     gen.gen_imported_types_file()
+#     gen.gen_macro_libmathext64_file()
 
 
 

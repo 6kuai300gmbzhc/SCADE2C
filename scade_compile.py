@@ -10,7 +10,8 @@ isPackage = 0
 # global isStatemachine
 isStatemachine = 0
 
-packageName = ""
+packageName = "" # 用于记录当前需要添加的包后缀，如"_P1_P2"
+packageList = list() # 用于记录当前进入的包的名称，如["P1", "P2"]
 op_kind_id = ""
 op_kind = ""
 
@@ -21,7 +22,7 @@ thisEnv = GlobalEnv
 program = None
 
 # 全局变量，用于存储被调用过的函数名称
-# calledOperators = []
+calledOperators = []
 
 
 def type_change(type):
@@ -330,7 +331,7 @@ def getTypefromObjects(objects):
     type = ""
     for obj in objects:
         if obj.strs == 'lv6id' and len(obj.objects)==0:
-            symbol = thisEnv.getSymbolInThisEnv(obj.value)
+            symbol = thisEnv.getSymbolInThisAndPreEnv(obj.value)
             if symbol.Type in typeArr:
                 type = symbol.Type
                 return type
@@ -547,7 +548,7 @@ def p_program(p):
 
 
 # not finish
-def p_decls_zero_or_mode(p):
+def p_decls_zero_or_more(p):
     '''Decls_zero_or_more : Decls Decls_zero_or_more
     | empty'''
     # p[0]=p[1]+p[2]
@@ -640,6 +641,13 @@ def p_numeric_kind(p):
 # 将LV6ID写成Lv6id是为了提前知道包的名字
 def p_package_decl(p):
     'Package_decl : Package Visibility_zero_or_one Pack_Lv6id Decls_zero_or_more END SEMICOLON'
+    global thisEnv, packageList, packageName
+    thisEnv = thisEnv.PrevTable
+    packageList.pop()
+    if len(packageList) == 0:
+        packageName = ""
+    else:
+        packageName = "_" + "_".join(packageList)
     pass
 
 
@@ -669,6 +677,12 @@ def p_user_op_decl(p):
 
 def p_pack_lv6id(p):
     'Pack_Lv6id : LV6ID'
+    global packageList, packageName, thisEnv
+    packageList.append(p[1].value)
+    packageName = "_" + "_".join(packageList)
+    newEnv = SymbolTable(p[1].value, thisEnv)
+    thisEnv.ChildTableList.append(newEnv)
+    thisEnv = newEnv
     p[0] = p[1]
 
 
@@ -1358,7 +1372,6 @@ def p_simple_equation(p):
 
                 leftSymbol.Code.extend(p[3].objects[idx])
                 leftSymbol.StateType = 'equation'
-
                 p[0].objects.append(p[1].objects[leftIdx])
                 leftIdx+=1
     p[0].objects.extend(p[3].beforeObjects)
@@ -1544,9 +1557,7 @@ def p_last_decl(p):
 
 def p_package(p):
     'Package : PACKAGE'
-    global isPackage
-    isPackage = 1
-    p[0] = p[1]
+    pass
 
 
 def p_const_block(p):
@@ -1585,6 +1596,7 @@ def p_const_decl(p):
         setObjectsType(p[6].objects[0], type)
         symbol.FieldList = objectsToStruct(p[4].objects)
         symbol.Code = p[6].objects[0]
+
         thisEnv.setSymbol(p[2].value, symbol)
     elif len(p) == 5:
         symbol = Symbol(p[2].value, 'Const', type, public, external, isPackage, packageName)
@@ -1782,71 +1794,71 @@ def p_path_id(p):
         symbol.isPathId=True
         thisEnv.setSymbol(symbol.Name, symbol) 
         p[0]=lex_value("Path_id",symbol.Name)
-    else:
-        tmpSymbol=thisEnv.getSymbolInThisEnv(p[1].value)
+    else: # 这种情况下，不存在包的前缀，应从当前Env或前序Env中查找symbol
+        tmpSymbol=thisEnv.getSymbolInThisAndPreEnv(p[1].value)
         if tmpSymbol==None:
             symbol=Symbol(p[1].value)
             thisEnv.setSymbol(p[1].value,symbol)
         p[0] = p[1]
 
-def p_apply_expr(p):
-    '''Apply_expr : Operator LPARENTHESE List RPARENTHESE'''
-    p[0] = lex_value("Apply_expr")
-    p[0].objects.append([p[1], lex_value("LPARENTHESE", "(")])
-    p[0].objects[0].extend(p[3].objects[0]) # 这里是否只意味着一个参数？
-    p[0].objects[0].extend([lex_value("RPARENTHESE", ")")])
-    calledOperators.append(p[1].value) # p[1].value应该是Operator的名称
-    op_kind_symbol=thisEnv.getSymbol(op_kind_id)
-    op_kind_symbol.callOperators.append(p[1].value)
+# def p_apply_expr(p):
+#     '''Apply_expr : Operator LPARENTHESE List RPARENTHESE'''
+#     p[0] = lex_value("Apply_expr")
+#     p[0].objects.append([p[1], lex_value("LPARENTHESE", "(")])
+#     p[0].objects[0].extend(p[3].objects[0]) # 这里是否只意味着一个参数？
+#     p[0].objects[0].extend([lex_value("RPARENTHESE", ")")])
+#     calledOperators.append(p[1].value) # p[1].value应该是Operator的名称
+#     op_kind_symbol=thisEnv.getSymbol(op_kind_id)
+#     op_kind_symbol.callOperators.append(p[1].value)
     
-# not finish
-def p_prefix(p):
-    '''Prefix : Path_id'''
-    p[0] = p[1]
+# # not finish
+# def p_prefix(p):
+#     '''Prefix : Path_id'''
+#     p[0] = p[1]
 
-# not finish
-def p_operator(p):
-    '''Operator : Prefix'''
-    p[0] = p[1]
+# # not finish
+# def p_operator(p):
+#     '''Operator : Prefix'''
+#     p[0] = p[1]
 
-def p_list_expr(p):
-    '''List_expr : LPARENTHESE List RPARENTHESE'''
-    p[0]=lex_value("List_expr")
-    p[0].objects.extend(p[2].objects)
+# def p_list_expr(p):
+#     '''List_expr : LPARENTHESE List RPARENTHESE'''
+#     p[0]=lex_value("List_expr")
+#     p[0].objects.extend(p[2].objects)
     
-    p[0].beforeObjects.extend(p[2].beforeObjects)
-    p[0].afterObjects.extend(p[2].afterObjects) 
+#     p[0].beforeObjects.extend(p[2].beforeObjects)
+#     p[0].afterObjects.extend(p[2].afterObjects) 
 
-def p_list(p):
-    '''List : List_1
-    | empty'''
-    p[0] = lex_value("List")
-    if p[1].strs=="List_1":
-        p[0].objects.extend(p[1].objects)
-        p[0].beforeObjects.extend(p[1].beforeObjects)
-        p[0].afterObjects.extend(p[1].afterObjects)
+# def p_list(p):
+#     '''List : List_1
+#     | empty'''
+#     p[0] = lex_value("List")
+#     if p[1].strs=="List_1":
+#         p[0].objects.extend(p[1].objects)
+#         p[0].beforeObjects.extend(p[1].beforeObjects)
+#         p[0].afterObjects.extend(p[1].afterObjects)
 
-def p_list_1(p):
-    '''List_1 : Expr List_2'''
-    p[0]=lex_value("List_1")
-    p[0].objects.extend(p[1].objects)
-    p[0].beforeObjects.extend(p[1].beforeObjects) # TODO: 搞清楚beforeObjects和afterObjects如何使用
-    p[0].afterObjects.extend(p[1].afterObjects)
-    p[0].objects.extend(p[2].objects)
-    p[0].beforeObjects.extend(p[2].beforeObjects)
-    p[0].afterObjects.extend(p[2].afterObjects)
+# def p_list_1(p):
+#     '''List_1 : Expr List_2'''
+#     p[0]=lex_value("List_1")
+#     p[0].objects.extend(p[1].objects)
+#     p[0].beforeObjects.extend(p[1].beforeObjects) # TODO: 搞清楚beforeObjects和afterObjects如何使用
+#     p[0].afterObjects.extend(p[1].afterObjects)
+#     p[0].objects.extend(p[2].objects)
+#     p[0].beforeObjects.extend(p[2].beforeObjects)
+#     p[0].afterObjects.extend(p[2].afterObjects)
 
-def p_list_2(p):
-    '''List_2 : COMMA Expr List_2
-    | empty'''
-    p[0]=lex_value("List_2")
-    if len(p)==4:
-        p[0].objects.extend(p[2].objects)
-        p[0].beforeObjects.extend(p[2].beforeObjects)
-        p[0].afterObjects.extend(p[2].afterObjects)
-        p[0].objects.extend(p[3].objects)
-        p[0].beforeObjects.extend(p[3].beforeObjects)
-        p[0].afterObjects.extend(p[3].afterObjects)
+# def p_list_2(p):
+#     '''List_2 : COMMA Expr List_2
+#     | empty'''
+#     p[0]=lex_value("List_2")
+#     if len(p)==4:
+#         p[0].objects.extend(p[2].objects)
+#         p[0].beforeObjects.extend(p[2].beforeObjects)
+#         p[0].afterObjects.extend(p[2].afterObjects)
+#         p[0].objects.extend(p[3].objects)
+#         p[0].beforeObjects.extend(p[3].beforeObjects)
+#         p[0].afterObjects.extend(p[3].afterObjects)
 
 def p_id_expr(p):
     '''Id_expr : Path_id

@@ -3,3 +3,5 @@ __pycache__/*
 grammar_file/*
 .vscode
 output/*
+parser.out
+parsetab.py

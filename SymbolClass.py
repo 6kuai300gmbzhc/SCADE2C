@@ -96,6 +96,16 @@ class SymbolTable:
         elif self.PrevTable:
             symbol = self.PrevTable.getSymbol(name)
         return symbol
+    
+    def getSymbolInThisAndPreEnv(self, name):
+        symbol = None
+        tmp = self
+        while tmp:
+            if tmp.SymbolTable.get(name):
+                symbol = tmp.SymbolTable.get(name)
+                break
+            tmp = tmp.PrevTable
+        return symbol
 
     def getSymbolInThisEnv(self, name):
         symbol = None
