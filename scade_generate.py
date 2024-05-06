@@ -133,26 +133,26 @@ def testInputDirFiles():
 
 if __name__=='__main__':
     #test files in input dir
-    testInputDirFiles()
-    # strs='''
-# package P2
-#     function plus(x: int32) returns (y: int32) 
-#     let
-#         y = x + x;
-#     tel
-# end;
-# '''
-#     program,symboltable=scade_compile.get_parse(strs)
-#     print("*************************************")
-#     print(program)
-#     print("*************************************")
-#     gen=Scade_generate(program,symboltable)
-#     gen.gen_const_file()
-#     gen.gen_sensor_file()
-#     gen.gen_types_file()
-#     gen.gen_assign_file()
-#     gen.gen_imported_types_file()
-#     gen.gen_macro_libmathext64_file()
+    # testInputDirFiles()
+    strs='''
+package P2
+    function plus(x: int32) returns (y: int32) 
+    let
+        y = x + x;
+    tel
+end;
+'''
+    program,symboltable=scade_compile.get_parse(strs)
+    print("*************************************")
+    print(program)
+    print("*************************************")
+    gen=Scade_generate(program,symboltable)
+    gen.gen_const_file()
+    gen.gen_sensor_file()
+    gen.gen_types_file()
+    gen.gen_assign_file()
+    gen.gen_imported_types_file()
+    gen.gen_macro_libmathext64_file()
 
 
 

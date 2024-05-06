@@ -95,12 +95,22 @@ def checkElemInStruct(symbolName,params,idx,thisEnv):
     
 def objectsToString(objects,thisEnv,op_kind_id):
     sstr=""
-    globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
+    if thisEnv.PrevTable!=None:
+        globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
+    print("objectsToString",objects)
     for elem in objects:
-        if elem.strs=='lv6id' and (not globalSymbol.isCalled or (globalSymbol.isCalled and globalSymbol.hasInternalState==True) ):
-            symbol=thisEnv.getSymbolInThisEnv(elem.value)
+        symbol=thisEnv.getSymbolInThisEnv(elem.value)
+        #没有被调用，或者被调用了，且是node，则可以使用outC
+        if elem.strs=='lv6id' and ((not globalSymbol.isCalled) or (globalSymbol.isCalled and globalSymbol.hasInternalState==True) ):    
             # type=symbol.Type
-            sstr+=symbol.changeName(thisEnv)
+            print("111 globalSymbol.isCalled=",globalSymbol.isCalled,symbol.IsInput)
+            if symbol.IsReturn:
+                sstr+=symbol.changeName(thisEnv)
+            else:
+                if globalSymbol.isCalled:
+                    sstr+=symbol.Name
+                else:
+                    sstr+=symbol.changeName(thisEnv)
             if len(elem.arrSize)!=0:
                 sstr+=objectsToString(elem.arrSize,thisEnv,op_kind_id)
             if len(elem.objects)!=0:
@@ -108,13 +118,12 @@ def objectsToString(objects,thisEnv,op_kind_id):
                     for structElem in elem.objects:
                         sstr+=".%s"%structElem.value
         elif elem.strs=='lv6id':
-            symbol=thisEnv.getSymbolInThisEnv(elem.value)
+            print("222")
             if len(globalSymbol.Returns) != 1:
                 if symbol.Name in globalSymbol.Returns and (symbol.Type in intArr or symbol.Type in floatArr or symbol.Type=='bool'):
                     sstr+="*"
             sstr+=symbol.Name
         elif elem.strs=='Path_id':
-            symbol=thisEnv.getSymbolInThisEnv(elem.value)
             sstr+=symbol.changeName(thisEnv)
         elif elem.strs=='integernum':
             sstr += "kcg_lit_%s(%s)" % (elem.type,str(elem.value))
@@ -128,10 +137,6 @@ def objectsToString(objects,thisEnv,op_kind_id):
             sstr+="kcg_false"
         elif elem.strs=='enum_lv6id':
             sstr+=elem.value
-        # elif elem.strs=='Pre':
-        #     symbol=thisEnv.getSymbol(elem.value)
-        #     symbol.Type=type
-        #     sstr+=symbol.changeName()
         else:
             sstr+=elem.value
     return sstr
