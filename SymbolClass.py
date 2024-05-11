@@ -10,6 +10,7 @@ class Symbol:
         self.Name = Name  # 标识符的名字
         self.Kind = Kind  # FbyIdx,FbyArr,Pre(重置函数中使用了),TmpVar
         #Type.structElem,OpKind,Sensor,State,Const,Var,Init,ApplyOp
+        #Global,PackageName,OpKind
 
         self.Type = Type  # Type类型(int , float,enum,array,struct)
                             #Node还是function,struct

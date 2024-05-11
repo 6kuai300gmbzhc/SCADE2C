@@ -17,13 +17,12 @@ op_kind = ""
 
 scade_lexer = scade_lex()
 GlobalEnv = SymbolTable('Global')  #global的符号表中的符号为各个函数的函数名，该符号只填充了Returns,Params,isStatemachine,hasInternalState
-                                   #global的符号表中还有子符号表，名为其子函数名的符号表。
+                                   #global的符号表中还有子符号表，名为其子函数名的符号表，各个Package的符号表
 thisEnv = GlobalEnv
 program = None
 
 # 全局变量，用于存储被调用过的函数名称
 calledOperators = []
-
 
 def type_change(type):
     list = ["char", "bool", "float32", "float64", "size", "uint64", "uint32", "uint16", "uint8", "int64", "int32",
@@ -33,6 +32,43 @@ def type_change(type):
         str = "kcg_" + type
     return str
 
+def symbolInit(symbol, symbolTable):
+    str = ""
+    if len(symbol.Default) != 0:
+        realType = getIdType(symbol.Name, symbolTable).Type
+        setObjectsType(symbol.Default[0], realType)
+        str = objectsToString(symbol.Default[0], thisEnv,op_kind_id)
+    elif len(symbol.Last) != 0:
+        realType = getIdType(symbol.Name, symbolTable).Type
+        setObjectsType(symbol.Last[0], realType)
+        str = objectsToString(symbol.Last[0], thisEnv,op_kind_id)
+    else:
+        realType = symbol.Type
+        if realType in intArr:
+            str = "kcg_lit_%s(0)" % realType
+        elif realType in floatArr:
+            str = "kcg_lit_%s(0.0)" % realType
+        elif realType == 'bool':
+            str = "kcg_true"
+        else:
+            symbolInit(getIdType(realType, thisEnv), thisEnv)
+    return str
+
+def structInitial(c_content, structName, symbol):
+    if symbol.Type == "struct":
+        for elemK, elemV in symbol.FieldList.items():
+            if elemV.Type not in typeArr:
+                rootEnv = getRootSymbolTable(thisEnv)
+                realSymbol = getIdType(elemV.Type, rootEnv)
+                structName += ".%s" % (elemV.Name)
+                c_content = structInitial(c_content, structName, realSymbol)
+            else:
+                if elemV.Type != "struct":
+                    c_content += "%s=%s;\n" % (structName + "." + elemV.Name, symbolInit(elemV, thisEnv))
+                else:
+                    structName += ".%s" % symbol.Name
+                    c_content = structInitial(c_content, structName, elemV)
+        return c_content
 
 def generate_head_file(symtable):
     op_kind_symbol = symtable.PrevTable.getSymbol(symtable.EnvName)
@@ -285,8 +321,6 @@ def generate_c_file_for_called_operator(body,symtable):
     with open(filename,'w') as f:
         f.write(c_content)
 
-
-
 def getName(initStr):
     symbol = thisEnv.getSymbolInThisEnv(op_kind_id)
     for i in range(1000):
@@ -302,30 +336,6 @@ def getName(initStr):
         else:
             return target
     return initStr
-
-
-def symbolInit(symbol, symbolTable):
-    str = ""
-    if len(symbol.Default) != 0:
-        realType = getIdType(symbol.Name, symbolTable).Type
-        setObjectsType(symbol.Default[0], realType)
-        str = objectsToString(symbol.Default[0], thisEnv,op_kind_id)
-    elif len(symbol.Last) != 0:
-        realType = getIdType(symbol.Name, symbolTable).Type
-        setObjectsType(symbol.Last[0], realType)
-        str = objectsToString(symbol.Last[0], thisEnv,op_kind_id)
-    else:
-        realType = symbol.Type
-        if realType in intArr:
-            str = "kcg_lit_%s(0)" % realType
-        elif realType in floatArr:
-            str = "kcg_lit_%s(0.0)" % realType
-        elif realType == 'bool':
-            str = "kcg_true"
-        else:
-            symbolInit(getIdType(realType, thisEnv), thisEnv)
-    return str
-
 
 def getTypefromObjects(objects):
     type = ""
@@ -361,7 +371,6 @@ def exprToNum(objects):
         if elem.strs == 'lv6id':
             symbol = thisEnv.getSymbolInThisEnv(elem.value)
     return num
-
 
 
 
@@ -456,31 +465,12 @@ def structAssign(leftLex,leftSymbol, typeSymbol, elem):
 
 
 def isNormalFormat(objects):
-    print("isNormalFormat",objects)
     if type(objects[0]) == list:
         return isNormalFormat(objects[0])
     else:
         if len(objects) == 1 and getIdType(objects[0].value, thisEnv).Type == 'struct':
             return False
     return True
-
-
-def structInitial(c_content, structName, symbol):
-    if symbol.Type == "struct":
-        for elemK, elemV in symbol.FieldList.items():
-            if elemV.Type not in typeArr:
-                rootEnv = getRootSymbolTable(thisEnv)
-                realSymbol = getIdType(elemV.Type, rootEnv)
-                structName += ".%s" % (elemV.Name)
-                c_content = structInitial(c_content, structName, realSymbol)
-            else:
-                if elemV.Type != "struct":
-                    c_content += "%s=%s;\n" % (structName + "." + elemV.Name, symbolInit(elemV, thisEnv))
-                else:
-                    structName += ".%s" % symbol.Name
-                    c_content = structInitial(c_content, structName, elemV)
-        return c_content
-
 
 def checkType(expr1, expr2, idx):
     type1 = getTypefromObjects(expr1.objects[idx])
@@ -517,46 +507,65 @@ precedence = (
     ('left', 'POINT')
 )
 
+def opKindToStr(symTable):
+    for elem in symTable.ChildTableList:
+        symbol=symTable.getSymbolInThisEnv(elem.EnvName)
+        print("symbol",symbol.Kind)
+        if symbol.Kind=='PackageName':
+            opKindToStr(elem)
+        elif symbol.Kind=='OpKind':
+            text=""
+            for variable in elem.SymbolTable.values():
+                if variable.Kind == "LocalVar":
+                    text += "%s %s;\n"%(type_change(variable.Type),variable.Name)
+                if variable.Kind == "TmpVar":
+                    if variable.StateType != "equation":
+                        text += ""
+                    else:
+                        text += ""
+            for variable in symbol.Code:
+                text+=typeToString(variable[1],[variable[0]],elem,elem.EnvName)
+            print("text\n",text)
 
 def p_program(p):
     'Program : Decls_zero_or_more'
-    symDicts=dict()
-    for elem in thisEnv.ChildTableList:
-        symDicts[elem.EnvName]=elem
-    for obj in p[1].objects:
-        text=""
-        symtable=symDicts[obj[0].value]
-        print("======",symtable.EnvName)
-        for elem in symtable.SymbolTable.values():
-            if elem.Kind == "LocalVar":
-                text += "%s %s;\n"%(type_change(elem.Type),elem.Name)
-            if elem.Kind=="TmpVar":
-                if elem.StateType != 'equation':
-                    text += "%s %s;\n" % (type_change(elem.Type), elem.Name)
-                else:
-                    text += "%s %s=%s;\n" % (type_change(elem.Type), elem.Name, objectsToString(elem.Code, symtable,symtable.EnvName))
-        for elem in obj[1].objects:
-            text+=typeToString(elem[1],[elem[0]],symtable,symtable.EnvName)
-        nodeSymbol=thisEnv.getSymbol(obj[0].value)
-        print("nodeSymbol.isCalled=",nodeSymbol.isCalled)
-        if nodeSymbol.isCalled:
-            generate_head_file_for_called_operator(symtable)
-            generate_c_file_for_called_operator(text,symtable)
-        else:
-            generate_head_file(symtable)
-            generate_c_file(text,symtable)           
+    opKindToStr(thisEnv)
+    # symDicts=dict()
+    # for elem in thisEnv.ChildTableList:
+    #     print("Program",elem.EnvName)
+    #     symDicts[elem.EnvName]=elem
+    # for obj in p[1].objects:
+    #     text=""
+    #     symtable=symDicts[obj[0].value]
+    #     for elem in symtable.SymbolTable.values():
+    #         if elem.Kind == "LocalVar":
+    #             text += "%s %s;\n"%(type_change(elem.Type),elem.Name)
+    #         if elem.Kind=="TmpVar":
+    #             if elem.StateType != 'equation':
+    #                 text += "%s %s;\n" % (type_change(elem.Type), elem.Name)
+    #             else:
+    #                 text += "%s %s=%s;\n" % (type_change(elem.Type), elem.Name, objectsToString(elem.Code, symtable,symtable.EnvName))
+    #     for elem in obj[1].objects:
+    #         text+=typeToString(elem[1],[elem[0]],symtable,symtable.EnvName)
+    #     nodeSymbol=thisEnv.getSymbol(obj[0].value)
+    #     if nodeSymbol.isCalled:
+    #         generate_head_file_for_called_operator(symtable)
+    #         generate_c_file_for_called_operator(text,symtable)
+    #     else:
+    #         generate_head_file(symtable)
+    #         generate_c_file(text,symtable)           
 
 
 # not finish
 def p_decls_zero_or_more(p):
     '''Decls_zero_or_more : Decls Decls_zero_or_more
     | empty'''
-    # p[0]=p[1]+p[2]
-    # pass
-    p[0]=lex_value("Decls_zero_or_more")
-    if len(p)==3:
-        p[0].objects.extend(p[1].objects)
-        p[0].objects.extend(p[2].objects)
+    pass
+    # print("Decls_zero_or_more",len(p))
+    # p[0]=lex_value("Decls_zero_or_more")
+    # if len(p)==3:
+    #     p[0].objects.extend(p[1].objects)
+    #     p[0].objects.extend(p[2].objects)
 
 
 # not finish
@@ -566,10 +575,10 @@ def p_decls(p):
     | Sensor_block
     | Package_decl
     | User_op_decl'''
-    # p[0]=p[1]
-    p[0]=lex_value("Decls")
-    if p[1]!=None:
-        p[0].objects.extend(p[1].objects)
+    pass
+    # p[0]=lex_value("Decls")
+    # if p[1]!=None:
+    #     p[0].objects.extend(p[1].objects)
 
 
 def p_type_block(p):
@@ -641,6 +650,7 @@ def p_numeric_kind(p):
 # 将LV6ID写成Lv6id是为了提前知道包的名字
 def p_package_decl(p):
     'Package_decl : Package Visibility_zero_or_one Pack_Lv6id Decls_zero_or_more END SEMICOLON'
+    p[0]=lex_value("Package_decl")
     global thisEnv, packageList, packageName
     thisEnv = thisEnv.PrevTable
     packageList.pop()
@@ -648,7 +658,6 @@ def p_package_decl(p):
         packageName = ""
     else:
         packageName = "_" + "_".join(packageList)
-    pass
 
 
 # 每一个function和node都会产生一个对应其函数名的.h和.c文件
@@ -661,25 +670,23 @@ def p_user_op_decl(p):
     if isStatemachine == 1:
         localSymbol.isStatemachine = True  # 该node name为状态机名字
     for idx in p[5].objects:
-        # print(idx.strs,idx.value)
         globalSymbol.Params.append(idx.value)
     for idx in p[7].objects:
         globalSymbol.Returns.append(idx.value)
-    # if symbol.isCalled:
-    #     generate_head_file_for_called_operator()
-    #     generate_c_file_for_called_operator(p[10].value)
-    # else:
-    #     generate_head_file()
-    #     generate_c_file(p[10].value)
-    p[0].objects.append([p[3],p[10]])
+    # p[0].objects.append([p[3],p[10]])
     thisEnv = thisEnv.PrevTable
+    globalSymbol.Code.extend(p[10].objects)
 
 
 def p_pack_lv6id(p):
     'Pack_Lv6id : LV6ID'
     global packageList, packageName, thisEnv
     packageList.append(p[1].value)
+    symbol=Symbol(p[1].value,'PackageName')
     packageName = "_" + "_".join(packageList)
+
+    thisEnv.setSymbol(p[1].value,symbol)
+
     newEnv = SymbolTable(p[1].value, thisEnv)
     thisEnv.ChildTableList.append(newEnv)
     thisEnv = newEnv
