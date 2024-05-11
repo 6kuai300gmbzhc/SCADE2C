@@ -5,12 +5,14 @@ from scade_lex import scade_lex, get_tokens, tokens, lex_value
 intArr = ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]
 floatArr = ["float32", "float64"]
 typeArr=['bool','int8','int16','int64','int32','uint8','uint16','uint32','uint64','float32','float64','char','enum','array','struct']
+
 class Node:
     def __init__(self,type=''):
         self.type=type#type能为ifCondition,switchCondition,equation,fbyBlock,ifBlock
         self.childNodeList=list()
         self.pattern=list()
         self.value=list()
+        
 class topologyNode:
     def __init__(self,name='',index=0,tpIdx=0,inNum=0,outNum=0):
         self.name=name
@@ -19,6 +21,7 @@ class topologyNode:
         self.inNum=inNum
         self.outNum=outNum
         self.finish=False
+
 def topologySort(symbolList,adjList,nodeList):
     sum=len(nodeList)
     retList=[]
@@ -97,13 +100,11 @@ def objectsToString(objects,thisEnv,op_kind_id):
     sstr=""
     if thisEnv.PrevTable!=None:
         globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
-    print("objectsToString",objects)
     for elem in objects:
         symbol=thisEnv.getSymbolInThisEnv(elem.value)
         #没有被调用，或者被调用了，且是node，则可以使用outC
         if elem.strs=='lv6id' and ((not globalSymbol.isCalled) or (globalSymbol.isCalled and globalSymbol.hasInternalState==True) ):    
             # type=symbol.Type
-            print("111 globalSymbol.isCalled=",globalSymbol.isCalled,symbol.IsInput)
             if symbol.IsReturn:
                 sstr+=symbol.changeName(thisEnv)
             else:
@@ -118,7 +119,6 @@ def objectsToString(objects,thisEnv,op_kind_id):
                     for structElem in elem.objects:
                         sstr+=".%s"%structElem.value
         elif elem.strs=='lv6id':
-            print("222")
             if len(globalSymbol.Returns) != 1:
                 if symbol.Name in globalSymbol.Returns and (symbol.Type in intArr or symbol.Type in floatArr or symbol.Type=='bool'):
                     sstr+="*"
@@ -311,7 +311,7 @@ def getRely(symbol,symtable,relyList):
     elif symbol.StateType=='memcpy':
         tmpList.extend(symbol.Code)
     elif symbol.StateType=='struct':
-        for key,value in symbol.FieldValueList.items():
+        for _,value in symbol.FieldValueList.items():
             tmpList.extend(value.Code)
     elif symbol.StateType=='ApplyExpr':
         tmpList.extend(symbol.Params)
