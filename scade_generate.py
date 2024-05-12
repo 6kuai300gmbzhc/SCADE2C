@@ -142,6 +142,12 @@ package P2
     tel
 end;
 '''
+#     strs='''package P1
+# 	const foo: int32 = 3;
+# 	package P2
+# 		function plus(x: int32) returns (y: int32) y = x + foo;
+# 	end; 
+# end;'''
     program,symboltable=scade_compile.get_parse(strs)
     print("*************************************")
     print(program)

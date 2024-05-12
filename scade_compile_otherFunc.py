@@ -12,7 +12,7 @@ class Node:
         self.childNodeList=list()
         self.pattern=list()
         self.value=list()
-        
+
 class topologyNode:
     def __init__(self,name='',index=0,tpIdx=0,inNum=0,outNum=0):
         self.name=name
@@ -101,7 +101,8 @@ def objectsToString(objects,thisEnv,op_kind_id):
     if thisEnv.PrevTable!=None:
         globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
     for elem in objects:
-        symbol=thisEnv.getSymbolInThisEnv(elem.value)
+        # thisEnv.printSymbol()
+        symbol=thisEnv.getSymbolInThisAndPreEnv(elem.value)
         #没有被调用，或者被调用了，且是node，则可以使用outC
         if elem.strs=='lv6id' and ((not globalSymbol.isCalled) or (globalSymbol.isCalled and globalSymbol.hasInternalState==True) ):    
             # type=symbol.Type

@@ -66,7 +66,7 @@ class Symbol:
                 name+="_"+elem.value
             self.Code.clear()
         else:
-            name=self.Name
+            name=self.Name+self.PackageName
         return name
 
 

@@ -70,255 +70,209 @@ def structInitial(c_content, structName, symbol):
                     c_content = structInitial(c_content, structName, elemV)
         return c_content
 
-def generate_head_file(symtable):
-    op_kind_symbol = symtable.PrevTable.getSymbol(symtable.EnvName)
-    name = op_kind_symbol.Name
-    head_content = ""
-    head_content += "#ifndef _" + name + "_H_\n" + "#define _" + name + "_H_\n"
-    head_content += "#include \"kcg_types.h\"\n\n"
-    head_content += "typedef struct {\n"
-    # input_params
-    # print(len(op_kind_symbol.Params))
-    for input_name in op_kind_symbol.Params:
+def generate_head_file_inC_struct(symtable,opKindSymbol):
+    text = "\n\ntypedef struct {\n"
+    for input_name in opKindSymbol.Params:
         symbol = symtable.getSymbolInThisEnv(input_name)
-        head_content += "%s %s%s;\n" % (type_change(symbol.Type), input_name, getArrSize(symbol.arrSize))
-    head_content += "} inC_" + name + ";\n"
+        text += "%s %s%s;"%(type_change(symbol.Type),input_name,getArrSize(symbol.arrSize))
+    text += "\n} inC_%s;\n"%(opKindSymbol.Name + opKindSymbol.PackageName)
+    return text
 
-    # out_params
-    head_content += "\n\ntypedef struct {\n"
+def generate_head_file_outC_struct(symtable,opKindSymbol):
+    thisSymbol=symtable.getSymbolInThisEnv(opKindSymbol.Name)
+    text = "\n\ntypedef struct {\n"
     for key,symbol in symtable.SymbolTable.items():
         if symbol.IsReturn == True:
             if symbol.Kind == 'FbyIdx' or symbol.Kind == 'FbyArr':
                 continue
             else:
-                head_content += "%s %s%s;\n"%(type_change(symbol.Type),key,getArrSize(symbol.arrSize))
-
-    for fbyElem in op_kind_symbol.fbyList:
+                text += "%s %s%s;\n"%(type_change(symbol.Type),key,getArrSize(symbol.arrSize))
+    for fbyElem in thisSymbol.fbyList:
         fbyIdx = symtable.getSymbolInThisEnv(fbyElem.fbyIdx)
         fbyArr = symtable.getSymbolInThisEnv(fbyElem.fbyArr)
-        head_content += type_change(fbyIdx.Type) + " " + fbyIdx.Name + ";\n"
-        head_content += "%s %s%s;\n" % (type_change(fbyArr.Type), fbyArr.Name, getArrSize([fbyIdx.Code]))
-    # automata
-    if op_kind_symbol.isStatemachine == 1:
-        head_content += "\nSSM_ST state_nxt;\n"
-    head_content += "} outC_" + name + ";\n"
+        text += type_change(fbyIdx.Type) + " " +fbyIdx.Name + ";\n" 
+        text += "%s %s%s;\n"% (type_change(fbyArr.Type),fbyArr.Name,getArrSize([fbyIdx.Code]))
+    
+    if  thisSymbol.isStatemachine == 1:
+        text += "\nSSM_ST state_nxt;\n"
+    text += "} outC_%s;\n"%(opKindSymbol.Name+opKindSymbol.PackageName)
+    return text
 
-    # function
-    head_content += "\nextern void " + name + "(inC_" + name + " *inC, outC_" + name + " *outC);\n"
-    head_content += "\nextern void " + name + "_reset(outC_" + name + " *outC);\n"
-    head_content += "\nextern void " + name + "_init(outC_" + name + " *outC);\n#endif"
+
+def generate_head_file_func(symtable,opKindSymbol):
+    text = ""
+    name=opKindSymbol.Name + opKindSymbol.PackageName
+    if opKindSymbol.isCalled:
+        if opKindSymbol.hasInternalState == False and len(opKindSymbol.Returns)==1:
+            retSymbol = symtable.getSymbolInThisEnv(opKindSymbol.Returns[0])
+            text += "extern %s %s("%(type_change(retSymbol.Type),name)
+        else:
+            text += "extern void %s("%(name)
+        for input_name in opKindSymbol.Params:
+            symbol = symtable.getSymbolInThisEnv(input_name)
+            if input_name != opKindSymbol.Params[0]:
+                text += ","
+            text += type_change(symbol.Type) + " "+ input_name
+        if opKindSymbol.hasInternalState == True:
+            text += ",outC_%s *outC"%name
+        else:
+            if len(opKindSymbol.Returns) > 1:
+                for output_name in opKindSymbol.Returns:
+                    symbol=symtable.getSymbolInThisEnv(output_name)
+                    text += "," + type_change(symbol.Type) +" *" + symbol.Name
+        text += ");\n"
+    else:
+        text += "\nextern void %s(inC_%s *inC, outC_%s *outC);\n"%(name,name,name)
+    return text
+
+
+def generate_head_file_reset_func(symtable,opKindSymbol):
+    text =""
+    name = opKindSymbol.Name
+    packageName = opKindSymbol.PackageName
+    text += "\nextern void %s_reset%s(outC_%s *outC);\n"%(name,packageName,name+packageName)
+    return text
+
+def generate_head_file_init_func(symtable,opKindSymbol):
+    text =""
+    name = opKindSymbol.Name
+    packageName = opKindSymbol.PackageName
+    text += "\nextern void %s_init%s(outC_%s *outC);\n"%(name,packageName,name+packageName)
+    return text
+
+def generate_head_file(symtable,opKindSymbol):
+    text = ""
+    name = opKindSymbol.Name + opKindSymbol.PackageName
+    text += "#ifndef _%s_H_\n"%name
+    text += "#define _%s_H_\n"%name
+    text += "#include \"kcg_types.h\"\n"
+
+    if opKindSymbol.isCalled and opKindSymbol.hasInternalState == False:
+        text+=generate_head_file_func(symtable,opKindSymbol)
+    else:
+        if opKindSymbol.isCalled == False:
+            text += generate_head_file_inC_struct(symtable,opKindSymbol)
+        text += generate_head_file_outC_struct(symtable,opKindSymbol)
+        text += generate_head_file_func(symtable,opKindSymbol)
+        text += generate_head_file_reset_func(symtable,opKindSymbol)
+        text += generate_head_file_init_func(symtable,opKindSymbol)
+            
+    text += "#endif\n"
     filename = "./output/" + name + ".h"
-    print(head_content)
+    print(text)
     with open(filename, 'w') as f:
-        f.write(head_content)
+        f.write(text)
 
+#若该函数被调用，输入参数需要展开，若是node，则可能和时序相关，输出为结构体。
+def generate_c_file_func(symtable,opKindSymbol):
+    text = ""
+    name = opKindSymbol.Name + opKindSymbol.PackageName
+    if opKindSymbol.isCalled:
+        if opKindSymbol.hasInternalState ==False and len(opKindSymbol.Returns)==1:
+            returnSymbol=symtable.getSymbolInThisEnv(opKindSymbol.Returns[0])
+            text += "%s %s("%(type_change(returnSymbol.Type),name)
+        else:
+            text += "void %s("%name
+        
+        for input_name in opKindSymbol.Params:
+            symbol = symtable.getSymbolInThisEnv(input_name)
+            if input_name != opKindSymbol.Params[0]:
+                text += ","
+            text += type_change(symbol.Type) + " "+ input_name
 
-def generate_c_file(body,symtable):
-    globalSymbol = symtable.PrevTable.getSymbol(symtable.EnvName)
-    c_content = "#include \"kcg_consts.h\"\n#include \"kcg_sensors.h\"\n"
-    c_content += "#include \"macro_libmathext64.h\"\n"
-    name = globalSymbol.Name
-    c_content += "#include \"%s.h\"\n" % name
-    for callOperator in globalSymbol.callOperators:
-        c_content += "#include \"%s.h\"\n" % callOperator
-    c_content += "void %s(inC_%s *inC, outC_%s *outC)\n{\n" % (name, name, name)
-    c_content += body
-    c_content += "\n}\n"
+        if opKindSymbol.hasInternalState == True:
+            text += ",outC_%s *outC"%name
+        else:
+            if len(opKindSymbol.Returns) > 1 :
+                for output_name in opKindSymbol.Returns:
+                    text += "," +type_change(symbol.Type) + " *" + output_name
+        text += ")\n{\n"
+    else:
+        text += "void %s(inC_%s *inC, outC_%s *outC)\n{\n" %(name,name,name)
+    
+    for variable in symtable.SymbolTable.values():
+        if variable.Kind == "LocalVar":
+            text += "%s %s;\n"%(type_change(variable.Type),variable.Name)
+        if variable.Kind == "TmpVar":
+            if variable.StateType != 'equation':
+                text += "%s %s;\n"%(type_change(variable.Type),variable.Name)
+            else:
+                text += "%s %s=%s;\n"%(type_change(variable.Type),variable.Name,objectsToString(variable.Code,symtable,symtable.EnvName))
+    for variable in opKindSymbol.Code:
+        text += typeToString(variable[1],[variable[0]],symtable,symtable.EnvName)
+    text += "\n}\n"
+    return text
 
-    # 初始化函数
-    c_content += "void %s_init(outC_%s *outC)\n{\n" % (name, name)
+def generate_c_file_init_func(symtable,opKindSymbol):
+    text = ""
+    name = opKindSymbol.Name
+    packageName = opKindSymbol.PackageName
+    text += "void %s_init%s(outC_%s *outC)\n{\n" % (name,packageName,name+packageName)
     for key,symbol in symtable.SymbolTable.items():
-        if symbol.IsReturn==True:
+        if symbol.IsReturn == True:
             realType = ""
             if symbol.Type not in typeArr:
-                realSymbol=getIdType(key,symtable)
-                realType=realSymbol.Type
+                realSymbol = getIdType (key,symtable)
+                realType =realSymbol.Type
             if len(symbol.arrSize)!=0:
-                tmpName=len(symbol.arrSize)-1
-                tmpName2=''
+                tmpName = len(symbol.arrSize)-1
+                tmpName2 = ''
                 for idx in reversed(symbol.arrSize):
-                    c_content+="for(kcg_size idx%s=0;idx%s<%s;idx%s++){\n"%(tmpName,tmpName,idx[0].value,tmpName)
+                    text +="for(kcg_size idx%s=0;idx%s<%s;idx%s++){\n"%(tmpName,tmpName,idx[0].value,tmpName)
                     tmpName2+='[idx%s]'%(tmpName)
                     tmpName=tmpName-1
                 if realType=="struct":
-                    c_content=structInitial(c_content,"outC->%s%s"%(symbol.Name,tmpName2),realSymbol)
+                    text =structInitial(text,"outC->%s%s"%(symbol.Name,tmpName2),realSymbol)
                 elif symbol.Kind!='FbyArr':
-                    c_content+="outC->%s%s=%s;\n"%(key,tmpName2,symbolInit(symbol,symtable))
+                    text +="outC->%s%s=%s;\n"%(key,tmpName2,symbolInit(symbol,symtable))
                 for idx in range(len(symbol.arrSize)):
-                    c_content+="}\n"
+                    text +="}\n"
             else:
                 if realType == "struct":
-                    c_content = structInitial(c_content, "outC->" + symbol.Name, realSymbol)
+                    text = structInitial(text, "outC->" + symbol.Name, realSymbol)
                 elif len(symbol.arrSize) == 0 and symbol.Kind != 'FbyArr':
-                    c_content += "outC->%s=%s;\n" % (key, symbolInit(symbol, symtable))
-    # NOTE: init状态机初始状态赋值
-    if globalSymbol.isStatemachine:
-        c_content += "outC->state_nxt=%s;\n" % globalSymbol.initState
-
-    for elem in globalSymbol.fbyList:
-        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n" % (
-            objectsToString(symtable.getSymbolInThisEnv(elem.fbyIdx).Code, symtable,op_kind_id),
+                    text += "outC->%s=%s;\n" % (key, symbolInit(symbol, symtable))
+    thisSymbol=symtable.getSymbolInThisEnv(opKindSymbol.Name)
+    if thisSymbol.isStatemachine:
+        text += "outC -> state_nxt=%s;\n" % thisSymbol.initState
+    for elem in thisSymbol.fbyList:
+        text += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n" % (
+            objectsToString(symtable.getSymbolInThisEnv(elem.fbyIdx).Code, symtable,opKindSymbol.EnvName),
             symtable.getSymbolInThisEnv(elem.fbyArr).changeName(symtable),
             symbolInit(symtable.getSymbolInThisEnv(elem.fbyArr), symtable))
-    c_content += "}\n"
-
-    # 重置函数
-    c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name, name)
+    text += "}\n"
+    return text
+        
+def generate_c_file_reset_func(symtable,opKindSymbol):
+    text = ""
+    thisSymbol=symtable.getSymbolInThisEnv(opKindSymbol.Name)
+    name = opKindSymbol.Name
+    packageName = opKindSymbol.PackageName
+    text += "void %s_reset%s(outC_%s *outC)\n{\n"%(name,packageName,name+packageName)
     for para in symtable.SymbolTable.values():
         if para.Kind == "Pre":
-            c_content += "outC->%s=%s;\n" % (para.Name, symbolInit(para, symtable))
-    # NOTE: reset状态机初始状态赋值
-    if globalSymbol.isStatemachine:
-        c_content += "outC->state_nxt=%s;\n" % globalSymbol.initState
-    c_content += "}\n"
+            text += "outC->%s = %s;\n"%(para.Name,symbolInit(para,symtable))
+    if thisSymbol.isStatemachine:
+        text += "outC->state_nxt=%s;\n"%thisSymbol.initState
+    text += "}\n"
+    return text
+
+def generate_c_file(symtable,opKindSymbol):
+    c_content = "#include \"kcg_consts.h\"\n#include \"kcg_sensors.h\"\n"
+    c_content += "#include \"macro_libmathext64.h\"\n"
+    name = opKindSymbol.Name + opKindSymbol.PackageName
+    c_content += "#include \"%s.h\"\n" % name
+    for callOperator in opKindSymbol.callOperators:
+        c_content += "#include \"%s.h\"\n" % callOperator
+
+    c_content += generate_c_file_func(symtable,opKindSymbol)
+    if  opKindSymbol.isCalled ==False or (opKindSymbol.isCalled == True and opKindSymbol.hasInternalState == True):
+        c_content += generate_c_file_init_func(symtable,opKindSymbol)
+        c_content += generate_c_file_reset_func(symtable,opKindSymbol)
+
     filename = "./output/%s.c" % (name)
     print(c_content)
     with open(filename, 'w') as f:
-        f.write(c_content)
-
-# Generate Head file for called operators
-def generate_head_file_for_called_operator(symtable):
-    print("symtable.EnvName=",symtable.EnvName," symtable.PrevTable=",symtable.PrevTable.EnvName)
-    op_kind_symbol=symtable.PrevTable.getSymbolInThisEnv(symtable.EnvName)
-    name=op_kind_symbol.Name
-    head_content=""
-    head_content+="#ifndef _"+name+"_H_\n"+"#define _"+name+"_H_\n"
-    head_content+="#include \"kcg_types.h\"\n\n"
-    
-    if op_kind_symbol.hasInternalState == True:
-        head_content += "\n\ntypedef struct {\n"
-        for elem in symtable.SymbolTable.values():
-            if elem.IsReturn == True:
-                if elem.Kind == 'FbyIdx' or elem.Kind == 'FbyArr':
-                    continue
-                else:
-                    head_content+="%s %s%s;\n"%(type_change(elem.Type),elem.Name,getArrSize(elem.arrSize))
-        for fbyElem in op_kind_symbol.fbyList:
-            fbyIdx = symtable.getSymbolInThisEnv(fbyElem.fbyIdx)
-            fbyArr = symtable.getSymbolInThisEnv(fbyElem.fbyArr)
-            head_content += type_change(fbyIdx.Type) + " "+fbyIdx.Name +";\n"
-            head_content += "%s %s%s;\n" % (type_change(fbyArr.Type), fbyArr.Name, getArrSize([fbyIdx.Code]))
-        if op_kind_symbol.isStatemachine == 1:
-            head_content += "\nSSM_ST state_nxt;\n"
-        head_content += "} outC_" + name + ";\n"
-    else:
-        print("function")
-
-    if op_kind_symbol.hasInternalState == False and len(op_kind_symbol.Returns)==1:
-        retSymbol=symtable.getSymbolInThisEnv(op_kind_symbol.Returns[0])
-        head_content += "extern %s %s("%(type_change(retSymbol.Type),name)
-    else:
-        head_content+="extern void %s("%name
-
-    #input_params
-    for input_name in op_kind_symbol.Params:
-        symbol = symtable.getSymbolInThisEnv(input_name)
-        if input_name != op_kind_symbol.Params[0]:
-            head_content += "," + type_change(symbol.Type) + " " + input_name
-        else:
-            head_content += type_change(symbol.Type) + " " + input_name
-        
-    if op_kind_symbol.hasInternalState == True:
-        head_content += ",outC_" + name +" *outC"
-    else:
-        if len(op_kind_symbol.Returns)!=0:
-            for output_name in op_kind_symbol.Returns:
-                symbol=symtable.getSymbolInThisEnv(output_name)
-                head_content += ","+type_change(symbol.Type) +" *" + symbol.Name
-    head_content+=");\n"
-
-    # endif 
-    head_content += "#endif\n"
-    
-    filename="./output/"+name+".h"
-    print(head_content)
-    with open(filename,'w') as f:
-        f.write(head_content)
-
-# Generate C file for called operators
-def generate_c_file_for_called_operator(body,symtable):
-    op_kind_symbol = symtable.PrevTable.getSymbolInThisEnv(symtable.EnvName)
-    c_content = "#include \"kcg_consts.h\"\n#include \"kcg_sensors.h\"\n"
-    c_content += "#include \"macro_libmathext64.h\"\n"
-    name = op_kind_symbol.Name
-    c_content += "#include \"%s.h\"\n" % name
-    
-    if op_kind_symbol.hasInternalState == False and len(op_kind_symbol.Returns)==1:
-        returnSymbol=symtable.getSymbolInThisEnv(op_kind_symbol.Returns[0])
-        c_content +="%s %s("%(type_change(returnSymbol.Type),name)
-    else:
-        c_content += "void %s("%name
-
-    #input_params
-    for input_name in op_kind_symbol.Params:
-        symbol = symtable.getSymbolInThisEnv(input_name)
-        if input_name != op_kind_symbol.Params[0]:
-            c_content += "," + type_change(symbol.Type) + " " + input_name
-        else:
-            c_content += type_change(symbol.Type) + " " + input_name
-    if op_kind_symbol.hasInternalState == True:
-        c_content += ",outC_"+ name + " *outC"
-    else:
-        if len(op_kind_symbol.Returns)!=1:
-            for output_name in op_kind_symbol.Returns:
-                c_content += ","+type_change(symbol.Type) + " *" + output_name
-    c_content += ")\n{\n"
-
-    c_content += body 
-    if op_kind_symbol.hasInternalState == False and len(op_kind_symbol.Returns)==1:
-        c_content+="return %s;"%op_kind_symbol.Returns[0]
-    c_content += "\n}\n"
-
-     # 初始化函数
-    c_content += "void %s_init(outC_%s *outC)\n{\n" % (name, name)
-    for key,symbol in symtable.SymbolTable.items():
-        if symbol.IsReturn==True:
-            realType = ""
-            if symbol.Type not in typeArr:
-                realSymbol=getIdType(key,symtable)
-                realType=realSymbol.Type
-            if len(symbol.arrSize)!=0:
-                tmpName=len(symbol.arrSize)-1
-                tmpName2=''
-                for idx in reversed(symbol.arrSize):
-                    c_content+="for(kcg_size idx%s=0;idx%s<%s;idx%s++){\n"%(tmpName,tmpName,idx[0].value,tmpName)
-                    tmpName2+='[idx%s]'%(tmpName)
-                    tmpName=tmpName-1
-                if realType=="struct":
-                    c_content=structInitial(c_content,"outC->%s%s"%(symbol.Name,tmpName2),realSymbol)
-                elif symbol.Kind!='FbyArr':
-                    c_content+="outC->%s%s=%s;\n"%(key,tmpName2,symbolInit(symbol,symtable))
-                for idx in range(len(symbol.arrSize)):
-                    c_content+="}\n"
-            else:
-                if realType == "struct":
-                    c_content = structInitial(c_content, "outC->" + symbol.Name, realSymbol)
-                elif len(symbol.arrSize) == 0 and symbol.Kind != 'FbyArr':
-                    c_content += "outC->%s=%s;\n" % (key, symbolInit(symbol, symtable))
-    # NOTE: init状态机初始状态赋值
-    if op_kind_symbol.isStatemachine:
-        c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.initState
-
-    for elem in op_kind_symbol.fbyList:
-        c_content += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n" % (
-            objectsToString(symtable.getSymbolInThisEnv(elem.fbyIdx).Code, symtable,op_kind_id),
-            symtable.getSymbolInThisEnv(elem.fbyArr).changeName(symtable),
-            symbolInit(symtable.getSymbolInThisEnv(elem.fbyArr), symtable))
-    c_content += "}\n"
-
-    # 重置函数
-    c_content += "void %s_reset(outC_%s *outC)\n{\n" % (name, name)
-    for para in symtable.SymbolTable.values():
-        if para.Kind == "Pre":
-            c_content += "outC->%s=%s;\n" % (para.Name, symbolInit(para, symtable))
-    # NOTE: reset状态机初始状态赋值
-    if op_kind_symbol.isStatemachine:
-        c_content += "outC->state_nxt=%s;\n" % op_kind_symbol.initState
-    c_content += "}\n"
-
-    filename = "./output/%s.c" %(name)
-    print(c_content)
-    with open(filename,'w') as f:
         f.write(c_content)
 
 def getName(initStr):
@@ -507,33 +461,23 @@ precedence = (
     ('left', 'POINT')
 )
 
-def opKindToStr(symTable):
+def opKindToStr(symTable,package_list):
     for symtable in symTable.ChildTableList:
         symbol=symTable.getSymbolInThisEnv(symtable.EnvName)
         if symbol.Kind=='PackageName':
-            opKindToStr(symtable)
+            package_list.append(symbol.Name)
+            opKindToStr(symtable,package_list)
+            package_list.pop()
         elif symbol.Kind=='OpKind':
-            text=""
-            for variable in symtable.SymbolTable.values():
-                if variable.Kind == "LocalVar":
-                    text += "%s %s;\n"%(type_change(variable.Type),variable.Name)
-                if variable.Kind == "TmpVar":
-                    if variable.StateType != "equation":
-                        text += ""
-                    else:
-                        text += ""
-            for variable in symbol.Code:
-                text+=typeToString(variable[1],[variable[0]],symtable,symtable.EnvName)
-            if symbol.isCalled:
-                generate_head_file_for_called_operator(symtable)
-                generate_c_file_for_called_operator(text,symtable)
-            else:
-                generate_head_file(symtable)
-                generate_c_file(text,symtable)
+            symbol.PackageName = "_"+"_".join(package_list)
+            generate_head_file(symtable,symbol)
+            generate_c_file(symtable,symbol)
 
+#package符号表中含有其作用域中的函数名这个符号（该符号指示了这个函数是否被调用，其输入和输出参数）。package符号表的子符号表中含有其作用域内的函数的符号表
 def p_program(p):
     'Program : Decls_zero_or_more'
-    opKindToStr(thisEnv)
+    package_list=[]
+    opKindToStr(thisEnv,package_list)
     # symDicts=dict()
     # for elem in thisEnv.ChildTableList:
     #     print("Program",elem.EnvName)
@@ -686,9 +630,10 @@ def p_pack_lv6id(p):
     'Pack_Lv6id : LV6ID'
     global packageList, packageName, thisEnv
     packageList.append(p[1].value)
-    symbol=Symbol(p[1].value,'PackageName')
     packageName = "_" + "_".join(packageList)
-
+    symbol=Symbol(p[1].value,'PackageName')
+    symbol.PackageName=packageName
+    
     thisEnv.setSymbol(p[1].value,symbol)
 
     newEnv = SymbolTable(p[1].value, thisEnv)
@@ -712,6 +657,7 @@ def p_user_op_decl_Lv6id(p):
     newEnv = SymbolTable(p[1].value, thisEnv)
     thisEnv.ChildTableList.append(newEnv)
     thisEnv = newEnv
+    thisEnv.setSymbol(p[1].value,symbol)
 
 
 def p_state_lv6id(p):
@@ -746,7 +692,8 @@ def p_opt_body(p):
         if len(p) == 3:
             # NOTE:加上Equation Control block的控制流代码
             # p[0].value += p[1].value
-            p[0].objects.append([p[1],thisEnv.getSymbolInThisEnv(p[1].value)])
+            for elem in p[1].objects:
+                p[0].objects.append([elem,thisEnv.getSymbolInThisEnv(elem.value)])
             # print("Debug info: Opt_body len(p)==3, p[0].value is: ", p[0].value)
         else:
             symbolList = []
@@ -2301,7 +2248,6 @@ def p_apply_expr(p):
     p[0].objects.append(p[4])
     # calledOperators.append(p[1].value) # p[1].value应该是Operator的名称
     # print("thisEnv.PrevTable",thisEnv.PrevTable.EnvName)
-    print("====apply_expr",p[1].value)
     thisEnv.PrevTable.getSymbolInThisEnv(p[1].value).isCalled=True
     globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
     globalSymbol.callOperators.append(p[1].value)
