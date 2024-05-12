@@ -508,14 +508,13 @@ precedence = (
 )
 
 def opKindToStr(symTable):
-    for elem in symTable.ChildTableList:
-        symbol=symTable.getSymbolInThisEnv(elem.EnvName)
-        print("symbol",symbol.Kind)
+    for symtable in symTable.ChildTableList:
+        symbol=symTable.getSymbolInThisEnv(symtable.EnvName)
         if symbol.Kind=='PackageName':
-            opKindToStr(elem)
+            opKindToStr(symtable)
         elif symbol.Kind=='OpKind':
             text=""
-            for variable in elem.SymbolTable.values():
+            for variable in symtable.SymbolTable.values():
                 if variable.Kind == "LocalVar":
                     text += "%s %s;\n"%(type_change(variable.Type),variable.Name)
                 if variable.Kind == "TmpVar":
@@ -524,8 +523,13 @@ def opKindToStr(symTable):
                     else:
                         text += ""
             for variable in symbol.Code:
-                text+=typeToString(variable[1],[variable[0]],elem,elem.EnvName)
-            print("text\n",text)
+                text+=typeToString(variable[1],[variable[0]],symtable,symtable.EnvName)
+            if symbol.isCalled:
+                generate_head_file_for_called_operator(symtable)
+                generate_c_file_for_called_operator(text,symtable)
+            else:
+                generate_head_file(symtable)
+                generate_c_file(text,symtable)
 
 def p_program(p):
     'Program : Decls_zero_or_more'

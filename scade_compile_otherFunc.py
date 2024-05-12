@@ -100,7 +100,6 @@ def objectsToString(objects,thisEnv,op_kind_id):
     sstr=""
     if thisEnv.PrevTable!=None:
         globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
-    print("objectsToString",objects)
     for elem in objects:
         symbol=thisEnv.getSymbolInThisEnv(elem.value)
         #没有被调用，或者被调用了，且是node，则可以使用outC
