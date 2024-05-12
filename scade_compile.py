@@ -477,31 +477,7 @@ def opKindToStr(symTable,package_list):
 def p_program(p):
     'Program : Decls_zero_or_more'
     package_list=[]
-    opKindToStr(thisEnv,package_list)
-    # symDicts=dict()
-    # for elem in thisEnv.ChildTableList:
-    #     print("Program",elem.EnvName)
-    #     symDicts[elem.EnvName]=elem
-    # for obj in p[1].objects:
-    #     text=""
-    #     symtable=symDicts[obj[0].value]
-    #     for elem in symtable.SymbolTable.values():
-    #         if elem.Kind == "LocalVar":
-    #             text += "%s %s;\n"%(type_change(elem.Type),elem.Name)
-    #         if elem.Kind=="TmpVar":
-    #             if elem.StateType != 'equation':
-    #                 text += "%s %s;\n" % (type_change(elem.Type), elem.Name)
-    #             else:
-    #                 text += "%s %s=%s;\n" % (type_change(elem.Type), elem.Name, objectsToString(elem.Code, symtable,symtable.EnvName))
-    #     for elem in obj[1].objects:
-    #         text+=typeToString(elem[1],[elem[0]],symtable,symtable.EnvName)
-    #     nodeSymbol=thisEnv.getSymbol(obj[0].value)
-    #     if nodeSymbol.isCalled:
-    #         generate_head_file_for_called_operator(symtable)
-    #         generate_c_file_for_called_operator(text,symtable)
-    #     else:
-    #         generate_head_file(symtable)
-    #         generate_c_file(text,symtable)           
+    opKindToStr(thisEnv,package_list)         
 
 
 # not finish
@@ -1758,66 +1734,7 @@ def p_path_id(p):
             symbol=Symbol(p[1].value)
             thisEnv.setSymbol(p[1].value,symbol)
         p[0] = p[1]
-
-# def p_apply_expr(p):
-#     '''Apply_expr : Operator LPARENTHESE List RPARENTHESE'''
-#     p[0] = lex_value("Apply_expr")
-#     p[0].objects.append([p[1], lex_value("LPARENTHESE", "(")])
-#     p[0].objects[0].extend(p[3].objects[0]) # 这里是否只意味着一个参数？
-#     p[0].objects[0].extend([lex_value("RPARENTHESE", ")")])
-#     calledOperators.append(p[1].value) # p[1].value应该是Operator的名称
-#     op_kind_symbol=thisEnv.getSymbol(op_kind_id)
-#     op_kind_symbol.callOperators.append(p[1].value)
     
-# # not finish
-# def p_prefix(p):
-#     '''Prefix : Path_id'''
-#     p[0] = p[1]
-
-# # not finish
-# def p_operator(p):
-#     '''Operator : Prefix'''
-#     p[0] = p[1]
-
-# def p_list_expr(p):
-#     '''List_expr : LPARENTHESE List RPARENTHESE'''
-#     p[0]=lex_value("List_expr")
-#     p[0].objects.extend(p[2].objects)
-    
-#     p[0].beforeObjects.extend(p[2].beforeObjects)
-#     p[0].afterObjects.extend(p[2].afterObjects) 
-
-# def p_list(p):
-#     '''List : List_1
-#     | empty'''
-#     p[0] = lex_value("List")
-#     if p[1].strs=="List_1":
-#         p[0].objects.extend(p[1].objects)
-#         p[0].beforeObjects.extend(p[1].beforeObjects)
-#         p[0].afterObjects.extend(p[1].afterObjects)
-
-# def p_list_1(p):
-#     '''List_1 : Expr List_2'''
-#     p[0]=lex_value("List_1")
-#     p[0].objects.extend(p[1].objects)
-#     p[0].beforeObjects.extend(p[1].beforeObjects) # TODO: 搞清楚beforeObjects和afterObjects如何使用
-#     p[0].afterObjects.extend(p[1].afterObjects)
-#     p[0].objects.extend(p[2].objects)
-#     p[0].beforeObjects.extend(p[2].beforeObjects)
-#     p[0].afterObjects.extend(p[2].afterObjects)
-
-# def p_list_2(p):
-#     '''List_2 : COMMA Expr List_2
-#     | empty'''
-#     p[0]=lex_value("List_2")
-#     if len(p)==4:
-#         p[0].objects.extend(p[2].objects)
-#         p[0].beforeObjects.extend(p[2].beforeObjects)
-#         p[0].afterObjects.extend(p[2].afterObjects)
-#         p[0].objects.extend(p[3].objects)
-#         p[0].beforeObjects.extend(p[3].beforeObjects)
-#         p[0].afterObjects.extend(p[3].afterObjects)
-
 def p_id_expr(p):
     '''Id_expr : Path_id
     | SINGLEQUOTE LV6ID
