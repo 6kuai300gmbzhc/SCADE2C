@@ -128,7 +128,6 @@ class SymbolTable:
 
     def printSymbol(self):
         print("=======EnvName",self.EnvName)
-        print(self.EnvName)
         for name,symbol in self.SymbolTable.items():
-            print("name=",symbol.Name," kind=",symbol.Kind," IsInput",symbol.IsInput)
+            print("name=",symbol.Name," kind=",symbol.Kind," IsInput",symbol.IsInput,len(symbol.Code))
         print("=======End")

@@ -43,5 +43,5 @@ outC->mem_pre=kcg_lit_float64(0.0);
 }
 void vwtovr_reset(outC_vwtovr *outC)
 {
-outC->mem_pre=kcg_lit_float64(0.0);
+outC->mem_pre = kcg_lit_float64(0.0);
 }

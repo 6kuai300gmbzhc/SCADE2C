@@ -79,7 +79,6 @@ def generate_head_file_inC_struct(symtable,opKindSymbol):
     return text
 
 def generate_head_file_outC_struct(symtable,opKindSymbol):
-    thisSymbol=symtable.getSymbolInThisEnv(opKindSymbol.Name)
     text = "\n\ntypedef struct {\n"
     for key,symbol in symtable.SymbolTable.items():
         if symbol.IsReturn == True:
@@ -87,13 +86,13 @@ def generate_head_file_outC_struct(symtable,opKindSymbol):
                 continue
             else:
                 text += "%s %s%s;\n"%(type_change(symbol.Type),key,getArrSize(symbol.arrSize))
-    for fbyElem in thisSymbol.fbyList:
+    for fbyElem in opKindSymbol.fbyList:
         fbyIdx = symtable.getSymbolInThisEnv(fbyElem.fbyIdx)
         fbyArr = symtable.getSymbolInThisEnv(fbyElem.fbyArr)
         text += type_change(fbyIdx.Type) + " " +fbyIdx.Name + ";\n" 
         text += "%s %s%s;\n"% (type_change(fbyArr.Type),fbyArr.Name,getArrSize([fbyIdx.Code]))
     
-    if  thisSymbol.isStatemachine == 1:
+    if  opKindSymbol.isStatemachine == 1:
         text += "\nSSM_ST state_nxt;\n"
     text += "} outC_%s;\n"%(opKindSymbol.Name+opKindSymbol.PackageName)
     return text
@@ -211,7 +210,9 @@ def generate_c_file_init_func(symtable,opKindSymbol):
     for key,symbol in symtable.SymbolTable.items():
         if symbol.IsReturn == True:
             realType = ""
-            if symbol.Type not in typeArr:
+            if symbol.Kind == "ApplyOp":
+                print("symbol.Returns",symbol.Returns)
+            elif symbol.Type not in typeArr:
                 realSymbol = getIdType (key,symtable)
                 realType =realSymbol.Type
             if len(symbol.arrSize)!=0:
@@ -232,10 +233,9 @@ def generate_c_file_init_func(symtable,opKindSymbol):
                     text = structInitial(text, "outC->" + symbol.Name, realSymbol)
                 elif len(symbol.arrSize) == 0 and symbol.Kind != 'FbyArr':
                     text += "outC->%s=%s;\n" % (key, symbolInit(symbol, symtable))
-    thisSymbol=symtable.getSymbolInThisEnv(opKindSymbol.Name)
-    if thisSymbol.isStatemachine:
-        text += "outC -> state_nxt=%s;\n" % thisSymbol.initState
-    for elem in thisSymbol.fbyList:
+    if opKindSymbol.isStatemachine:
+        text += "outC -> state_nxt=%s;\n" % opKindSymbol.initState
+    for elem in opKindSymbol.fbyList:
         text += "for(int idx=0;idx<%s;idx++){\n%s[idx]=%s;\n}\n" % (
             objectsToString(symtable.getSymbolInThisEnv(elem.fbyIdx).Code, symtable,opKindSymbol.EnvName),
             symtable.getSymbolInThisEnv(elem.fbyArr).changeName(symtable),
@@ -245,15 +245,14 @@ def generate_c_file_init_func(symtable,opKindSymbol):
         
 def generate_c_file_reset_func(symtable,opKindSymbol):
     text = ""
-    thisSymbol=symtable.getSymbolInThisEnv(opKindSymbol.Name)
     name = opKindSymbol.Name
     packageName = opKindSymbol.PackageName
     text += "void %s_reset%s(outC_%s *outC)\n{\n"%(name,packageName,name+packageName)
     for para in symtable.SymbolTable.values():
         if para.Kind == "Pre":
             text += "outC->%s = %s;\n"%(para.Name,symbolInit(para,symtable))
-    if thisSymbol.isStatemachine:
-        text += "outC->state_nxt=%s;\n"%thisSymbol.initState
+    if opKindSymbol.isStatemachine:
+        text += "outC->state_nxt=%s;\n"%opKindSymbol.initState
     text += "}\n"
     return text
 
@@ -276,7 +275,6 @@ def generate_c_file(symtable,opKindSymbol):
         f.write(c_content)
 
 def getName(initStr):
-    symbol = thisEnv.getSymbolInThisEnv(op_kind_id)
     for i in range(1000):
         target = initStr
         if i != 0:
@@ -469,7 +467,8 @@ def opKindToStr(symTable,package_list):
             opKindToStr(symtable,package_list)
             package_list.pop()
         elif symbol.Kind=='OpKind':
-            symbol.PackageName = "_"+"_".join(package_list)
+            if len(package_list)!=0:
+                symbol.PackageName = "_"+"_".join(package_list)
             generate_head_file(symtable,symbol)
             generate_c_file(symtable,symbol)
 
@@ -589,10 +588,10 @@ def p_user_op_decl(p):
     'User_op_decl : Op_kind Interface_status User_op_decl_Lv6id User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
     p[0]=lex_value("User_op_decl")
     global thisEnv
-    globalSymbol = thisEnv.PrevTable.getSymbol(p[3].value)  # 该symbol名字在 User_op_decl_Lv6id已经被set
-    localSymbol=thisEnv.getSymbolInThisEnv(p[3].value)
+    globalSymbol = thisEnv.PrevTable.getSymbolInThisEnv(p[3].value)  # 该symbol名字在 User_op_decl_Lv6id已经被set
+    # localSymbol=thisEnv.getSymbolInThisEnv(p[3].value)
     if isStatemachine == 1:
-        localSymbol.isStatemachine = True  # 该node name为状态机名字
+        globalSymbol.isStatemachine = True  # 该node name为状态机名字
     for idx in p[5].objects:
         globalSymbol.Params.append(idx.value)
     for idx in p[7].objects:
@@ -608,7 +607,8 @@ def p_pack_lv6id(p):
     packageList.append(p[1].value)
     packageName = "_" + "_".join(packageList)
     symbol=Symbol(p[1].value,'PackageName')
-    symbol.PackageName=packageName
+    if len(packageList)!=0:
+        symbol.PackageName=packageName
     
     thisEnv.setSymbol(p[1].value,symbol)
 
@@ -633,7 +633,6 @@ def p_user_op_decl_Lv6id(p):
     newEnv = SymbolTable(p[1].value, thisEnv)
     thisEnv.ChildTableList.append(newEnv)
     thisEnv = newEnv
-    thisEnv.setSymbol(p[1].value,symbol)
 
 
 def p_state_lv6id(p):
@@ -1245,7 +1244,8 @@ def p_simple_equation(p):
             opSym=thisEnv.getSymbolInThisEnv(p[3].objects[idx][opLexIdx].value)#表示在该env下函数名所对应的符号
             if applySym.hasInternalState == True:
                 outStrucName=getName("tmpStruct")
-                outSymbol=Symbol(outStrucName,"TmpVar","outC_"+opSym.Name)
+                outSymbol=Symbol(outStrucName,"ApplyOp","outC_"+opSym.Name)
+                outSymbol.IsReturn=True 
                 thisEnv.setSymbol(outStrucName,outSymbol)
                 opSym.Returns.append(lex_value('',outStrucName))
                 opSym.StateType='ApplyExpr'
@@ -1729,8 +1729,9 @@ def p_path_id(p):
         thisEnv.setSymbol(symbol.Name, symbol) 
         p[0]=lex_value("Path_id",symbol.Name)
     else: # 这种情况下，不存在包的前缀，应从当前Env或前序Env中查找symbol
-        tmpSymbol=thisEnv.getSymbolInThisAndPreEnv(p[1].value)
-        if tmpSymbol==None:
+        preSymbol=thisEnv.getSymbolInThisAndPreEnv(p[1].value)
+        thisSymbol=thisEnv.getSymbolInThisEnv(p[1].value)
+        if thisSymbol==None and preSymbol.Kind =="OpKind":
             symbol=Symbol(p[1].value)
             thisEnv.setSymbol(p[1].value,symbol)
         p[0] = p[1]
@@ -1781,14 +1782,13 @@ def p_expr(p):
     p[0].afterObjects = p[1].afterObjects
 
 
-# arrow对应于C语言的三目运算符
 # pre：需要在output中添加一个mem
 def p_tempo_expr(p):
     '''Tempo_expr : Expr ARROW Expr
     | PRE Expr
     | FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE'''
     # 若是init操作符，则需要向out结构体中添加init。若有重名，则使用init1（依此递增）
-    symbol = thisEnv.getSymbolInThisEnv(op_kind_id)
+    symbol = thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
     p[0] = lex_value("Tempo_expr")
     if len(p) == 4 and p[2].value == '->':
         if len(p[1].objects) != len(p[3].objects):
@@ -2154,6 +2154,7 @@ def p_arith_expr_binOp(p):
 def p_apply_expr(p):
     '''Apply_expr : Operator LPARENTHESE List RPARENTHESE'''
     p[0] = lex_value("Apply_expr")
+    thisEnv.printSymbol()
     applySymbol=thisEnv.getSymbolInThisEnv(p[1].value)
     applySymbol.StateType="ApplyExpr"
     for obj in p[3].objects:
@@ -2165,6 +2166,7 @@ def p_apply_expr(p):
     p[0].objects.append(p[4])
     # calledOperators.append(p[1].value) # p[1].value应该是Operator的名称
     # print("thisEnv.PrevTable",thisEnv.PrevTable.EnvName)
+    #TODO:不一定是上一层，根据路径去查找
     thisEnv.PrevTable.getSymbolInThisEnv(p[1].value).isCalled=True
     globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
     globalSymbol.callOperators.append(p[1].value)
