@@ -1,70 +1,88 @@
+/*
+ * Copyright (C) 2020  ANSYS, Inc. ALL RIGHTS RESERVED.
+ * Copyright (C) 2015 ESTEREL TECHNOLOGIES SAS. ALL RIGHTS RESERVED.
+ * This source file may be used and distributed without restriction provided that this copyright statement is not removed from the file and that any derivative work contains this copyright notice.
+ * 
+ * Warranty
+ * ANSYS, Inc makes no warranty of any kind with regard to the use of this Software, either expressed or implied, including, but not limited to the fitness for a particular purpose.
+ */
+
+
+/*
+ * macro_libmathext.h
+ *
+ * Copyright(c) 2003-2009 Esterel Technologies
+ *
+ *
+ */
+
 #include <math.h>
 #include "kcg_types.h"
 
 
 /* Inverse hyperbolic cosine */
-#define AcoshR_mathext(In) ((kcg_float64) log(In +sqrt(((In) * (In)) - 1.0)))
+#define AcoshR64_mathext_mathextimpl(In) ((kcg_float64) log(In +sqrt(((In) * (In)) - 1.0)))
 
 /* Inverse Cosine */
-#define AcosR_mathext(In) ((kcg_float64) acos(In))
+#define AcosR64_mathext_mathextimpl(In) ((kcg_float64) acos(In))
 
 /* Inverse hyperbolic sine */
 /*	The Result is slightly different from Simulink result
 	Difference is of kind  E-13 
 	(for big input (for example E4) difference is of kind E-8) */
-#define AsinhR_mathext(In) ((kcg_float64) log((In) + sqrt(1.0 + ((In) * (In)))))
+#define AsinhR64_mathext_mathextimpl(In) ((kcg_float64) log((In) + sqrt(1.0 + ((In) * (In)))))
 
 
 /* Inverse sine */
-#define AsinR_mathext(In) ((kcg_float64) asin(In))
+#define AsinR64_mathext_mathextimpl(In) ((kcg_float64) asin(In))
 
 /* Inverse hyperbolic tangent */
-#define AtanhR_mathext(In) ((kcg_float64) (0.5 * log((1 + (In)) / (1 - (In)))))
+#define AtanhR64_mathext_mathextimpl(In) ((kcg_float64) (0.5 * log((1 + (In)) / (1 - (In)))))
 
 /* Inverse tangent */
-#define AtanR_mathext(In) ((kcg_float64) atan(In))
+#define AtanR64_mathext_mathextimpl(In) ((kcg_float64) atan(In))
 
 /* Four quadrant inverse tangent */
-#define Atan2R_mathext(In1, In2) ((kcg_float64) atan2(In1, In2))
+#define Atan2R64_mathext_mathextimpl(In1, In2) ((kcg_float64) atan2(In1, In2))
 
 
 /* Hyperbolic cosine */
-#define CoshR_mathext(In) ((kcg_float64) cosh(In))
+#define CoshR64_mathext_mathextimpl(In) ((kcg_float64) cosh(In))
 
 /* Cosine */
-#define CosR_mathext(In) ((kcg_float64) cos(In))
+#define CosR64_mathext_mathextimpl(In) ((kcg_float64) cos(In))
 
 /* Exponential */
-#define ExpR_mathext(In) ((kcg_float64) exp(In))
+#define ExpR64_mathext_mathextimpl(In) ((kcg_float64) exp(In))
 
 /* Logarithm with base e */
-#define LnR_mathext(In) ((kcg_float64) log(In))
+#define LnR64_mathext_mathextimpl(In) ((kcg_float64) log(In))
 
 /* Logarithm with base 10 */
-#define LogR_mathext(In) ((kcg_float64) log10(In))
+#define LogR64_mathext_mathextimpl(In) ((kcg_float64) log10(In))
 
 /* Power */
-#define PowerR_mathext(In, Power)  ((kcg_float64) pow(In, Power))
+#define PowerR64_mathext_mathextimpl(In, Power)  ((kcg_float64) pow(In, Power))
 /* Note: In SCADE 5.1, there was an assert in simulation mode to check validity of parameters.  */
 /*       In SCADE 6.0, this operator will likely end-up not being an imported operator anymore. */
-#define PowerRR_mathext(In, Power) ((kcg_float64) pow(In, Power))
+#define PowerRR64_mathext_mathextimpl(In, Power) ((kcg_float64) pow(In, Power))
 
 
 /* Hyperbolic sine */
-#define SinhR_mathext(In) ((kcg_float64) sinh(In))
+#define SinhR64_mathext_mathextimpl(In) ((kcg_float64) sinh(In))
 
 /* Sine */
-#define SinR_mathext(In) ((kcg_float64) sin(In))
+#define SinR64_mathext_mathextimpl(In) ((kcg_float64) sin(In))
 
 /* Sqrt */
-#define SqrtR_mathext(In) ((kcg_float64) sqrt(In))
+#define SqrtR64_mathext_mathextimpl(In) ((kcg_float64) sqrt(In))
 
 
 /* Tangent */
-#define TanR_mathext(In) ((kcg_float64) tan(In))
+#define TanR64_mathext_mathextimpl(In) ((kcg_float64) tan(In))
 
 /* Hyperbolic tangent */
-#define TanhR_mathext(In) ((kcg_float64) tanh(In))
+#define TanhR64_mathext_mathextimpl(In) ((kcg_float64) tanh(In))
 
 /* 10^x */
-#define TenPowR_mathext(In) ((kcg_float64) pow(10, In))
+#define TenPowR64_mathext_mathextimpl(In) ((kcg_float64) pow(10, In))

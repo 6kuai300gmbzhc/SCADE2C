@@ -1,10 +1,30 @@
 import copy
 import queue
+from SymbolClass import Symbol, SymbolTable, fbyClass
 from scade_lex import scade_lex, get_tokens, tokens, lex_value
 
 intArr = ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]
 floatArr = ["float32", "float64"]
 typeArr=['bool','int8','int16','int64','int32','uint8','uint16','uint32','uint64','float32','float64','char','enum','array','struct']
+
+isPackage = 0
+# global isStatemachine
+isStatemachine = 0
+
+packageName = "" # 用于记录当前需要添加的包后缀，如"_P1_P2"
+packageList = list() # 用于记录当前进入的包的名称，如["P1", "P2"]
+op_kind_id = ""
+op_kind = ""
+
+scade_lexer = scade_lex()
+GlobalEnv = SymbolTable('Global')  #global的符号表中的符号为各个函数的函数名，该符号只填充了Returns,Params,isStatemachine,hasInternalState
+                                   #global的符号表中还有子符号表，名为其子函数名的符号表，各个Package的符号表
+thisEnv = GlobalEnv
+program = None
+
+# 全局变量，用于存储被调用过的函数名称
+calledOperators = []
+
 
 class Node:
     def __init__(self,type=''):
@@ -62,17 +82,11 @@ def topologyReady(symbolList):
                 nodeList[adjIdx2].outNum+=1
                 adjList[adjIdx2].append(adjIdx1)
     return topologySort(symbolList,adjList,nodeList)
-
-def getRootSymbolTable(thisEnv):
-    if thisEnv.PrevTable!=None:
-        return getRootSymbolTable(thisEnv.PrevTable)
-    else:
-        return thisEnv
     
 def getIdType(symbolName,symbolTable):
     symbol=symbolTable.getSymbolInThisEnv(symbolName)
     if symbol!=None and symbol.Type not in typeArr:
-        rootSymbolTable=getRootSymbolTable(symbolTable)
+        rootSymbolTable=GlobalEnv
         return getIdType(symbol.Type,rootSymbolTable)
     else:
         return symbol
@@ -83,7 +97,7 @@ def getStructElemType(lex,symtable):
         if idx != len(lex.objects) - 1:
             symbol = symbol.FieldList[lex.objects[idx].value]
             while symbol.Type not in typeArr:
-                symbol = getRootSymbolTable(symtable).getSymbolInThisEnv(symbol.Type)
+                symbol = GlobalEnv.getSymbolInThisEnv(symbol.Type)
         else:
             return symbol.FieldList[lex.objects[idx].value]
 
