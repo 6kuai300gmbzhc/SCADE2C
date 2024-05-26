@@ -152,12 +152,12 @@ let
 tel
 end;
 
-# package P5
-# function func1(in1,in2:float64) returns(out1:float64)
-# let
-# 	out1=P4::myAdd(in1,in2);
-# tel
-# end;'''
+package P5
+function func1(in1,in2:float64) returns(out1:float64)
+let
+    out1=P4::myAdd(in1,in2);
+tel
+end;'''
 #     strs='''
 # package P1
 # function func1(in1:int64) returns(out1:int64)

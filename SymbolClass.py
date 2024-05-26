@@ -30,7 +30,8 @@ class Symbol:
         # self.TypeType = TypeType           #类型定义的基本类型，或者Struct、Enum
         # self.Clock = Clock                 #变量的时钟
         self.isTemplate = False
-        self.templateType = dict()
+        self.templateTypeDict = dict()
+        self.templateTypeList = list()
 
         self.IsInput = False
         self.IsReturn = False
@@ -127,10 +128,15 @@ class SymbolTable:
             symbol = self.SymbolTable.pop(name)
         return symbol
 
+    def getSymbolTable(self,name):
+        for table in self.ChildTableList:
+            if table.EnvName==name:
+                return table
+
     def printSymbol(self):
         print("=======EnvName",self.EnvName)
         for name,symbol in self.SymbolTable.items():
-            print("name=",symbol.Name," kind=",symbol.Kind," type=",symbol.Type," IsInput",symbol.IsInput,len(symbol.Code))
+            print("name=",name,symbol.Name," kind=",symbol.Kind," type=",symbol.Type," IsInput",symbol.IsInput," packageName=",symbol.PackageName," isTemplate=",symbol.isTemplate,len(symbol.Code))
         print("=======End")
 
     def printChildTable(self):

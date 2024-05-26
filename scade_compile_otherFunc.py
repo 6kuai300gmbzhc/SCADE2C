@@ -86,8 +86,11 @@ def topologyReady(symbolList):
 def getIdType(symbolName,symbolTable):
     symbol=symbolTable.getSymbolInThisEnv(symbolName)
     if symbol!=None and symbol.Type not in typeArr:
-        rootSymbolTable=GlobalEnv
-        return getIdType(symbol.Type,rootSymbolTable)
+        if symbol.Type[0]=='\'':
+            return symbolTable.getSymbolInThisEnv(symbol.Type)
+        else:
+            rootSymbolTable=GlobalEnv
+            return getIdType(symbol.Type,rootSymbolTable)
     else:
         return symbol
 
@@ -115,7 +118,6 @@ def objectsToString(objects,thisEnv,op_kind_id):
     if thisEnv.PrevTable!=None:
         globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
     for elem in objects:
-        # thisEnv.printSymbol()
         symbol=thisEnv.getSymbolInThisAndPreEnv(elem.value)
         #没有被调用，或者被调用了，且是node，则可以使用outC
         if elem.strs=='lv6id' and ((not globalSymbol.isCalled) or (globalSymbol.isCalled and globalSymbol.hasInternalState==True) ):    
@@ -139,7 +141,9 @@ def objectsToString(objects,thisEnv,op_kind_id):
                     sstr+="*"
             sstr+=symbol.Name
         elif elem.strs=='Path_id':
-            sstr+=symbol.changeName(thisEnv)
+            # print("symbol.Kind=",symbol.Kind)
+            sstr+=elem.value
+            # sstr+=symbol.changeName(thisEnv)
         elif elem.strs=='integernum':
             sstr += "kcg_lit_%s(%s)" % (elem.type,str(elem.value))
         elif elem.strs=='floatnum':
