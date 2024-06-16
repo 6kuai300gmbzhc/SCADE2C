@@ -1,0 +1,297 @@
+const D_Vdt : float64 = 0.5;
+const D_Vdt1 : float64 = 0.15;
+const D_Vit1 : float64 = 3;
+const D_Vit2 : float64 = 7;
+const D_Vit3 : float64 = 2;
+const D_Vpt : float64 = 2;
+const k : float64 = 1;
+const kd : float64 = 5;
+const ki1 : float64 = 3;
+const ki2 : float64 = 0.01;
+const ki3 : float64 = 1.5;
+const kp : float64 = 1;
+const Ts : float64 = 0.02;
+
+package pwlinear
+  function LimiterUnSymmetrical(
+      LUS_Input : 'T;
+      LowLimit : 'T;
+      HighLimit : 'T)
+    returns (LUS_Output : 'T)
+    where 'T numeric
+  var
+    _L1 : bool;
+    _L11 : 'T;
+    _L13 : 'T;
+    _L15 : 'T;
+    _L2 : bool;
+    _L3 : 'T;
+    _L9 : 'T;
+  let
+    _L1= _L3 #1 >= _L15;
+    _L2= _L3 #2 <= _L13;
+    _L3= LUS_Input;
+    _L9= #3 if _L1 then (_L15) else (_L11);
+    _L11= #6 if _L2 then (_L13) else (_L3);
+    _L13= LowLimit;
+    _L15= HighLimit;
+    LUS_Output= _L9;
+    assume A1 : LowLimit #3 <= HighLimit;
+  tel
+end;
+
+node vwtovr(vw : float64 last = 70)
+  returns (vr : float64 default = 70 last = 70)
+var
+  _L1 : float64;
+  _L2 : float64;
+  _L3 : float64;
+  _L4 : float64;
+  _L5 : float64;
+  _L6 : float64;
+  _L8 : bool;
+let
+  _L1= (70) #1 -> (_L2);
+  _L2= #1 pre (_L5);
+  _L3= _L1 #1 - _L4;
+  _L4= 0.09;
+  _L5= #1 if _L8 then (_L6) else (_L3);
+  _L6= vw;
+  _L8= _L3 #1 < _L6;
+  vr= _L5;
+tel
+
+node err(vw : float64) returns (err : float64 last = 0.0)
+var
+  _L1 : float64;
+  _L2 : float64;
+  _L3 : float64;
+  _L4 : float64;
+  _L5 : float64;
+  _L6 : bool;
+  _L7 : float64;
+let
+  err= _L4;
+  _L1= vw;
+  _L2= #1 vwtovr(_L1);
+  _L3= _L2 #1 - _L1;
+  _L4= #1 if _L6 then (_L3) else (_L7);
+  _L5= 0;
+  _L6= _L3 #1 > _L5;
+  _L7= 0;
+tel
+
+node errtovp(err : float64) returns (vp : float64 last = 0; temp2 : float64)
+var
+  _L1 : float64;
+  _L2 : float64;
+  _L4 : float64;
+  _L7 : bool;
+  _L6 : float64;
+  _L9 : float64;
+  _L10 : float64;
+  _L11 : float64;
+  _L12 : float64;
+let
+  temp2= _L4;
+  _L1= err;
+  _L2= D_Vpt;
+  _L4= _L1 #1 - _L2;
+  _L6= #1 if _L7 then (_L11) else (_L12);
+  _L7= _L4 #1 > _L9;
+  _L9= 0;
+  vp= _L6;
+  _L10= kp;
+  _L11= _L4 #1 * _L10;
+  _L12= 0;
+tel
+
+node errtovi0(
+    err : float64 last = 0;
+    Num0 : float64 last = 0;
+    vi0 : float64 last = 0;
+    vi10 : float64 last = 0)
+  returns (
+    vi : float64 last = 0;
+    temp4 : float64 last = 0;
+    Num : float64 default = 0 last = 0;
+    vi1 : float64 last = 0)
+var
+  _L1 : float64;
+  _L2 : float64;
+  _L3 : float64;
+let
+  _L1= err;
+  _L2= D_Vit1;
+  _L3= _L1 #1 - _L2;
+  temp4= _L3;
+  activate IfBlock1 if temp4 #17 <= 0
+    then let
+      Num= Num0 #3 + 0.02;
+      vi= vi10 #2 - Ts #3 * Ts #3 * Num #3 * Num #3 * ki2;
+    tel
+    else if temp4 #19 > D_Vit2
+    then let
+      Num= 0;
+      vi= vi0 #2 + Ts #2 * ki1;
+      vi1= vi;
+    tel
+    else let
+      Num= 0;
+      vi= vi0 #1 + Ts #1 * ki3 #1 * temp4;
+      vi1= vi;
+    tel
+  returns ..;
+tel
+
+node errtovi(err : float64 last = 0)
+  returns (vi : float64 last = 0; vi1 : float64; Num_Abs : float64 last = 0)
+var
+  _L4 : float64;
+  _L3 : float64;
+  _L2 : float64;
+  _L1 : float64;
+  _L5 : float64;
+  _L6 : float64;
+  _L7 : float64;
+  _L8 : bool;
+  _L11 : bool;
+  _L15 : float64;
+  _L25 : float64;
+  _L29 : float64;
+  _L31 : float64;
+  _L39 : float64;
+  _L40 : float64;
+  _L41 : float64;
+  _L42 : float64;
+  _L44 : float64;
+  _L47 : float64;
+  _L48 : float64;
+  _L52 : float64;
+  _L51 : float64;
+  _L54 : float64;
+  _L53 : float64;
+let
+  _L1, _L2, _L3, _L4= #1 errtovi0(_L5, _L48, _L52, _L54);
+  _L5= err;
+  _L6= #1 if _L11 then (_L40) else (_L29);
+  _L7= #2 if _L8 then (_L42) else (_L4);
+  _L8= _L4 #1 > _L31;
+  vi1= _L15;
+  _L11= _L1 #1 < _L39;
+  _L15= #3 if _L11 then (_L44) else (_L7);
+  _L25= #4 if _L11 then (_L41) else (_L3);
+  Num_Abs= _L25;
+  vi= _L6;
+  _L29= #1 pwlinear::LimiterUnSymmetrical(_L1, 0.0, 10.0);
+  _= _L2;
+  _L31= 10.0;
+  _L39= 0;
+  _L40= 0;
+  _L41= 0;
+  _L42= 10.0;
+  _L44= 0.0;
+  _L47= #1 pre (_L25);
+  _L48= (0) #1 -> (_L47);
+  _L51= #2 pre (_L6);
+  _L52= (0) #2 -> (_L51);
+  _L53= #3 pre (_L15);
+  _L54= (0) #3 -> (_L53);
+tel
+
+
+node errtovd0(err : float64 last = 0)
+  returns (temp3 : float64; vd0 : float64 last = 0)
+var
+  _L2 : float64;
+  _L3 : float64;
+  _L4 : float64;
+  _L5 : bool;
+  _L6 : float64;
+  _L7 : float64;
+  _L8 : float64;
+  _L9 : float64;
+  _L10 : float64;
+  _L11 : float64;
+  _L12 : float64;
+  _L13 : float64;
+let
+  _L2= _L4 #1 - _L3;
+  temp3= _L2;
+  _L3= D_Vdt;
+  _L4= err;
+  _L5= _L2 #1 > _L6;
+  _L6= 0;
+  vd0= _L7;
+  _L7= #1 if _L5 then (_L13) else (_L6);
+  _L8= err;
+  _L9= #1 pre (_L8);
+  _L10= (0) #1 -> (_L9);
+  _L11= _L8 #2 - _L10;
+  _L12= kd;
+  _L13= _L11 #1 * _L12;
+tel
+
+node errtovd(err : float64 last = 0) returns (vd : float64 last = 0)
+var
+  _L1 : float64;
+  _L3 : float64;
+  _L2 : float64;
+  _L4 : float64;
+let
+  _L1= err;
+  _L2, _L3= #1 errtovd0(_L1);
+  _L4= #1 pwlinear::LimiterUnSymmetrical(_L3, 0.0, 1 #1 / 0);
+  _= _L2;
+  vd= _L4;
+tel
+
+
+node pbm(command : float64; vw : float64; t : float64)
+  returns (
+    brkcmd : float64 last = 0;
+    vref : float64;
+    num : float64;
+    sumerror : float64)
+var
+  _L8 : float64;
+  _L9 : float64;
+  _L10 : float64;
+  _L13 : float64;
+  _L12 : float64;
+  _L11 : float64;
+  _L15 : float64;
+  _L14 : float64;
+  _L17 : bool;
+  _L19 : float64;
+  _L20 : bool;
+  _L21 : float64;
+  _L22 : float64;
+  _L25 : float64;
+  _L26 : float64;
+  _L27 : float64;
+  _L29 : float64;
+  _L32 : float64;
+let
+  _L8= vw;
+  _L9= #1 err(_L8);
+  _L10= _L29 #1 + _L14 #1 + _L11;
+  _L11, _L12, _L13= #1 errtovi(_L9);
+  _L14, _L15= #1 errtovp(_L9);
+  _L17= _L10 #1 < _L32;
+  _L19= #1 if _L17 then (_L32) else (_L22);
+  _L20= _L10 #1 > _L21;
+  _L21= command;
+  _L22= #2 if _L20 then (_L21) else (_L10);
+  _L25= command;
+  _L26= _L25 #1 - _L19;
+  brkcmd= _L26;
+  sumerror= _L11;
+  num= _L13;
+  _L27= #1 vwtovr(_L8);
+  vref= _L27;
+  _= _L15;
+  _= _L12;
+  _L29= #1 errtovd(_L9);
+  _L32= 0;
+tel

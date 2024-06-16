@@ -87,7 +87,8 @@ def getIdType(symbolName,symbolTable):
     symbol=symbolTable.getSymbolInThisEnv(symbolName)
     if symbol!=None and symbol.Type not in typeArr:
         if symbol.Type[0]=='\'':
-            return symbolTable.getSymbolInThisEnv(symbol.Type)
+            # return symbolTable.getSymbolInThisEnv(symbol.Type)
+            return symbol
         else:
             rootSymbolTable=GlobalEnv
             return getIdType(symbol.Type,rootSymbolTable)
@@ -113,10 +114,10 @@ def checkElemInStruct(symbolName,params,idx,thisEnv):
     else:
         return checkElemInStruct(realSymbol.FieldList[params[idx].value].Type,params,idx+1,thisEnv)
     
-def objectsToString(objects,thisEnv,op_kind_id):
+def objectsToString(objects,thisEnv):
     sstr=""
     if thisEnv.PrevTable!=None:
-        globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
+        globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(thisEnv.EnvName)
     for elem in objects:
         symbol=thisEnv.getSymbolInThisAndPreEnv(elem.value)
         #没有被调用，或者被调用了，且是node，则可以使用outC
@@ -130,7 +131,7 @@ def objectsToString(objects,thisEnv,op_kind_id):
                 else:
                     sstr+=symbol.changeName(thisEnv)
             if len(elem.arrSize)!=0:
-                sstr+=objectsToString(elem.arrSize,thisEnv,op_kind_id)
+                sstr+=objectsToString(elem.arrSize,thisEnv)
             if len(elem.objects)!=0:
                 if checkElemInStruct(symbol.Name,elem.objects,0,thisEnv):
                     for structElem in elem.objects:
@@ -197,30 +198,30 @@ def getArrIdx(arrSizeList,idxList,stIdx,idxStrList):
         getArrIdx(arrSizeList,idxList,stIdx+1,idxStrList)
 
 
-def typeToString(symbol,leftLex,symtable,op_kind_id):
+def typeToString(symbol,leftLex,symtable):
     str=""
-    leftName=objectsToString(leftLex,symtable,op_kind_id)
+    leftName=objectsToString(leftLex,symtable)
     if symbol.StateType=='equation':
         str+=leftName
         str+=' = '
-        str+=objectsToString(symbol.Code,symtable,op_kind_id)
+        str+=objectsToString(symbol.Code,symtable)
         str+=';\n'
     elif symbol.StateType=='memcpy':
-        str+='memcpy(&%s,&%s,sizeof(%s));\n'%(leftName,objectsToString(symbol.Code,symtable,op_kind_id),symbol.Type)
+        str+='memcpy(&%s,&%s,sizeof(%s));\n'%(leftName,objectsToString(symbol.Code,symtable),symbol.Type)
     elif symbol.StateType=='ifCondition':
         ifNode=symbol.Code[0]
-        str+=blockToString(ifNode,leftName,symtable,op_kind_id)
+        str+=blockToString(ifNode,leftName,symtable)
     elif symbol.StateType=='switchCondition':
         switchNode=symbol.Code[0]
-        str+=blockToString(switchNode,leftName,symtable,op_kind_id)
+        str+=blockToString(switchNode,leftName,symtable)
     elif symbol.StateType=='fbyBlock':
-        str+="if(%s){\n for(int idx=0;idx<%s;idx++){\n"%(objectsToString(symbol.Code[0],symtable,op_kind_id),objectsToString(symbol.Code[4],symtable,op_kind_id))
-        str+="%s[idx]=%s;\n}\n"%(objectsToString(symbol.Code[2],symtable,op_kind_id),objectsToString(symbol.Code[5],symtable,op_kind_id))
-        str+="%s=0;\n"%objectsToString(symbol.Code[1],symtable,op_kind_id)
+        str+="if(%s){\n for(int idx=0;idx<%s;idx++){\n"%(objectsToString(symbol.Code[0],symtable),objectsToString(symbol.Code[4],symtable))
+        str+="%s[idx]=%s;\n}\n"%(objectsToString(symbol.Code[2],symtable),objectsToString(symbol.Code[5],symtable))
+        str+="%s=0;\n"%objectsToString(symbol.Code[1],symtable)
         str+="}\n"
-        str+="%s=%s[%s];\n"%(leftName,objectsToString(symbol.Code[2],symtable,op_kind_id),objectsToString(symbol.Code[1],symtable,op_kind_id))
-        str+="%s[%s]=%s;\n"%(objectsToString(symbol.Code[2],symtable,op_kind_id),objectsToString(symbol.Code[1],symtable,op_kind_id),objectsToString(objectsToString(symbol.Code[3],symtable,op_kind_id)))
-        str+="%s=(%s+1)%%(%s);\n"%(objectsToString(symbol.Code[1],symtable,op_kind_id),objectsToString(symbol.Code[1],symtable,op_kind_id),objectsToString(symbol.Code[4],symtable,op_kind_id))
+        str+="%s=%s[%s];\n"%(leftName,objectsToString(symbol.Code[2],symtable),objectsToString(symbol.Code[1],symtable))
+        str+="%s[%s]=%s;\n"%(objectsToString(symbol.Code[2],symtable),objectsToString(symbol.Code[1],symtable),objectsToString(objectsToString(symbol.Code[3],symtable)))
+        str+="%s=(%s+1)%%(%s);\n"%(objectsToString(symbol.Code[1],symtable),objectsToString(symbol.Code[1],symtable),objectsToString(symbol.Code[4],symtable))
     elif symbol.StateType=='struct':
         for key,value in symbol.FieldValueList.items():
             tmpLex=[]
@@ -228,7 +229,7 @@ def typeToString(symbol,leftLex,symtable,op_kind_id):
             objects=key.split('.')
             for elem in objects:
                 tmpLex.append(lex_value('',"."+elem))
-            str+=typeToString(value,tmpLex,symtable,op_kind_id)
+            str+=typeToString(value,tmpLex,symtable)
     elif symbol.StateType=='arrayList':
         arrSizeList=getArrSizeList(symbol.arrSize)
         idxList=[0 for _ in range(len(arrSizeList))]
@@ -237,61 +238,61 @@ def typeToString(symbol,leftLex,symtable,op_kind_id):
         for idx in range(0,len(symbol.arrValueList)):
             leftLex.append(lex_value('',idxStrList[idx]))
             symbol.arrValueList[idx].Type=symbol.Type
-            str+=typeToString(symbol.arrValueList[idx],leftLex,symtable,op_kind_id)
+            str+=typeToString(symbol.arrValueList[idx],leftLex,symtable)
             leftLex.pop()
     elif symbol.StateType=='ApplyExpr':
         str+="%s("%symbol.Name
         for idx in range(len(symbol.Params)):
             if idx==0:
-                str+="%s"%objectsToString([symbol.Params[idx]],symtable,op_kind_id)
+                str+="%s"%objectsToString(symbol.Params[idx],symtable)
             else:
-                str+=",%s"%objectsToString([symbol.Params[idx]],symtable,op_kind_id)
+                str+=",%s"%objectsToString(symbol.Params[idx],symtable)
         for idx in range(len(symbol.Returns)):
             if len(symbol.Params)==0:
-                str+="&%s"%objectsToString([symbol.Returns[idx]],symtable,op_kind_id)
+                str+="&%s"%objectsToString([symbol.Returns[idx]],symtable)
             else:
-                str+=",&%s"%objectsToString([symbol.Returns[idx]],symtable,op_kind_id)
+                str+=",&%s"%objectsToString([symbol.Returns[idx]],symtable)
         str+=");\n"
     return str
 
-def blockToString(root,leftName,symtable,op_kind_id):
+def blockToString(root,leftName,symtable):
     str=""
     if root.type=='ifCondition':
-        str+="if(%s)"%(objectsToString(root.value,symtable,op_kind_id))
+        str+="if(%s)"%(objectsToString(root.value,symtable))
         if len(root.childNodeList)==1:
             leftNode=root.childNodeList[0]
-            str+="{\n%s}\n"%blockToString(leftNode,leftName,symtable,op_kind_id)
+            str+="{\n%s}\n"%blockToString(leftNode,leftName,symtable)
         elif len(root.childNodeList)==2:
             leftNode=root.childNodeList[0]
             rightNode=root.childNodeList[1]
-            str+="{\n%s}else{\n%s}\n"%(blockToString(leftNode,leftName,symtable,op_kind_id),blockToString(rightNode,leftName,symtable,op_kind_id))
+            str+="{\n%s}else{\n%s}\n"%(blockToString(leftNode,leftName,symtable),blockToString(rightNode,leftName,symtable))
     elif root.type=='equation':
-        str+="%s = %s;\n"%(leftName,objectsToString(root.value,symtable,op_kind_id))
+        str+="%s = %s;\n"%(leftName,objectsToString(root.value,symtable))
     elif root.type=='switchCondition':
-        str += "switch(%s){\n" % (objectsToString(root.value, symtable,op_kind_id))
+        str += "switch(%s){\n" % (objectsToString(root.value, symtable))
         isDefault = False
         for elem in root.childNodeList:
             if elem.pattern[0].value == '_':
                 isDefault = True
                 str += "default :\n{\n"
             else:
-                str += "case %s :\n{\n" % objectsToString(elem.pattern, symtable,op_kind_id)
-            str += "%s" % (blockToString(elem, leftName, symtable,op_kind_id))
+                str += "case %s :\n{\n" % objectsToString(elem.pattern, symtable)
+            str += "%s" % (blockToString(elem, leftName, symtable))
             str += "break;\n}\n"
         if isDefault == False:
             str += "default :\nbreak;\n}\n"
     elif root.type=='fbyBlock':
         str += "if(%s){\n for(int idx=0;idx<%s;idx++){\n" % (
-        objectsToString(root.value[0], symtable,op_kind_id), objectsToString(root.value[4], symtable,op_kind_id))
-        str += "%s[idx]=%s;\n}\n" % (objectsToString(root.value[2], symtable,op_kind_id), objectsToString(root.value[5], symtable,op_kind_id))
-        str += "%s=0;\n" % objectsToString(root.value[1], symtable,op_kind_id)
+        objectsToString(root.value[0], symtable), objectsToString(root.value[4], symtable))
+        str += "%s[idx]=%s;\n}\n" % (objectsToString(root.value[2], symtable), objectsToString(root.value[5], symtable))
+        str += "%s=0;\n" % objectsToString(root.value[1], symtable)
         str += "}\n"
         str += "%s=%s[%s];\n" % (
-        leftName, objectsToString(root.value[2], symtable,op_kind_id), objectsToString(root.value[1], symtable,op_kind_id))
-        str += "%s[%s]=%s;\n" % (objectsToString(root.value[2], symtable,op_kind_id), objectsToString(root.value[1], symtable,op_kind_id),
-                                 objectsToString(root.value[3], symtable,op_kind_id))
-        str += "%s=(%s+1)%%(%s);\n" % (objectsToString(root.value[1], symtable,op_kind_id), objectsToString(root.value[1], symtable,op_kind_id),
-                                       objectsToString(root.value[4], symtable,op_kind_id))
+        leftName, objectsToString(root.value[2], symtable), objectsToString(root.value[1], symtable))
+        str += "%s[%s]=%s;\n" % (objectsToString(root.value[2], symtable), objectsToString(root.value[1], symtable),
+                                 objectsToString(root.value[3], symtable))
+        str += "%s=(%s+1)%%(%s);\n" % (objectsToString(root.value[1], symtable), objectsToString(root.value[1], symtable),
+                                       objectsToString(root.value[4], symtable))
     return str
 
 def recursiveGetRely(type,node,tmpList):
@@ -333,7 +334,9 @@ def getRely(symbol,symtable,relyList):
         for _,value in symbol.FieldValueList.items():
             tmpList.extend(value.Code)
     elif symbol.StateType=='ApplyExpr':
-        tmpList.extend(symbol.Params)
+        print("getRely",symbol.Params)
+        for par in symbol.Params:
+            tmpList.extend(par)
     for elem in tmpList:
         if elem.strs=='lv6id':
             tmpSymbol = symtable.getSymbolInThisEnv(elem.value)

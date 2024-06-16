@@ -39,7 +39,7 @@ class Scade_generate:
                 if v.Kind=="Const":
                     h_content += "extern const %s %s%s;\n"%(type_change(v.Type),k+v.PackageName,getArrSize(v.arrSize))
                     if v.External !=True:
-                        c_content += "const %s %s%s = %s;\n"%(type_change(v.Type),k + v.PackageName,getArrSize(v.arrSize),objectsToString(v.Code,temp,temp.EnvName))
+                        c_content += "const %s %s%s = %s;\n"%(type_change(v.Type),k + v.PackageName,getArrSize(v.arrSize),objectsToString(v.Code,temp))
             for table in temp.ChildTableList:
                 que.put(table)
         h_content+="\n\n#endif"
@@ -131,73 +131,41 @@ def testInputDirFiles():
             gen.gen_const_file()
             gen.gen_sensor_file()
             gen.gen_types_file()
+            gen.gen_assign_file()
+            gen.gen_imported_types_file()
             gen.gen_macro_libmathext_file()
             # kcg_types.h需要依赖kcg_assign.h, 目前的生成只需要简单的拷贝
 
 
 if __name__=='__main__':
     #test files in input dir
-    # testInputDirFiles()
-#     strs='''package P4
-# function myAdd(in1:int64;in2:int64) returns(out1:int64)
+    testInputDirFiles()
+#     strs='''
+# package P4
+# function myAdd(in1:'T;in2:'T) returns(out1:'T) where 'T numeric
 # let
 # 	out1=in1+in2;
 # tel
-# end;'''
-    strs='''
-package P4
-function myAdd(in1:'T;in2:'T) returns(out1:'T) where 'T numeric
-let
-	out1=in1+in2;
-tel
-end;
-
-package P5
-function func1(in1,in2:float64) returns(out1:float64)
-let
-    out1=P4::myAdd(in1,in2);
-tel
-end;
-'''
-#     strs='''
-# package P1
-# function func1(in1:int64) returns(out1:int64)
-# let
-# 	out1=in1+2;
-# tel
-# package pp1
-# function func2(in1:int64) returns(out1:int64)
-# let
-# 	out1=in1-2;
-# tel
-# end;
 # end;
 
-# package P2
-# package P3
-# function func3(in1:int64) returns(out1:int64)
+# package P5
+# function func1(in1,in2:float64) returns(out1:float64)
 # let
-# 	out1=in1+1;
+#     out1=P4::myAdd(in1,in2);
 # tel
 # end;
-# function func2(in1:int64) returns(out1,out2,out3:int64)
-# let
-# 	out1=P1::func1(in1);
-# 	out2=P1::pp1::func2(in1);
-# 	out3=P3::func3(in1);
-# tel
-# end;'''
-    program,symboltable=scade_compile.get_parse(strs)
-    print("*************************************")
-    print(program)
-    print("*************************************")
-    gen=Scade_generate(program,symboltable)
-    gen.gen_const_file()
-    gen.gen_sensor_file()
-    gen.gen_types_file()
-    gen.gen_assign_file()
-    gen.gen_imported_types_file()
-    gen.gen_macro_libmathext_file()
+# '''
+    # program,symboltable=scade_compile.get_parse(strs)
+    # print("*************************************")
+    # print(program)
+    # print("*************************************")
+    # gen=Scade_generate(program,symboltable)
+    # gen.gen_const_file()
+    # gen.gen_sensor_file()
+    # gen.gen_types_file()
+    # gen.gen_assign_file()
+    # gen.gen_imported_types_file()
+    # gen.gen_macro_libmathext_file()
 
 
 
