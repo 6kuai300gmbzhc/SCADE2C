@@ -13,8 +13,8 @@ isStatemachine = 0
 
 packageName = "" # 用于记录当前需要添加的包后缀，如"_P1_P2"
 packageList = list() # 用于记录当前进入的包的名称，如["P1", "P2"]
-op_kind_id = ""
-op_kind = ""
+op_kind_id = "" #node的lv6id
+op_kind = "" #node or function
 
 scade_lexer = scade_lex()
 GlobalEnv = SymbolTable('Global')  #global的符号表中的符号为各个函数的函数名，该符号只填充了Returns,Params,isStatemachine,hasInternalState
@@ -334,7 +334,6 @@ def getRely(symbol,symtable,relyList):
         for _,value in symbol.FieldValueList.items():
             tmpList.extend(value.Code)
     elif symbol.StateType=='ApplyExpr':
-        print("getRely",symbol.Params)
         for par in symbol.Params:
             tmpList.extend(par)
     for elem in tmpList:

@@ -1,5 +1,6 @@
 import ply.lex as lex
 import sys
+import re
 
 class lex_value:
     def __init__(self, strs = "", value = "", Type = "", scope = "") -> None:
@@ -152,6 +153,8 @@ reserved = {
 tokens = [
     "INTEGERNUM",  # ++
     "FLOATNUM",  # ++
+    "TYPED_FLOAT",
+    "TYPED_INTEGER",
     "CHARACTER", #++
     "LV6ID",  # id
     "LV6IDREF",  # ++
@@ -350,13 +353,21 @@ def t_CHARACTER(t):
 
 
 def t_FLOATNUM(t):
-    r'((\d+\.\d*)|(\.\d+))([eE][+-]?\d+)?'
-    t.value = lex_value('floatnum', float(t.value))
+    r'((\d+\.\d*)|(\.\d+))([eE][+-]?\d+)?(_f32|_f64)?'
+    suffix_pattern=re.compile(r'(_f32|_f64)$')
+    if suffix_pattern.search(t.value):
+        t.type=reserved.get(t.value.split("_")[-1],"TYPED_FLOAT")
+    else:
+        t.value=lex_value('floatnum',float(t.value))
     return t
 
 # decimal and hexadecimal
 def t_INTEGERNUM(t):
-    r'(0x[0-9a-fA-F]+)|(0b[01]+)|(0[0-7]+)|0|([1-9][0-9]*)'
+    r'(0x[0-9a-fA-F]+)|(0b[01]+)|(0[0-7]+)|0|([1-9][0-9]*)(_i|_ui)?(8|16|32|64)?'
+    suffix_pattern=re.compile(r'(_ui|_i)(8|16|32|64)$')
+    if suffix_pattern.search(t.value):
+        t.type=reserved.get(t.value.split("_")[-1],"TYPED_INTEGER")
+        return t
     if len(t.value)>1 and t.value[1]=='x':
         num=int(t.value,16)
     elif len(t.value)>1 and t.value[1]=='b':
@@ -397,9 +408,9 @@ def get_tokens(inputString):
             tok.value = lex_value(tok.value, tok.value)
         string_tokens.append(tok)
     get_scope(string_tokens) # 计算出scope
-    print("------------TOKENS-------------")
-    print(string_tokens)
-    print("-----------END TOKENS----------\n")
+    # print("------------TOKENS-------------")
+    # print(string_tokens)
+    # print("-----------END TOKENS----------\n")
     return string_tokens
 
 def token2string(token):

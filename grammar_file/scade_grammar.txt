@@ -1,16 +1,13 @@
 Program ::= Decls_zero_or_more
 
-Path ::= id Path_1
+Path_id ::= id Path_1
 
 Path_1 ::= :: id Path_1
-        ::= $
-
-Path_id ::= id
-        ::= Path :: id
+       ::= $
 
 Package_decl ::= package Visibility_zero_or_one id Decls_zero_or_more end ;
 
-Decls ::= open Path
+Decls ::= open Path_id
        ::= Package_decl
        ::= Group_block
        ::= Type_block
@@ -48,28 +45,26 @@ Numeric_kind ::= numeric
               ::= signed
               ::= unsigned
 
-Type_expr ::= bool Type_expr_2
-           ::= signed << Expr >> Type_expr_2
-           ::= int8 Type_expr_2
-           ::= int16 Type_expr_2
-           ::= int32 Type_expr_2
-           ::= int64 Type_expr_2
-           ::= unsigned << Expr >> Type_expr_2
-           ::= uint8 Type_expr_2
-           ::= uint16 Type_expr_2
-           ::= uint32 Type_expr_2
-           ::= uint64 Type_expr_2
-           ::= float32 Type_expr_2
-           ::= float64 Type_expr_2
-           ::= char Type_expr_2
-           ::= Path_id Type_expr_2
-           ::= Typevar Type_expr_2
-           ::= {  Field_decl Type_expr_1 } Type_expr_2
+Type_expr ::= bool
+           ::= signed << Expr >> 
+           ::= int8 
+           ::= int16 
+           ::= int32 
+           ::= int64 
+           ::= unsigned << Expr >> 
+           ::= uint8 
+           ::= uint16 
+           ::= uint32 
+           ::= uint64 
+           ::= float32 
+           ::= float64 
+           ::= char 
+           ::= Path_id 
+           ::= Typevar 
+           ::= {  Field_decl Type_expr_1 }
+           ::= Type_expr EXPONENT Expr
 
 Type_expr_1 ::= , Field_decl Type_expr_1
-             ::= $
-
-Type_expr_2 ::= ^ Expr Type_expr_2
              ::= $
 
 Field_decl ::= id : Type_expr
@@ -224,7 +219,7 @@ Return ::= returns Returns_var
 
 Returns_var ::= Returns_var_1 Returns_var_2
 
-Returns_var_1 ::= id , Returns_var_1
+Returns_var_1 ::= Returns_var_1 id ,
                ::= $
 
 Returns_var_2 ::= id
@@ -259,6 +254,7 @@ State_decl_2 ::= final
               ::= $
 
 State_decl_3 ::= unless State_decl_5
+             ::= $
 
 State_decl_5 ::= Transition ; State_decl_6
 

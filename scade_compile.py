@@ -5,6 +5,8 @@ from ply.yacc import yacc
 import re
 from scade_compile_otherFunc import *
 
+outputDir=""
+
 def type_change(type):
     list = ["char", "bool", "float32", "float64", "size", "uint64", "uint32", "uint16", "uint8", "int64", "int32",
             "int16", "int8"]
@@ -144,8 +146,8 @@ def generate_head_file(symtable,opKindSymbol):
         text += generate_head_file_init_func(symtable,opKindSymbol)
             
     text += "#endif\n"
-    filename = "./output/" + name + ".h"
-    # print(text)
+    filename = outputDir + "/include/" + name + ".h"
+    print(text)
     with open(filename, 'w') as f:
         f.write(text)
 
@@ -275,8 +277,8 @@ def generate_c_file(symtable,opKindSymbol):
         c_content += generate_c_file_init_func(symtable,opKindSymbol)
         c_content += generate_c_file_reset_func(symtable,opKindSymbol)
 
-    filename = "./output/%s.c" % (name)
-    # print(c_content)
+    filename = "%s/src/%s.c" % (outputDir,name)
+    print(c_content)
     with open(filename, 'w') as f:
         f.write(c_content)
 
@@ -315,11 +317,9 @@ def getTypefromObjects(objects):
 
 
 def setObjectsType(objects, type):
-    print("setObjectType=",objects)
     for elem in objects:
         symbol = thisEnv.getSymbolInThisEnv(elem.value)
         if symbol == None:
-            print("elem.value None",elem.value)
             if elem.type == '':
                 elem.type = type
         else:
@@ -388,7 +388,6 @@ def structAssign(leftLex,leftSymbol, typeSymbol, elem):
                     tmpName+="."
             type=getStructElemType(leftLex,thisEnv).Type
             leftLex.type=type
-            print("memcpy setObjectsType=",elem[1]," type",type)
             setObjectsType(elem[1],type)
             leftSymbol.StateType='struct'
             elemSymbol=Symbol()
@@ -665,6 +664,10 @@ def p_user_op_decl(p):
     thisEnv = thisEnv.PrevTable
     globalSymbol.Code.extend(p[10].objects)
 
+    global op_kind_id,op_kind
+    op_kind_id=''
+    op_kind=''
+
 
 def p_pack_lv6id(p):
     'Pack_Lv6id : LV6ID'
@@ -749,9 +752,10 @@ def p_opt_body(p):
                         for elem in symbol.arrValueList:
                             getRely(elem,thisEnv,symbol.relyList)
                     elif symbol.StateType=='ApplyExpr':
+                        getRely(symbol,thisEnv,symbol.relyList)
                         for retVal in symbol.Returns:
                             retSymbol=thisEnv.getSymbolInThisEnv(retVal.value)
-                            getRely(symbol,thisEnv,symbol.relyList)
+                            retSymbol.relyList.append(symbol.Name)
                     else:
                         getRely(symbol,thisEnv,symbol.relyList)
                     symbolList.append(symbol)
@@ -1316,7 +1320,6 @@ def p_simple_equation(p):
             leftIdx += 1
             continue
         typeSymbol = getIdType(p[1].objects[leftIdx].value, thisEnv)
-        print("left===",p[1].objects[leftIdx]," type=",typeSymbol.Type)
         leftSymbol = thisEnv.getSymbolInThisEnv(p[1].objects[leftIdx].value)
         arrSizeList = getArrSizeList(leftSymbol.arrSize)
         isApply,applySymbol,symtable,opLexIdx=isApplyExpr(p[3].objects[idx])#applySymbol表示对应的函数在全局所对应的符号,symtable表示该函数对应的符号表
@@ -1324,7 +1327,6 @@ def p_simple_equation(p):
             type=typeSymbol.Type
             for par in p[3].objects[idx][opLexIdx+1].objects:
                 setObjectsType(par,type)
-            print("p[3].objects[idx][opLexIdx+1]=",p[3].objects[idx][opLexIdx+1])
             opSym=thisEnv.getSymbolInThisEnv(p[3].objects[idx][opLexIdx].value)#表示在该env下函数名所对应的符号
             if applySymbol.isTemplate == True:
                 applySymbol=setTemplateType(applySymbol,thisEnv,symtable,p[1].objects[leftIdx:leftIdx+len(applySymbol.Params)],p[3].objects[idx])
@@ -1340,11 +1342,13 @@ def p_simple_equation(p):
                 outStrucName=getName("tmpStruct")
                 outSymbol=Symbol(outStrucName,"ApplyOut","outC_"+opSym.Name)
                 outSymbol.Code.append(lex_value("",opSym.Name))
+                outSymbol.relyList.append(opSym.Name)
                 outSymbol.IsReturn=True
                 thisEnv.setSymbol(outStrucName,outSymbol)
                 opSym.Returns.append(lex_value('lv6id',outStrucName))
                 opSym.StateType='ApplyExpr'
                 p[0].objects.append(lex_value("lv6id",opSym.Name))
+                p[0].objects.append(lex_value("lv6id",outStrucName))
                 for elem in applySymbol.Returns:
                     leftSymbol=thisEnv.getSymbolInThisEnv(p[1].objects[leftIdx].value)
                     leftSymbol.StateType='equation'
@@ -1355,7 +1359,6 @@ def p_simple_equation(p):
                 #可能存在1+applyExpr(para1,para2)的情况
                 if len(applySymbol.Returns)==1:
                     leftSymbol.StateType='equation'
-                    print("p[3].objects[idx]=",p[3].objects[idx])
                     for elem in p[3].objects[idx]:
                         if elem.type == "ApplyParams":
                             leftSymbol.Code.append(lex_value('','('))
@@ -1382,7 +1385,6 @@ def p_simple_equation(p):
                 p[0].objects.append(p[1].objects[leftIdx])
             else:
                 #使用memcpy
-                print("memcpy")
                 leftSymbol.StateType='memcpy'
                 leftSymbol.Code.extend(p[3].objects[idx])
                 p[0].objects.append(p[1].objects[leftIdx])
@@ -1836,15 +1838,6 @@ def p_field_decl(p):
     p[0].objects.append(field)
 
 
-def p_type_expr_2(p):
-    '''Type_expr_2 : EXPONENT Expr Type_expr_2
-    | empty'''
-    p[0] = lex_value("Type_expr_2")
-    if len(p) == 4:
-        p[0].objects.append(p[2].objects[0])
-        p[0].objects.extend(p[3].objects)
-
-
 def p_path_1(p):
     '''Path_1 : DOUBLECOLON LV6ID Path_1
     | empty '''
@@ -1885,7 +1878,6 @@ def getFuncName(funcList,symtable):
                         tmpTable = childSym
                         break
                 if flag == False:
-                    print("flag=",flag)
                     curFunc = inspect.currentframe()
                     callerFunc = curFunc.f_back
                     funcName = callerFunc.f_code.co_name
@@ -2518,7 +2510,6 @@ def p_array_expr(p):
     | Expr Index'''
     p[0]=lex_value("Array_expr")
     if len(p)==4:
-        print("array_expr",p[2].objects)
         p[0].strs='Array_list_expr'
         p[0].objects.extend(p[2].objects)
     else:
@@ -2580,9 +2571,10 @@ def p_empty(p):
 def get_parse(strs):
     global program
     parser = yacc(debug=1)
-    parse = yacc(debug=1)
-    pattern = r'\#[\w]+'
-    strs = re.sub(pattern, '', strs)
+    pattern1 = r'\#[\w]+'
+    strs = re.sub(pattern1, '', strs)
+    pattern2 = re.compile(r'/\*.*?\*/',re.DOTALL)
+    strs = re.sub(pattern2,'',strs)
     print("=======strs=====\n", strs)
     string_tokens = get_tokens(strs)
     scade_lexer.set_tokens(string_tokens)

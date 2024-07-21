@@ -1,0 +1,480 @@
+====outputDir= ./output/test_errtovi
+=======strs=====
+ const D_Vdt : float64 = 0.5;
+const D_Vdt1 : float64 = 0.15;
+const D_Vit1 : float64 = 3;
+const D_Vit2 : float64 = 7;
+const D_Vit3 : float64 = 2;
+const D_Vpt : float64 = 2;
+const k : float64 = 1;
+const kd : float64 = 5;
+const ki1 : float64 = 3;
+const ki2 : float64 = 0.01;
+const ki3 : float64 = 1.5;
+const kp : float64 = 1;
+const Ts : float64 = 0.02;
+
+package pwlinear
+  function LimiterUnSymmetrical(
+      LUS_Input : 'T;
+      LowLimit : 'T;
+      HighLimit : 'T)
+    returns (LUS_Output : 'T)
+    where 'T numeric
+  var
+    _L1 : bool;
+    _L11 : 'T;
+    _L13 : 'T;
+    _L15 : 'T;
+    _L2 : bool;
+    _L3 : 'T;
+    _L9 : 'T;
+  let
+    _L1= _L3  >= _L15;
+    _L2= _L3  <= _L13;
+    _L3= LUS_Input;
+    _L9=  if _L1 then (_L15) else (_L11);
+    _L11=  if _L2 then (_L13) else (_L3);
+    _L13= LowLimit;
+    _L15= HighLimit;
+    LUS_Output= _L9;
+    assume A1 : LowLimit  <= HighLimit;
+  tel
+end;
+
+node errtovi0(
+    err : float64 last = 0;
+    Num0 : float64 last = 0;
+    vi0 : float64 last = 0;
+    vi10 : float64 last = 0)
+  returns (
+    vi : float64 last = 0;
+    temp4 : float64 last = 0;
+    Num : float64 default = 0 last = 0;
+    vi1 : float64 last = 0)
+var
+  _L1 : float64;
+  _L2 : float64;
+  _L3 : float64;
+let
+  _L1= err;
+  _L2= D_Vit1;
+  _L3= _L1  - _L2;
+  temp4= _L3;
+  activate IfBlock1 if temp4  <= 0
+    then let
+      Num= Num0  + 0.02;
+      vi= vi10  - Ts  * Ts  * Num  * Num  * ki2;
+    tel
+    else if temp4  > D_Vit2
+    then let
+      Num= 0;
+      vi= vi0  + Ts  * ki1;
+      vi1= vi;
+    tel
+    else let
+      Num= 0;
+      vi= vi0  + Ts  * ki3  * temp4;
+      vi1= vi;
+    tel
+  returns ..;
+tel
+
+node errtovi(err : float64 last = 0)
+  returns (vi : float64 last = 0; vi1 : float64; Num_Abs : float64 last = 0)
+var
+  _L4 : float64;
+  _L3 : float64;
+  _L2 : float64;
+  _L1 : float64;
+  _L5 : float64;
+  _L6 : float64;
+  _L7 : float64;
+  _L8 : bool;
+  _L11 : bool;
+  _L15 : float64;
+  _L25 : float64;
+  _L29 : float64;
+  _L31 : float64;
+  _L39 : float64;
+  _L40 : float64;
+  _L41 : float64;
+  _L42 : float64;
+  _L44 : float64;
+  _L47 : float64;
+  _L48 : float64;
+  _L52 : float64;
+  _L51 : float64;
+  _L54 : float64;
+  _L53 : float64;
+let
+  _L1, _L2, _L3, _L4=  errtovi0(_L5, _L48, _L52, _L54);
+  _L5= err;
+  _L6=  if _L11 then (_L40) else (_L29);
+  _L7=  if _L8 then (_L42) else (_L4);
+  _L8= _L4  > _L31;
+  vi1= _L15;
+  _L11= _L1  < _L39;
+  _L15=  if _L11 then (_L44) else (_L7);
+  _L25=  if _L11 then (_L41) else (_L3);
+  Num_Abs= _L25;
+  vi= _L6;
+  _L29=  pwlinear::LimiterUnSymmetrical(_L1, 0.0, 10.0);
+  _= _L2;
+  _L31= 10.0;
+  _L39= 0;
+  _L40= 0;
+  _L41= 0;
+  _L42= 10.0;
+  _L44= 0.0;
+  _L47=  pre (_L25);
+  _L48= (0)  -> (_L47);
+  _L51=  pre (_L6);
+  _L52= (0)  -> (_L51);
+  _L53=  pre (_L15);
+  _L54= (0)  -> (_L53);
+tel
+
+
+thisEnv= Global
+当前函数为 LimiterUnSymmetrical
+当前函数为 errtovi0
+当前函数为 errtovi
+ApplyExpr errtovi0
+#ifndef LIMITERUNSYMMETRICAL_PWLINEAR_FLOAT64_H_
+#define LIMITERUNSYMMETRICAL_PWLINEAR_FLOAT64_H_
+#include "kcg_types.h"
+#include "kcg_consts.h"
+#include "kcg_sensors.h"
+#include "macro_libmathext64.h"
+extern kcg_float64 LimiterUnSymmetrical_pwlinear_float64(kcg_float64 LUS_Input,kcg_float64 LowLimit,kcg_float64 HighLimit);
+#endif
+
+#include "LimiterUnSymmetrical_pwlinear_float64.h"
+kcg_float64 LimiterUnSymmetrical_pwlinear_float64(kcg_float64 LUS_Input,kcg_float64 LowLimit,kcg_float64 HighLimit)
+{
+kcg_float64 LUS_Output;
+kcg_bool _L1;
+kcg_float64 _L11;
+kcg_float64 _L13;
+kcg_float64 _L15;
+kcg_bool _L2;
+kcg_float64 _L3;
+kcg_float64 _L9;
+kcg_float64 ifTmp;
+kcg_float64 ifTmp1;
+_L3 = LUS_Input;
+_L13 = LowLimit;
+_L15 = HighLimit;
+_L1 = (_L3>=_L15);
+_L2 = (_L3<=_L13);
+if(_L2){
+ifTmp1 = _L13;
+}else{
+ifTmp1 = _L3;
+}
+_L11 = ifTmp1;
+if(_L1){
+ifTmp = _L15;
+}else{
+ifTmp = _L11;
+}
+_L9 = ifTmp;
+LUS_Output = _L9;
+return LUS_Output;
+
+}
+
+#ifndef ERRTOVI0_H_
+#define ERRTOVI0_H_
+#include "kcg_types.h"
+#include "kcg_consts.h"
+#include "kcg_sensors.h"
+#include "macro_libmathext64.h"
+
+
+typedef struct {
+kcg_float64 vi;
+kcg_float64 temp4;
+kcg_float64 Num;
+kcg_float64 vi1;
+} outC_errtovi0;
+extern void errtovi0(kcg_float64 err,kcg_float64 Num0,kcg_float64 vi0,kcg_float64 vi10,outC_errtovi0 *outC);
+
+extern void errtovi0_reset(outC_errtovi0 *outC);
+
+extern void errtovi0_init(outC_errtovi0 *outC);
+#endif
+
+#include "errtovi0.h"
+void errtovi0(kcg_float64 err,kcg_float64 Num0,kcg_float64 vi0,kcg_float64 vi10,outC_errtovi0 *outC)
+{
+kcg_float64 _L1;
+kcg_float64 _L2;
+kcg_float64 _L3;
+_L1 = err;
+_L2 = D_Vit1;
+_L3 = (_L1-_L2);
+outC->temp4 = _L3;
+if((outC->temp4<=kcg_lit_float64(0))){
+outC->Num = (Num0+kcg_lit_float64(0.02));
+}else{
+if((outC->temp4>D_Vit2)){
+outC->Num = kcg_lit_float64(0);
+}else{
+outC->Num = kcg_lit_float64(0);
+}
+}
+if((outC->temp4<=kcg_lit_float64(0))){
+outC->vi = (vi10-((((Ts*Ts)*outC->Num)*outC->Num)*ki2));
+}else{
+if((outC->temp4>D_Vit2)){
+outC->vi = (vi0+(Ts*ki1));
+}else{
+outC->vi = (vi0+((Ts*ki3)*outC->temp4));
+}
+}
+if(!(outC->temp4<=kcg_lit_float64(0))){
+if((outC->temp4>D_Vit2)){
+outC->vi1 = outC->vi;
+}else{
+outC->vi1 = outC->vi;
+}
+}
+
+}
+void errtovi0_init(outC_errtovi0 *outC)
+{
+outC->vi=kcg_lit_float64(0);
+outC->temp4=kcg_lit_float64(0);
+outC->Num=kcg_lit_float64(0);
+outC->vi1=kcg_lit_float64(0);
+}
+void errtovi0_reset(outC_errtovi0 *outC)
+{
+}
+
+#ifndef ERRTOVI_H_
+#define ERRTOVI_H_
+#include "kcg_types.h"
+#include "kcg_consts.h"
+#include "kcg_sensors.h"
+#include "macro_libmathext64.h"
+#include "errtovi0.h"
+#include "LimiterUnSymmetrical_pwlinear_float64.h"
+
+
+typedef struct {
+kcg_float64 err;
+
+} inC_errtovi;
+
+
+typedef struct {
+kcg_float64 vi;
+kcg_float64 vi1;
+kcg_float64 Num_Abs;
+outC_errtovi0 tmpStruct;
+kcg_float64 mem_pre;
+kcg_bool init;
+kcg_float64 mem_pre1;
+kcg_bool init1;
+kcg_float64 mem_pre2;
+kcg_bool init2;
+} outC_errtovi;
+
+extern void errtovi(inC_errtovi *inC, outC_errtovi *outC);
+
+extern void errtovi_reset(outC_errtovi *outC);
+
+extern void errtovi_init(outC_errtovi *outC);
+#endif
+
+#include "errtovi.h"
+void errtovi(inC_errtovi *inC, outC_errtovi *outC)
+{
+kcg_float64 _L4;
+kcg_float64 _L3;
+kcg_float64 _L2;
+kcg_float64 _L1;
+kcg_float64 _L5;
+kcg_float64 _L6;
+kcg_float64 _L7;
+kcg_bool _L8;
+kcg_bool _L11;
+kcg_float64 _L15;
+kcg_float64 _L25;
+kcg_float64 _L29;
+kcg_float64 _L31;
+kcg_float64 _L39;
+kcg_float64 _L40;
+kcg_float64 _L41;
+kcg_float64 _L42;
+kcg_float64 _L44;
+kcg_float64 _L47;
+kcg_float64 _L48;
+kcg_float64 _L52;
+kcg_float64 _L51;
+kcg_float64 _L54;
+kcg_float64 _L53;
+kcg_float64 ifTmp;
+kcg_float64 ifTmp1;
+kcg_float64 ifTmp2;
+kcg_float64 ifTmp3;
+kcg_float64 tmp_pre=outC->mem_pre;
+kcg_float64 initTmp;
+kcg_float64 tmp_pre1=outC->mem_pre1;
+kcg_float64 initTmp1;
+kcg_float64 tmp_pre2=outC->mem_pre2;
+kcg_float64 initTmp2;
+_L1 = outC->tmpStruct.vi;
+_L2 = outC->tmpStruct.temp4;
+_L3 = outC->tmpStruct.Num;
+_L4 = outC->tmpStruct.vi1;
+_L5 = inC->err;
+_L29 = LimiterUnSymmetrical_pwlinear_float64(_L1,kcg_lit_float64(0.0),kcg_lit_float64(10.0));
+_L31 = kcg_lit_float64(10.0);
+_L39 = kcg_lit_float64(0);
+_L40 = kcg_lit_float64(0);
+_L41 = kcg_lit_float64(0);
+_L42 = kcg_lit_float64(10.0);
+_L44 = kcg_lit_float64(0.0);
+_L47 = tmp_pre;
+if(outC->init){
+initTmp = kcg_lit_float64(0);
+}else{
+initTmp = _L47;
+}
+_L51 = tmp_pre1;
+if(outC->init1){
+initTmp1 = kcg_lit_float64(0);
+}else{
+initTmp1 = _L51;
+}
+_L53 = tmp_pre2;
+if(outC->init2){
+initTmp2 = kcg_lit_float64(0);
+}else{
+initTmp2 = _L53;
+}
+_L8 = (_L4>_L31);
+_L11 = (_L1<_L39);
+if(_L11){
+ifTmp3 = _L41;
+}else{
+ifTmp3 = _L3;
+}
+_L48 = initTmp;
+_L52 = initTmp1;
+_L54 = initTmp2;
+errtovi0(_L5,_L48,_L52,_L54,&outC->tmpStruct);
+if(_L11){
+ifTmp = _L40;
+}else{
+ifTmp = _L29;
+}
+if(_L8){
+ifTmp1 = _L42;
+}else{
+ifTmp1 = _L4;
+}
+_L25 = ifTmp3;
+outC->Num_Abs = _L25;
+outC->mem_pre = _L25;
+_L6 = ifTmp;
+_L7 = ifTmp1;
+if(_L11){
+ifTmp2 = _L44;
+}else{
+ifTmp2 = _L7;
+}
+outC->vi = _L6;
+outC->mem_pre1 = _L6;
+_L15 = ifTmp2;
+outC->mem_pre2 = _L15;
+outC->vi1 = _L15;
+if(outC->init)
+{
+outC->init = kcg_false;
+}
+if(outC->init1)
+{
+outC->init1 = kcg_false;
+}
+if(outC->init2)
+{
+outC->init2 = kcg_false;
+}
+
+}
+void errtovi_init(outC_errtovi *outC)
+{
+outC->vi=kcg_lit_float64(0);
+outC->vi1=kcg_lit_float64(0.0);
+outC->Num_Abs=kcg_lit_float64(0);
+errtovi0_init(&outC->tmpStruct);
+outC->mem_pre=kcg_lit_float64(0.0);
+outC->init=kcg_true;
+outC->mem_pre1=kcg_lit_float64(0.0);
+outC->init1=kcg_true;
+outC->mem_pre2=kcg_lit_float64(0.0);
+outC->init2=kcg_true;
+}
+void errtovi_reset(outC_errtovi *outC)
+{
+errtovi0_reset(&outC->tmpStruct);
+outC->mem_pre = kcg_lit_float64(0.0);
+outC->mem_pre1 = kcg_lit_float64(0.0);
+outC->mem_pre2 = kcg_lit_float64(0.0);
+}
+
+************************************* ./input/test_errtovi.txt
+None
+*************************************
+====const h_file
+#ifndef _KCG_CONSTS_H_
+#define _KCG_CONSTS_H_
+#include "kcg_types.h"
+
+extern const kcg_float64 D_Vdt;
+extern const kcg_float64 D_Vdt1;
+extern const kcg_float64 D_Vit1;
+extern const kcg_float64 D_Vit2;
+extern const kcg_float64 D_Vit3;
+extern const kcg_float64 D_Vpt;
+extern const kcg_float64 k;
+extern const kcg_float64 kd;
+extern const kcg_float64 ki1;
+extern const kcg_float64 ki2;
+extern const kcg_float64 ki3;
+extern const kcg_float64 kp;
+extern const kcg_float64 Ts;
+
+
+#endif
+====const c_file
+#include "kcg_consts.h"
+const kcg_float64 D_Vdt = kcg_lit_float64(0.5);
+const kcg_float64 D_Vdt1 = kcg_lit_float64(0.15);
+const kcg_float64 D_Vit1 = kcg_lit_float64(3);
+const kcg_float64 D_Vit2 = kcg_lit_float64(7);
+const kcg_float64 D_Vit3 = kcg_lit_float64(2);
+const kcg_float64 D_Vpt = kcg_lit_float64(2);
+const kcg_float64 k = kcg_lit_float64(1);
+const kcg_float64 kd = kcg_lit_float64(5);
+const kcg_float64 ki1 = kcg_lit_float64(3);
+const kcg_float64 ki2 = kcg_lit_float64(0.01);
+const kcg_float64 ki3 = kcg_lit_float64(1.5);
+const kcg_float64 kp = kcg_lit_float64(1);
+const kcg_float64 Ts = kcg_lit_float64(0.02);
+
+====sensor
+#ifndef _KCG_SENSORS_H_
+#define _KCG_SENSORS_H_
+#include "kcg_types.h"
+
+
+#endif
+====types_file
+
+outputDir finish ./output/test_errtovi
