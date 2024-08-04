@@ -9,7 +9,7 @@ class Symbol:
         self.Name = Name  # 标识符的名字
         self.Kind = Kind  # FbyIdx,FbyArr,Pre(重置函数中使用了),TmpVar
         #Type.structElem,OpKind,Sensor,State,Const,Var,Init,ApplyOp,ApplyOut
-        #Global,PackageName,OpKind
+        #Global,Package,OpKind
 
         self.Type = Type  # Type类型(int , float,enum,array,struct)
                             #Node还是function,struct
@@ -120,7 +120,7 @@ class SymbolTable:
         if not self.getSymbolInThisEnv(name):
             self.SymbolTable[name] = symbol
         else:
-            print(name, 'symbol error')
+            print(name, 'symbol error ! Env.Name=',self.EnvName)
 
     def popSymbol(self, name):
         symbol = None
@@ -136,7 +136,7 @@ class SymbolTable:
     def printSymbol(self):
         print("=======EnvName",self.EnvName)
         for name,symbol in self.SymbolTable.items():
-            print("name=",name,symbol.Name," kind=",symbol.Kind," type=",symbol.Type," IsInput",symbol.IsInput," packageName=",symbol.PackageName," isTemplate=",symbol.isTemplate,len(symbol.Code))
+            print("name=",name,symbol.Name," kind=",symbol.Kind," type=",symbol.Type," IsInput",symbol.IsInput," packageName=",symbol.PackageName," isTemplate=",symbol.isTemplate,len(symbol.Code)," relyList=",symbol.relyList)
         print("=======End")
 
     def printChildTable(self):

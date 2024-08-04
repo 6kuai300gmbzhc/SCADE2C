@@ -1,4 +1,4 @@
-const D_Vdt : float64 = 0.5;
+ const D_Vdt : float64 = 0.5;
 
 const D_Vdt1 : float64 = 0.15;
 
@@ -299,7 +299,7 @@ tel
 package aircraft_brake_system
   const Constant1 : float64 = 0.0;
 
-  node aircraft_brake_system(brake_pressure : float64; t : float64 last = 0)
+  node brake_system(brake_pressure : float64; t : float64 last = 0)
     returns (
       Kbbm : float64;
       Tb : float64;
@@ -1094,4 +1094,75 @@ package smlk
     Out1= 70._f64;
   tel
 
+end;
+
+package libsi
+  const imported #pragma kcg C:name Infinity__libsi #end Infinity : float64;
+
+  function Gain(u : 'T; K : 'T) returns (y : 'T) where 'T numeric
+  var
+    _L1 : 'T;
+    _L2 : 'T;
+    _L3 : 'T;
+  let
+    _L1= u;
+    _L2= K;
+    _L3= _L1 #1 * _L2;
+    y= _L3;
+  tel
+
+  node #pragma kcg expand #end UnitDelayHelper(Input : 'T; x0 : 'T)
+    returns (Output : 'T)
+  var
+    _L1 : 'T;
+    _L2 : 'T;
+    _L3 : 'T;
+  let
+    _L1= Input;
+    Output= _L3;
+    _L2= x0;
+    _L3= #1 fby(_L1; 1; _L2);
+  tel
+
+end;
+
+package mathext
+  function imported AtanR(Input1 : 'T) returns (Output1 : 'T) where 'T float;
+  function imported SinR(Input1 : 'T) returns (Output1 : 'T) where 'T float;
+end;
+
+package pwlinear
+  function #pragma kcg expand #end LimiterUnSymmetrical(
+      LUS_Input : 'T;
+      LowLimit : 'T;
+      HighLimit : 'T)
+    returns (LUS_Output : 'T)
+    where 'T numeric
+  var
+    _L1 : bool;
+    _L11 : 'T;
+    _L13 : 'T;
+    _L15 : 'T;
+    _L2 : bool;
+    _L3 : 'T;
+    _L9 : 'T;
+  let
+    _L1= _L3 #1 >= _L15;
+    _L2= _L3 #2 <= _L13;
+    _L3= LUS_Input;
+    _L9= #3 if _L1 then (_L15) else (_L11);
+    _L11= #6 if _L2 then (_L13) else (_L3);
+    _L13= LowLimit;
+    _L15= HighLimit;
+    LUS_Output= _L9;
+    assume A1 : LowLimit #3 <= HighLimit;
+  tel
+end;
+
+package Discrete
+
+  function
+    #pragma kcg expand #end
+    zero_order_hold (x: 't) returns (y: 't)
+    y = x;
 end;

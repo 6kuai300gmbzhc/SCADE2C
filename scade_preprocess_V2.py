@@ -55,6 +55,7 @@ def writeFile(node):
 programNode=graphTree("","root")
 curNode=programNode
 rootSymtable=SymbolTable('Global')
+rootSymbol=Symbol('Global')
 curSymtable=rootSymtable
 scade_lexer=scade_lex()
 
@@ -75,12 +76,131 @@ precedence = (
     ('left', 'POINT')
 )
 
+class topologyNode:
+    def __init__(self,name='',index=0,tpIdx=0,inNum=0,outNum=0):
+        self.name=name
+        self.index=index
+        self.tpIdx=tpIdx
+        self.inNum=inNum
+        self.outNum=outNum
+        self.finish=False
+
+def topologySort(symbolList,adjList,nodeList):
+    sum=len(nodeList)
+    retList=[]
+    for i in range(sum):
+        if len(retList)>=sum:
+            break
+        for elem in nodeList:
+            if len(retList)>=sum:
+                break
+            if elem.inNum==0 and elem.finish==False:
+                retList.append(symbolList[elem.tpIdx])
+                elem.finish=True
+                for j in range(len(adjList[elem.index])):
+                    idx=adjList[elem.index][j]
+                    nodeList[idx].inNum-=1
+    return retList
+
+
+def topologyReady(symbolList):
+    adjList=[]
+    nodeDict={}
+    nodeList=[]
+    num=0
+    for idx in range(0,len(symbolList)):
+        leftName=symbolList[idx].Name
+        if leftName not in nodeDict.keys():
+            node=topologyNode(leftName,num,idx)
+            nodeList.append(node)
+            nodeDict[leftName]=num
+            num+=1
+            adjList.append([])
+        else:
+            raise NotImplementedError('%s redefined'%leftName)
+    for elem in symbolList:
+        adjIdx1=nodeDict[elem.Name]
+        for relyElem in elem.relyList:
+            if relyElem in nodeDict.keys():
+                adjIdx2=nodeDict[relyElem]
+                nodeList[adjIdx1].inNum+=1
+                nodeList[adjIdx2].outNum+=1
+                adjList[adjIdx2].append(adjIdx1)
+    return topologySort(symbolList,adjList,nodeList)
+
+def getWholePathFromTopToDown(pathList,idx,symtable):
+    if idx>=len(pathList):
+        return True
+    if symtable.getSymbolInThisEnv(pathList[idx])!=None:
+        for elem in symtable.ChildTableList:
+            if elem.EnvName==pathList[idx]:
+                return getWholePathFromTopToDown(pathList,idx+1,elem)
+    return False
+
+def getSameLevelRely(symtable):
+    global rootSymtable
+    nodeList=[]
+    nodeIdxDict={}
+    adjList=[]
+    num=0
+    for _,symbol in symtable.SymbolTable.items():
+        if symbol.Kind=='OpKind' or symbol.Kind=='Package':
+            tpNode=topologyNode(symbol.Name,num,num)
+            nodeList.append(tpNode)
+            nodeIdxDict[symbol.Name]=num
+            num+=1
+            adjList.append([])
+    for _,symbol in symtable.SymbolTable.items():
+        if symbol.Kind =='OpKind' or symbol.Kind=='Package':
+            for idx in range(len(symbol.relyList)):
+                pathList=symbol.relyList[idx].split("::")
+                ret=getWholePathFromTopToDown(pathList,0,rootSymtable)
+                if ret==False:
+                    ret=getWholePathFromTopToDown(pathList,0,symtable)
+                    curPath=symtable.PrevTable.getSymbolInThisEnv(symtable.EnvName).PackageName.split('::')
+                    pathList=curPath+pathList
+                    if ret==True:
+                        symbol.relyList[idx]='::'.join(pathList)
+                    else:
+                        raise NotImplementedError("Path error",pathList)
+            global rootSymbol
+            fSymbol=rootSymbol
+            if symtable.EnvName!='Global':
+                fSymbol=symtable.PrevTable.getSymbolInThisEnv(symtable.EnvName)
+            fname=fSymbol.PackageName
+            #在此处进行拓扑排序
+            for relyElem in symbol.relyList:
+                if len(relyElem)>len(fname) and relyElem[:len(fname)]==fname:
+                    relyElem=relyElem[len(fname)+2:]
+                    idx=relyElem.find("::")
+                    if idx!=-1:
+                        relyName=relyElem[:idx]
+                        if symtable[relyName]!=None and (symtable[relyName].Kind=='OpKind' or symtable[relyName].Kind=='Package'):
+                            pass
+                else:
+                    fSymbol.relyList.append(relyElem)
+
+
+
+def ReOrder(symtable):
+    flag=False
+    for symbolName,symbol in symtable.SymbolTable.items():
+        if symbol.Kind=='Package':
+             for childTable in symtable.ChildTableList:
+                 if childTable.EnvName==symbolName:
+                    flag=True
+                    ReOrder(childTable)
+    if symtable.EnvName!='Global':
+        print("ReOrder getSameLevelRely===",symtable.EnvName,symtable.PrevTable.EnvName)
+    getSameLevelRely(symtable)
+
 def p_program(p):
     'Program : Decls_zero_or_more'
     p[0]=lex_value("Program")
     p[0].objects.extend(p[1].objects)
-    print("\n\n\n============Program")
-    print(lexObjectsToString(p[1].objects))
+    # print("\n\n\n============Program")
+    # print(lexObjectsToString(p[1].objects))
+    ReOrder(curSymtable)
 
 def p_decls_zero_or_more(p):
     '''Decls_zero_or_more : Decls Decls_zero_or_more
@@ -165,6 +285,13 @@ def p_type_block(p):
     p[0]=lex_value("Type_block")
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
+    if curSymtable.EnvName=='Global':
+        global rootSymbol
+        rootSymbol.Code.append(lexObjectsToString(p[0].objects))
+    else:
+        packageSymbol=curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
+        packageSymbol.Code.append(lexObjectsToString(p[0].objects))
+    
 
 
 def p_type_block_1(p):
@@ -264,12 +391,15 @@ def p_user_op_decl(p):
     p[0].objects.extend(p[10].objects)
 
     global curSymtable
+    curSymtable=curSymtable.PrevTable
     symbol=curSymtable.getSymbolInThisEnv(p[3].objects[0].value)
     tmpstr=lexObjectsToString(p[0].objects)
     symbol.Code.append(tmpstr)
+    print("=====Node:",p[3].objects[0].value," relyList======")
+    print(symbol.relyList)
+    print(tmpstr)
+    print("======")
     # p[0].Code.append(tmpstr)
-
-    curSymtable=curSymtable.PrevTable
 
 
 def p_pack_lv6id(p):
@@ -281,6 +411,14 @@ def p_pack_lv6id(p):
     symTable=SymbolTable(p[1].value)
     curSymtable.ChildTableList.append(symTable)
     symTable.PrevTable=curSymtable
+
+    symbol=Symbol(p[1].value,"Package")
+    curSymtable.setSymbol(p[1].value,symbol)
+    if curSymtable.EnvName=='Global':
+        symbol.PackageName=p[1].value
+    else:
+        symbol.PackageName="%s::%s"%(curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName).PackageName,p[1].value)
+
     curSymtable=symTable
 
     global curNode
@@ -300,11 +438,15 @@ def p_user_op_decl_Lv6id(p):
     symTable=SymbolTable(p[1].value)
     curSymtable.ChildTableList.append(symTable)
     symTable.PrevTable=curSymtable
-    curSymtable=symTable
 
-    symbol=Symbol(p[1].value)
-    symbol.Type="op"
+    symbol=Symbol(p[1].value,'OpKind')
+    if curSymtable.EnvName=='Global':
+        symbol.PackageName=p[1].value
+    else:
+        symbol.PackageName='%s::%s'%(curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName).PackageName,p[1].value)
     curSymtable.setSymbol(p[1].value,symbol)
+
+    curSymtable=symTable
 
     global curNode
     node=graphTree(p[1].value,"node")
@@ -326,7 +468,7 @@ def p_op_kind(p):
     p[0]=lex_value("Op_kind")
     p[0].objects.append(p[1])
 
-
+#Equation_zero_or_more_with_semicolon在此处需要拓扑排序
 def p_opt_body(p):
     '''Opt_body : SEMICOLON
     | Equation SEMICOLON
@@ -585,7 +727,7 @@ def p_scope(p):
     if len(p)==4:
         p[0].objects.extend(p[3].objects)
 
-
+#Equation_zero_or_more_with_semicolon需要进行拓扑排序
 def p_eqs(p):
     'Eqs : LET Equation_zero_or_more_with_semicolon TEL'
     p[0]=lex_value("Eqs")
@@ -746,6 +888,7 @@ def p_if_block(p):
     p[0].objects.append(p[5])
     p[0].objects.extend(p[6].objects)
 
+
 def p_if_block_1(p):
     '''If_block_1 : Data_def
     | If_block'''
@@ -788,6 +931,8 @@ def p_data_def_1(p):
     p[0]=lex_value("Data_def1")
     p[0].objects.extend(p[1].objects)
 
+
+#若左边的符号为_或()则删去
 def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
     p[0]=lex_value("Simple_equation")
@@ -795,16 +940,6 @@ def p_simple_equation(p):
     p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects)
     
-    for obj in p[1].objects:
-        if obj.strs=='lv6id':
-            symbol=Symbol(obj.value)
-            curSymtable.setSymbol(obj.value,symbol)
-    relyLists=list()
-    for obj in p[3].objects:
-        if obj.strs=='lv6id' or obj.strs=='pathId':
-            relyLists.append(obj)
-    
-
 def p_lhs(p):
     '''Lhs : LPARENTHESE RPARENTHESE
     | Lhs_id Lhs_1'''
@@ -831,8 +966,9 @@ def p_lhs_1(p):
 def p_lhs_id(p):
     '''Lhs_id : LV6ID
               | UNDERLINE'''
-    p[0]=lex_value("Lhs_id")
+    p[0]=lex_value("Lhs_id")   
     p[0].objects.append(p[1])
+
 
 # not finish
 def p_user_op_decl_1(p):
@@ -963,6 +1099,11 @@ def p_var_id(p):
     p[0].objects.extend(p[2].objects)
     p[0].objects.append(p[3])
 
+    global curSymtable
+    symbol=Symbol(p[3].value)
+    curSymtable.setSymbol(p[3].value,symbol)
+    
+
 def p_var_id_1(p):
     '''Var_id_1 : CLOCK
     | empty'''
@@ -1055,6 +1196,12 @@ def p_const_block(p):
     p[0]=lex_value("Const_block")
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
+    if curSymtable.EnvName=='Global':
+        global rootSymbol
+        rootSymbol.Code.append(lexObjectsToString(p[0].objects))
+    else:
+        packageSymbol=curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
+        packageSymbol.Code.append(lexObjectsToString(p[0].objects))
 
 
 def p_const_block_1(p):
@@ -1086,7 +1233,7 @@ def p_interface_status(p):
     p[0]=lex_value("Interface_status")
     p[0].objects.extend(p[1].objects)
     if len(p)!=2:
-        p[0].objects.append(p[2].objects)
+        p[0].objects.extend(p[2].objects)
 
 
 def p_visibility_zero_or_one(p):
@@ -1117,6 +1264,12 @@ def p_sensor_block(p):
     p[0].objects.extend(p[2].objects)
     # tmpstr = p[1].value + lexObjectsToString(p[2].objects)
     # p[0].Code.append(tmpstr)
+    if curSymtable.EnvName=='Global':
+        global rootSymbol
+        rootSymbol.Code.append(lexObjectsToString(p[0].objects))
+    else:
+        packageSymbol=curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
+        packageSymbol.Code.append(lexObjectsToString(p[0].objects))
 
 
 def p_sensor_block_1(p):
@@ -1151,7 +1304,7 @@ def p_id_one_or_more_with_comma_1(p):
     if len(p)!=2:
         p[0].objects.append(p[1])
         p[0].objects.append(p[2])
-        p[0].objects.exend(p[3].objects)
+        p[0].objects.extend(p[3].objects)
 
 
 # not finish
@@ -1292,8 +1445,9 @@ def p_tempo_expr(p):
         p[0].objects.extend(p[3].objects)
         p[0].objects.append(p[4])
         p[0].objects.extend(p[5].objects)
-        p[0].objects.extend(p[6].objects)
-        p[0].objects.append(p[7])
+        p[0].objects.append(p[6])
+        p[0].objects.extend(p[7].objects)
+        p[0].objects.append(p[8])
 
 def p_tempo_expr_1(p):
     '''Tempo_expr_1 : SEMICOLON List Tempo_expr_1
@@ -1427,6 +1581,7 @@ def p_arith_expr_binOp(p):
 
 def p_apply_expr(p):
     '''Apply_expr : Operator LPARENTHESE List RPARENTHESE'''
+    print("p[1].objects=",p[1].objects)
     opStr=lexObjectsToString(p[1].objects)
     node=graphTree(opStr,"applyFunc")
     global curNode
@@ -1437,6 +1592,12 @@ def p_apply_expr(p):
     p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects)
     p[0].objects.append(p[4])
+
+    tmpStr=p[1].objects[0].value
+    if curSymtable.getSymbolInThisEnv(tmpStr)==None:
+        preSymtable=curSymtable.PrevTable
+        preOpKindSymbol=preSymtable.getSymbolInThisEnv(curSymtable.EnvName)
+        preOpKindSymbol.relyList.append(tmpStr)
 
     
 # not finish
@@ -1460,7 +1621,6 @@ def p_operator(p):
     | LPARENTHESE Iterator_mw Operator LSHIFT Expr RSHIFT IF Expr DEFAULT Expr RPARENTHESE
     | LPARENTHESE FOLDW Operator LSHIFT Expr RSHIFT IF Expr RPARENTHESE
     | LPARENTHESE FOLDWI Operator LSHIFT Expr RSHIFT IF Expr RPARENTHESE'''
-    # print("Operator")
     p[0]=lex_value("Operator")
     if len(p)==2:
         p[0].objects.extend(p[1].objects)
@@ -1489,7 +1649,7 @@ def p_operator(p):
         p[0].objects.extend(p[3].objects)
         p[0].objects.append(p[4])
         p[0].objects.extend(p[5].objects)
-        p[0].objects.append([p[6],p[7]])
+        p[0].objects.extend([p[6],p[7]])
     elif len(p)==9:
         p[0].objects.extend([p[1],p[2]])
         p[0].objects.exend(p[3].objects)
@@ -1545,7 +1705,7 @@ def p_iterator(p):
     | MAPFOLDI
     | MAPFOLDI INTEGERNUM'''
     p[0]=lex_value("Iterator")
-    p[0].objects.apend(p[1])
+    p[0].objects.append(p[1])
     if len(p)==3:
         p[0].objects.append(p[2])
 
@@ -1724,7 +1884,7 @@ def p_array_expr4(p):
     p[0]=lex_value("Array_expr4")
     if len(p)==8:
         p[0].objects.append(p[1])
-        p[0].objetcs.extend(p[2].objects)
+        p[0].objects.extend(p[2].objects)
         p[0].objects.append(p[3])
         p[0].objects.extend(p[4].objects)
         p[0].objects.append(p[5])
@@ -1732,15 +1892,15 @@ def p_array_expr4(p):
         p[0].objects.append(p[7])
     else:
         p[0].objects.append(p[1])
-        p[0].objetcs.append(p[2])
+        p[0].objects.append(p[2])
         p[0].objects.extend(p[3].objects)
         p[0].objects.extend([p[4],p[5],p[6],p[7],p[8]])
 
 def p_array_expr_1(p):
     '''Array_expr_1 : Label_or_index Array_expr_2'''
     p[0]=lex_value("Array_expr_1")
+    p[0].objects.extend(p[1].objects)
     p[0].objects.extend(p[2].objects)
-    p[0].objects.extend(p[3].objects)
 
 def p_array_expr_2(p):
     '''Array_expr_2 : Label_or_index Array_expr_2

@@ -58,6 +58,7 @@ def topologySort(symbolList,adjList,nodeList):
                     idx=adjList[elem.index][j]
                     nodeList[idx].inNum-=1
     return retList
+
 def topologyReady(symbolList):
     adjList=[]
     nodeDict={}
