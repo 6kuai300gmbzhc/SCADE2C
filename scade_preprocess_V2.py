@@ -77,12 +77,11 @@ precedence = (
 )
 
 class topologyNode:
-    def __init__(self,name='',index=0,tpIdx=0,inNum=0,outNum=0):
+    def __init__(self,name='',index=0,tpIdx=0,inNum=0):
         self.name=name
         self.index=index
         self.tpIdx=tpIdx
         self.inNum=inNum
-        self.outNum=outNum
         self.finish=False
 
 def topologySort(symbolList,adjList,nodeList):
@@ -103,30 +102,30 @@ def topologySort(symbolList,adjList,nodeList):
     return retList
 
 
-def topologyReady(symbolList):
-    adjList=[]
-    nodeDict={}
-    nodeList=[]
-    num=0
-    for idx in range(0,len(symbolList)):
-        leftName=symbolList[idx].Name
-        if leftName not in nodeDict.keys():
-            node=topologyNode(leftName,num,idx)
-            nodeList.append(node)
-            nodeDict[leftName]=num
-            num+=1
-            adjList.append([])
-        else:
-            raise NotImplementedError('%s redefined'%leftName)
-    for elem in symbolList:
-        adjIdx1=nodeDict[elem.Name]
-        for relyElem in elem.relyList:
-            if relyElem in nodeDict.keys():
-                adjIdx2=nodeDict[relyElem]
-                nodeList[adjIdx1].inNum+=1
-                nodeList[adjIdx2].outNum+=1
-                adjList[adjIdx2].append(adjIdx1)
-    return topologySort(symbolList,adjList,nodeList)
+# def topologyReady(symbolList):
+#     adjList=[]
+#     nodeDict={}
+#     nodeList=[]
+#     num=0
+#     for idx in range(0,len(symbolList)):
+#         leftName=symbolList[idx].Name
+#         if leftName not in nodeDict.keys():
+#             node=topologyNode(leftName,num,idx)
+#             nodeList.append(node)
+#             nodeDict[leftName]=num
+#             num+=1
+#             adjList.append([])
+#         else:
+#             raise NotImplementedError('%s redefined'%leftName)
+#     for elem in symbolList:
+#         adjIdx1=nodeDict[elem.Name]
+#         for relyElem in elem.relyList:
+#             if relyElem in nodeDict.keys():
+#                 adjIdx2=nodeDict[relyElem]
+#                 nodeList[adjIdx1].inNum+=1
+#                 nodeList[adjIdx2].outNum+=1
+#                 adjList[adjIdx2].append(adjIdx1)
+#     return topologySort(symbolList,adjList,nodeList)
 
 def getWholePathFromTopToDown(pathList,idx,symtable):
     if idx>=len(pathList):
@@ -142,12 +141,14 @@ def getSameLevelRely(symtable):
     nodeList=[]
     nodeIdxDict={}
     adjList=[]
+    symbolList=[]
     num=0
     for _,symbol in symtable.SymbolTable.items():
         if symbol.Kind=='OpKind' or symbol.Kind=='Package':
             tpNode=topologyNode(symbol.Name,num,num)
             nodeList.append(tpNode)
             nodeIdxDict[symbol.Name]=num
+            symbolList.append(symbol)
             num+=1
             adjList.append([])
     for _,symbol in symtable.SymbolTable.items():
@@ -169,38 +170,52 @@ def getSameLevelRely(symtable):
                 fSymbol=symtable.PrevTable.getSymbolInThisEnv(symtable.EnvName)
             fname=fSymbol.PackageName
             #在此处进行拓扑排序
+            symbol.relyList=list(set(symbol.relyList))
             for relyElem in symbol.relyList:
                 if len(relyElem)>len(fname) and relyElem[:len(fname)]==fname:
-                    relyElem=relyElem[len(fname)+2:]
-                    idx=relyElem.find("::")
+                    relyName=relyElem
+                    if len(fname)!=0:
+                        relyName=relyElem[len(fname)+2:]
+                    idx=relyName.find("::")
                     if idx!=-1:
-                        relyName=relyElem[:idx]
-                        if symtable[relyName]!=None and (symtable[relyName].Kind=='OpKind' or symtable[relyName].Kind=='Package'):
-                            pass
+                        relyName=relyName[:idx]
+                    if symtable.SymbolTable[relyName]!=None and (symtable.SymbolTable[relyName].Kind=='OpKind' or symtable.SymbolTable[relyName].Kind=='Package'):
+                        idx1=nodeIdxDict[symbol.Name]
+                        idx2=nodeIdxDict[relyName]
+                        nodeList[idx1].inNum+=1
+                        adjList[idx2].append(idx1)
                 else:
                     fSymbol.relyList.append(relyElem)
-
-
+    retList=topologySort(symbolList,adjList,nodeList)
+    return retList
 
 def ReOrder(symtable):
-    flag=False
     for symbolName,symbol in symtable.SymbolTable.items():
         if symbol.Kind=='Package':
              for childTable in symtable.ChildTableList:
                  if childTable.EnvName==symbolName:
-                    flag=True
                     ReOrder(childTable)
+    global rootSymbol
+    packageSymbol=rootSymbol
+    if symtable.EnvName != 'Global':
+        packageSymbol=symtable.PrevTable.SymbolTable[symtable.EnvName]
+    retList=getSameLevelRely(symtable)
+    # print("packageSymbol=",packageSymbol.Name)
+    # if symtable.EnvName!='Global':
+    #     str="package "+symtable.EnvName
+    #     packageSymbol.Code.append(str)
+    for elem in retList:
+        packageSymbol.Code+=symtable.SymbolTable[elem.Name].Code
     if symtable.EnvName!='Global':
-        print("ReOrder getSameLevelRely===",symtable.EnvName,symtable.PrevTable.EnvName)
-    getSameLevelRely(symtable)
+        str="end;\n"
+        packageSymbol.Code.append(str)
 
 def p_program(p):
     'Program : Decls_zero_or_more'
     p[0]=lex_value("Program")
     p[0].objects.extend(p[1].objects)
-    # print("\n\n\n============Program")
-    # print(lexObjectsToString(p[1].objects))
     ReOrder(curSymtable)
+
 
 def p_decls_zero_or_more(p):
     '''Decls_zero_or_more : Decls Decls_zero_or_more
@@ -414,6 +429,7 @@ def p_pack_lv6id(p):
 
     symbol=Symbol(p[1].value,"Package")
     curSymtable.setSymbol(p[1].value,symbol)
+    symbol.Code.append("package %s\n"%p[1].value)
     if curSymtable.EnvName=='Global':
         symbol.PackageName=p[1].value
     else:
@@ -1980,6 +1996,14 @@ def get_parse(strs):
     scade_lexer.set_tokens(string_tokens)
     nodes = parser.parse(strs, lexer=scade_lexer)
     writeFile(programNode)
+
+    content=""
+    for elem in rootSymbol.Code:
+        content+=elem
+    file=open("afterPreprocess.scade",'w')
+    file.write(content)
+    
+    
     # return program, GlobalEnv
 
 if __name__ == '__main__':
@@ -1987,7 +2011,7 @@ if __name__ == '__main__':
     file = open("airBrakeSystem.txt",'r')
     strs = file.read()
     get_parse(strs)
-    parser.parse(strs, lexer=scade_lexer)
+    # parser.parse(strs, lexer=scade_lexer)
 
 
 #package airdynamic有问题

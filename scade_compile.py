@@ -678,7 +678,6 @@ def p_pack_lv6id(p):
     if len(packageList)!=0:
         symbol.PackageName=packageName
     
-    print("thisEnv=",thisEnv.EnvName)
     thisEnv.setSymbol(p[1].value,symbol)
 
     newEnv = SymbolTable(p[1].value, thisEnv)
@@ -686,6 +685,8 @@ def p_pack_lv6id(p):
     thisEnv.ChildTableList.append(newEnv)
     thisEnv = newEnv
     p[0] = p[1]
+    print("当前包为",thisEnv.EnvName)
+
 
 
 def p_user_op_decl_Lv6id(p):
@@ -1637,12 +1638,14 @@ def p_package(p):
 
 def p_const_block(p):
     'Const_block : CONST Const_block_1'
+    # print("Const_block")
     pass
 
 
 def p_const_block_1(p):
     '''Const_block_1 : Const_decl SEMICOLON Const_block_1
     | empty'''
+    # print("Const_block_1")
     pass
 
 
@@ -1650,6 +1653,7 @@ def p_const_decl(p):
     '''Const_decl : Interface_status LV6ID COLON Type_expr EQU Expr
     | Interface_status LV6ID COLON Type_expr'''
     # Interface_status表示该变量是private or public 。是否是external
+    # print("=== Const_decl ===")
     external = False
     public = True
     if len(p[1].objects) != 1:
@@ -1904,10 +1908,12 @@ def p_path_id(p):
         symbol=Symbol(func_name)
         symbol.isPathId=True
         thisEnv.setSymbol(func_name,symbol)
-    else: # 这种情况下，不存在包的前缀，应从当前Env或前序Env中查找symbol
+    else:
+        #这种情况，不一定是路径，const中若存在=,也走这条路径 
+        # 这种情况下，不存在包的前缀，应从当前Env或前序Env中查找symbol
         preSymbol=thisEnv.getSymbolInThisAndPreEnv(p[1].value)
         thisSymbol=thisEnv.getSymbolInThisEnv(p[1].value)
-        if thisSymbol==None and preSymbol.Kind =="OpKind":
+        if thisSymbol==None and preSymbol!=None and preSymbol.Kind =="OpKind":
             symbol=Symbol(p[1].value)
             thisEnv.setSymbol(p[1].value,symbol)
         p[0] = p[1]
@@ -2304,6 +2310,7 @@ def p_arith_expr_binOp(p):
     | Expr LSL Expr
     | Expr LSR Expr'''
     p[0] = lex_value("Arith_expr")
+    print("p[1].value=",p[1].objects," p[3].value=",p[3].objects)
     checkType(p[1], p[3], 0)
     if p[2].strs == 'mod':
         p[2].value = ' % '
