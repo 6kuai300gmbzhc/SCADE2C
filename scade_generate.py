@@ -195,17 +195,17 @@ if __name__=='__main__':
 # tel
 # end;
 # '''
-    # program,symboltable=scade_compile.get_parse(strs)
-    # print("*************************************")
-    # print(program)
-    # print("*************************************")
-    # gen=Scade_generate(program,symboltable)
-    # gen.gen_const_file()
-    # gen.gen_sensor_file()
-    # gen.gen_types_file()
-    # gen.gen_assign_file()
-    # gen.gen_imported_types_file()
-    # gen.gen_macro_libmathext_file()
+#     program,symboltable=sc.get_parse(strs)
+#     print("*************************************")
+#     print(program)
+#     print("*************************************")
+#     gen=Scade_generate(program,symboltable)
+#     gen.gen_const_file()
+#     gen.gen_sensor_file()
+#     gen.gen_types_file()
+#     gen.gen_assign_file()
+#     gen.gen_imported_types_file()
+#     gen.gen_macro_libmathext_file()
 
 
 

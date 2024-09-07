@@ -5,7 +5,7 @@ from ply.yacc import yacc
 import re
 from scade_compile_otherFunc import *
 
-outputDir=""
+outputDir="/home/xuqianhui/scade2c/output/example"
 
 def type_change(type):
     list = ["char", "bool", "float32", "float64", "size", "uint64", "uint32", "uint16", "uint8", "int64", "int32",
@@ -282,7 +282,7 @@ def generate_c_file(symtable,opKindSymbol):
     with open(filename, 'w') as f:
         f.write(c_content)
 
-def getName(initStr):
+def getName(initStr,symtable):
     for i in range(1000):
         target = initStr
         if i != 0:
@@ -291,7 +291,7 @@ def getName(initStr):
         #     continue
         # else:
         #     return target
-        if target in thisEnv.SymbolTable:
+        if target in symtable.SymbolTable:
             continue
         else:
             return target
@@ -306,11 +306,15 @@ def getTypefromObjects(objects):
                 type = symbol.Type
                 return type
             elif symbol.Type != '':
-                opSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
-                if opSymbol.isTemplate == True and symbol.Type[0] == '\'':
-                    type = symbol.Type
+                # opSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
+                if getIdType(symbol.Type, GlobalEnv)==None:
+                    return symbol.Type
                 else:
-                    type = getIdType(symbol.Type, GlobalEnv).Type
+                    return getIdType(symbol.Type, GlobalEnv).Type
+                # if opSymbol.isTemplate == True and symbol.Type[0] == '\'':
+                #     type = symbol.Type
+                # else:
+                #     type = getIdType(symbol.Type, GlobalEnv).Type
         elif obj.strs=='lv6id' and len(obj.objects)!=0:
             type=getStructElemType(obj,thisEnv).Type
     return type
@@ -451,11 +455,24 @@ def checkType(expr1, expr2, idx):
         return type1
 
 
-def fromPathFindFunc(funcPath):
-    pathList = funcPath.split('_')
-    funcName = pathList[0]
-    pathList = pathList[1:]
-    pathList.append(funcName)
+def fromPathFindFunc(symtable,funcSymbol):
+    pathList = funcSymbol.pathList
+    for elem in pathList:
+        if elem == pathList[-1]:
+            symbol=symtable.getSymbolInThisEnv(elem)
+            if symbol != None:
+                return symbol,symtable.getSymbolTable(symbol.Name)
+            else:
+                break
+        else:
+            flag=False
+            for sym in symtable.ChildTableList:
+                if sym.EnvName == elem:
+                    flag=True
+                    symtable = sym
+                    break
+            if flag==False:
+                break
     symtable=GlobalEnv
     for elem in pathList:
         if elem == pathList[-1]:
@@ -465,10 +482,15 @@ def fromPathFindFunc(funcPath):
             else:
                 raise NotImplementedError("fromPathFindFunc error")
         else:
+            flag=False
             for sym in symtable.ChildTableList:
                 if sym.EnvName == elem:
+                    flag=True
                     symtable = sym
                     break
+            if flag==False:
+                break
+    # return fromPathFindFunc(GlobalEnv,funcSymbol)
     
 def setTemplateType(applySym,instantSymtable,templateSymtable,leftLex,rightLex):
     instantApplySym=copy.deepcopy(applySym)
@@ -483,7 +505,6 @@ def setTemplateType(applySym,instantSymtable,templateSymtable,leftLex,rightLex):
     for key in instantApplySym.templateTypeDict.keys():
         for idx in range(len(paraList)):
             symbol=templateSymtable.getSymbolInThisEnv(paraList[idx].value)
-            # templateSymtable.printSymbol()
             type=getTypefromObjects(instantParaList[idx])
             if symbol.Type == key and type!=None:
                 instantApplySym.templateTypeDict[key]=type
@@ -491,7 +512,7 @@ def setTemplateType(applySym,instantSymtable,templateSymtable,leftLex,rightLex):
         instantApplySym.templateTypeList[idx]=instantApplySym.templateTypeDict[instantApplySym.templateTypeList[idx]]
         
     instantApplySym.isTemplate=False
-    dictName=getName("instantApplySym")
+    dictName=getName("instantApplySym",templateSymtable.PrevTable)
     templateSymtable.PrevTable.setSymbol(dictName,instantApplySym)
     instantApplySymtable.EnvName=dictName
     templateSymtable.PrevTable.ChildTableList.append(instantApplySymtable)
@@ -499,6 +520,14 @@ def setTemplateType(applySym,instantSymtable,templateSymtable,leftLex,rightLex):
     for elem in instantApplySymtable.SymbolTable.values():
         if len(elem.Type)>0 and elem.Type[0] ==  '\'':
             elem.Type=instantApplySym.templateTypeDict[elem.Type]
+    name=instantApplySym.Name
+    if len(instantApplySym.templateTypeList)!=0:
+        name+="_"+"_".join(instantApplySym.templateTypeList)
+    instantApplySym.Name=name
+    instantApplySymtable.EnvName=name
+    # instantSymtable.setSymbol(name,instantApplySym)
+    templateSymtable.ChildTableList.append(instantApplySymtable)
+    templateSymtable.PrevTable.setSymbol(name,instantApplySym)
     return instantApplySym
         
 
@@ -583,6 +612,7 @@ def p_type_block_1(p):
 
 def p_Type_decl(p):
     'Type_decl : Interface_status LV6ID Type_decl_1 Type_decl_2'
+    global thisEnv
     external = True
     public = True
     if len(p[1].objects) == 1:
@@ -683,9 +713,10 @@ def p_pack_lv6id(p):
     newEnv = SymbolTable(p[1].value, thisEnv)
     # print("p_pack_lv6id",thisEnv.EnvName,newEnv.EnvName)
     thisEnv.ChildTableList.append(newEnv)
+    newEnv.PrevTable=thisEnv
     thisEnv = newEnv
     p[0] = p[1]
-    print("当前包为",thisEnv.EnvName)
+    print("当前包为",thisEnv.EnvName,thisEnv)
 
 
 
@@ -703,8 +734,9 @@ def p_user_op_decl_Lv6id(p):
 
     newEnv = SymbolTable(p[1].value, thisEnv)
     thisEnv.ChildTableList.append(newEnv)
+    newEnv.PrevTable=thisEnv
     thisEnv = newEnv
-    print("当前函数为",p[1].value)
+    print("当前函数为",thisEnv.EnvName,thisEnv)
 
 
 def p_state_lv6id(p):
@@ -1297,13 +1329,12 @@ def fillArrValueList(objects,arrSizeList,st,arrValueList,typeSymbol):
             arrValueList.append(symbol)
         return
     for idx in range(arrSizeList[st]):
-        print("fill",objects[idx],"arrSizeList[st]=",arrSizeList[st])
         fillArrValueList(objects[idx],arrSizeList,st+1,arrValueList,typeSymbol)
 
 def isApplyExpr(lex_lists):
     for idx in range(len(lex_lists)):
         if lex_lists[idx].type=="ApplyExpr":
-            symbol,symtable=fromPathFindFunc(lex_lists[idx].value)
+            symbol,symtable=fromPathFindFunc(thisEnv.PrevTable,thisEnv.getSymbol(lex_lists[idx].value))
             return True,symbol,symtable,idx
     return False,None,None,-1
 
@@ -1313,6 +1344,7 @@ def p_simple_equation(p):
     p[0] = lex_value('Simple_equation')
 
     leftIdx=0
+    global thisEnv
     #此时等式左边，右边都是列表类型
     for idx in range(len(p[3].objects)):
         # 修改此处，若左边为结构体，右边是非struct_expr,则展开依次初始化
@@ -1322,63 +1354,9 @@ def p_simple_equation(p):
             continue
         typeSymbol = getIdType(p[1].objects[leftIdx].value, thisEnv)
         leftSymbol = thisEnv.getSymbolInThisEnv(p[1].objects[leftIdx].value)
-        arrSizeList = getArrSizeList(leftSymbol.arrSize)
-        isApply,applySymbol,symtable,opLexIdx=isApplyExpr(p[3].objects[idx])#applySymbol表示对应的函数在全局所对应的符号,symtable表示该函数对应的符号表
-        if isApply:
-            type=typeSymbol.Type
-            for par in p[3].objects[idx][opLexIdx+1].objects:
-                setObjectsType(par,type)
-            opSym=thisEnv.getSymbolInThisEnv(p[3].objects[idx][opLexIdx].value)#表示在该env下函数名所对应的符号
-            if applySymbol.isTemplate == True:
-                applySymbol=setTemplateType(applySymbol,thisEnv,symtable,p[1].objects[leftIdx:leftIdx+len(applySymbol.Params)],p[3].objects[idx])
-            if applySymbol.External != True:
-                applySymbol.isCalled = True
-                globalSymbol = thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
-                funcName=p[3].objects[idx][opLexIdx].value
-                if len(applySymbol.templateTypeList)!=0:
-                    funcName+="_"+"_".join(applySymbol.templateTypeList)
-                globalSymbol.callOperators.append(funcName)
-                p[3].objects[idx][opLexIdx].value=funcName
-            if applySymbol.hasInternalState == True:
-                outStrucName=getName("tmpStruct")
-                outSymbol=Symbol(outStrucName,"ApplyOut","outC_"+opSym.Name)
-                outSymbol.Code.append(lex_value("",opSym.Name))
-                outSymbol.relyList.append(opSym.Name)
-                outSymbol.IsReturn=True
-                thisEnv.setSymbol(outStrucName,outSymbol)
-                opSym.Returns.append(lex_value('lv6id',outStrucName))
-                opSym.StateType='ApplyExpr'
-                p[0].objects.append(lex_value("lv6id",opSym.Name))
-                p[0].objects.append(lex_value("lv6id",outStrucName))
-                for elem in applySymbol.Returns:
-                    leftSymbol=thisEnv.getSymbolInThisEnv(p[1].objects[leftIdx].value)
-                    leftSymbol.StateType='equation'
-                    leftSymbol.Code.extend([lex_value("lv6id",outStrucName),lex_value("","."),lex_value("",elem.value)])
-                    p[0].objects.append(p[1].objects[leftIdx])
-                    leftIdx+=1
-            else:
-                #可能存在1+applyExpr(para1,para2)的情况
-                if len(applySymbol.Returns)==1:
-                    leftSymbol.StateType='equation'
-                    for elem in p[3].objects[idx]:
-                        if elem.type == "ApplyParams":
-                            leftSymbol.Code.append(lex_value('','('))
-                            for obj in elem.objects:
-                                leftSymbol.Code.extend(obj)
-                                if obj != elem.objects[-1]:
-                                    leftSymbol.Code.append(lex_value('',','))
-                            leftSymbol.Code.append(lex_value('',')'))
-                        else:
-                            leftSymbol.Code.append(elem)
-                    p[0].objects.append(p[1].objects[leftIdx])
-                    leftIdx+=1
-                else:
-                    opSym.StateType='ApplyExpr'
-                    for _ in applySymbol.Returns:
-                        opSym.Returns.append(p[1].objects[leftIdx])
-                        leftIdx+=1
-                    p[0].objects.append(p[3].objects[idx][opLexIdx])               
+        if leftSymbol==None:
             continue
+        arrSizeList = getArrSizeList(leftSymbol.arrSize)
         if len(arrSizeList)!=0:
             if p[3].strs=='Array_list_expr':
                 leftSymbol.StateType='arrayList'
@@ -1408,15 +1386,72 @@ def p_simple_equation(p):
                     p[0].objects.append(p[1].objects[leftIdx])
                 leftIdx+=1
             else:
-                type = typeSymbol.Type
-                setObjectsType(p[3].objects[idx], type)
-                setObjectsType(p[3].beforeObjects, type)
-                setObjectsType(p[3].afterObjects, type)
+                isApply,applySymbol,symtable,opLexIdx=isApplyExpr(p[3].objects[idx])#applySymbol表示对应的函数在全局所对应的符号,symtable表示该函数对应的符号表
+                if isApply:
+                    type=typeSymbol.Type
+                    for par in p[3].objects[idx][opLexIdx+1].objects:
+                        setObjectsType(par,type)
+                    opSym=thisEnv.getSymbolInThisEnv(p[3].objects[idx][opLexIdx].value)#表示在该env下函数名所对应的符号
+                    if applySymbol.isTemplate == True:
+                        applySymbol=setTemplateType(applySymbol,thisEnv,symtable,p[1].objects[leftIdx:leftIdx+len(applySymbol.Params)],p[3].objects[idx])
+                    if applySymbol.External != True:
+                        applySymbol.isCalled = True
+                        globalSymbol = thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
+                        funcName=p[3].objects[idx][opLexIdx].value
+                        if len(applySymbol.templateTypeList)!=0:
+                            funcName+="_"+"_".join(applySymbol.templateTypeList)
+                        globalSymbol.callOperators.append(funcName)
+                        p[3].objects[idx][opLexIdx].value=funcName
+                    if applySymbol.hasInternalState == True:
+                        outStrucName=getName("tmpStruct",thisEnv)
+                        outSymbol=Symbol(outStrucName,"ApplyOut","outC_"+opSym.Name)
+                        outSymbol.Code.append(lex_value("",opSym.Name))
+                        outSymbol.relyList.append(opSym.Name)
+                        outSymbol.IsReturn=True
+                        thisEnv.setSymbol(outStrucName,outSymbol)
+                        opSym.Returns.append(lex_value('lv6id',outStrucName))
+                        opSym.StateType='ApplyExpr'
+                        p[0].objects.append(lex_value("lv6id",opSym.Name))
+                        p[0].objects.append(lex_value("lv6id",outStrucName))
+                        for elem in applySymbol.Returns:
+                            leftSymbol=thisEnv.getSymbolInThisEnv(p[1].objects[leftIdx].value)
+                            leftSymbol.StateType='equation'
+                            leftSymbol.Code.extend([lex_value("lv6id",outStrucName),lex_value("","."),lex_value("",elem.value)])
+                            p[0].objects.append(p[1].objects[leftIdx])
+                            leftIdx+=1
+                    else:
+                        #可能存在1+applyExpr(para1,para2)的情况
+                        if len(applySymbol.Returns)==1:
+                            leftSymbol.StateType='equation'
+                            for elem in p[3].objects[idx]:
+                                if elem.type == "ApplyParams":
+                                    leftSymbol.Code.append(lex_value('','('))
+                                    for obj in elem.objects:
+                                        leftSymbol.Code.extend(obj)
+                                        if obj != elem.objects[-1]:
+                                            leftSymbol.Code.append(lex_value('',','))
+                                    leftSymbol.Code.append(lex_value('',')'))
+                                else:
+                                    leftSymbol.Code.append(elem)
+                            p[0].objects.append(p[1].objects[leftIdx])
+                            leftIdx+=1
+                        else:
+                            opSym.StateType='ApplyExpr'
+                            for _ in applySymbol.Returns:
+                                opSym.Returns.append(p[1].objects[leftIdx])
+                                leftIdx+=1
+                            p[0].objects.append(p[3].objects[idx][opLexIdx])               
+                    continue
+                else:
+                    type = typeSymbol.Type
+                    setObjectsType(p[3].objects[idx], type)
+                    setObjectsType(p[3].beforeObjects, type)
+                    setObjectsType(p[3].afterObjects, type)
 
-                leftSymbol.Code.extend(p[3].objects[idx])
-                leftSymbol.StateType = 'equation'
-                p[0].objects.append(p[1].objects[leftIdx])
-                leftIdx+=1
+                    leftSymbol.Code.extend(p[3].objects[idx])
+                    leftSymbol.StateType = 'equation'
+                    p[0].objects.append(p[1].objects[leftIdx])
+                    leftIdx+=1
     p[0].objects.extend(p[3].beforeObjects)
     p[0].objects.extend(p[3].afterObjects)
             #p[0].objects的内容为lex_value
@@ -1470,20 +1505,21 @@ def p_user_op_decl_2(p):
 
 def p_where_decl(p):
     '''Where_decl : WHERE Typevar Where_decl_1 Numeric_kind'''
+    global thisEnv
     p[0]=lex_value("Where_decl")
     opSymbol=thisEnv.PrevTable.getSymbolInThisEnv(op_kind_id)
     opSymbol.isTemplate=True
 
-    typeSymbol=Symbol(p[2].value,'Type','')
-    thisEnv.setSymbol(p[2].value,typeSymbol)
+    # typeSymbol=Symbol(p[2].value,'Type','')
+    # thisEnv.setSymbol(p[2].value,typeSymbol)
     opSymbol.templateTypeDict[p[2].value]=p[4].value
-    opSymbol.templateTypeList.append(p[2].value)
+    # opSymbol.templateTypeList.append(p[2].value)
     
     for elem in p[3].objects:
-        typeSymbol=Symbol(elem.value,'Type','')
-        thisEnv.setSymbol(elem.value,typeSymbol)
+        # typeSymbol=Symbol(elem.value,'Type','')
+        # thisEnv.setSymbol(elem.value,typeSymbol)
         opSymbol.templateTypeDict[elem.value]=p[4].value
-        opSymbol.templateTypeList.append(elem.value)
+        # opSymbol.templateTypeList.append(elem.value)
     
 
 def p_where_decl_1(p):
@@ -1498,6 +1534,13 @@ def p_typevar(p):
     '''Typevar : SINGLEQUOTE LV6ID'''
     p[0]=lex_value()
     p[0].value=p[1].value+p[2].value
+    symbol=thisEnv.PrevTable.getSymbolInThisEnv(thisEnv.EnvName)
+    symbol.isTemplate=True
+    if thisEnv.getSymbolInThisEnv(p[0].value)==None:
+        typeSymbol=Symbol(p[0].value,'Type','')
+        thisEnv.setSymbol(p[0].value,typeSymbol)
+        symbol.templateTypeList.append(p[0].value)
+        symbol.templateTypeDict[p[0].value]=""
 
 def p_user_op_decl_3(p):
     '''User_op_decl_3 : empty'''
@@ -1551,7 +1594,7 @@ def p_var_decls(p):
     typeName = p[4].value
     if p[4].strs == "struct":
         # 此处生成的临时结构体，作用域应在根结点的符号表内
-        tmpStructName = getName("tmpStruct")
+        tmpStructName = getName("tmpStruct",thisEnv)
         structSymbol = Symbol(tmpStructName, 'Type', 'struct')
         structSymbol.FieldList = objectsToStruct(p[4].objects)
         structSymbol.arrSize.extend(p[4].arrSize)
@@ -1581,11 +1624,12 @@ def p_var_decls_1(p):
     p[0] = lex_value("var_decls_1")
     if len(p) == 4:
         p[0].objects.append(p[2])
-        p[0].objects.extend(p[3].objects)
+        p[0].objects.extend(p[3].objects) 
 
 
 def p_var_id(p):
     'Var_id : Var_id_1 Var_id_2 LV6ID'
+    global thisEnv
     p[0] = p[3]
     symbol = Symbol(p[3].value, 'Var', '')
     thisEnv.setSymbol(p[3].value, symbol)
@@ -1653,7 +1697,7 @@ def p_const_decl(p):
     '''Const_decl : Interface_status LV6ID COLON Type_expr EQU Expr
     | Interface_status LV6ID COLON Type_expr'''
     # Interface_status表示该变量是private or public 。是否是external
-    # print("=== Const_decl ===")
+    global thisEnv
     external = False
     public = True
     if len(p[1].objects) != 1:
@@ -1662,7 +1706,7 @@ def p_const_decl(p):
         public = False
     if p[4].strs == 'struct':  # 若为结构体，则是const imported c12:{tt1:bool,tt2:float32};
         # 创建一个变量，该symbol的Kind为type，结构体定义在kcg_types.h文件里
-        type = getName('tmpStruct')
+        type = getName('tmpStruct',thisEnv)
         typeSymbol = Symbol(type, "Type", 'struct')
         thisEnv.setSymbol(type, typeSymbol)
         typeSymbol.FieldList = objectsToStruct(p[4].objects)
@@ -1725,9 +1769,10 @@ def p_sensor_block_1(p):
 
 def p_sensor_decl(p):
     'Sensor_decl : Id_one_or_more_with_comma COLON Type_expr'
+    global thisEnv
     for item in p[1].objects:
         if p[3].strs == 'struct':
-            typeName = getName("tmpStruct")
+            typeName = getName("tmpStruct",thisEnv)
             typeSymbol = Symbol(typeName, "Type", 'struct')
             thisEnv.setSymbol(typeName, typeSymbol)
             typeSymbol.FieldList = objectsToStruct(p[3].objects)
@@ -1827,7 +1872,7 @@ def p_field_decl(p):
     field = list()
     field.append(p[1])
     if p[3].strs == "struct":
-        tmpStructName = getName("tmpStruct")
+        tmpStructName = getName("tmpStruct",thisEnv)
         structSymbol = Symbol(tmpStructName, 'Type', 'struct')
         structSymbol.FieldList = objectsToStruct(p[3].objects)
         structSymbol.arrSize.extend(p[3].arrSize)
@@ -1853,46 +1898,84 @@ def p_path_1(p):
         p[0] = p[1]
 
 def getFuncName(funcList,symtable):
-    fullFlag=False
-    for elem in funcList:
-        flag = False
-        if elem == funcList[-1]:
-            if symtable.getSymbolInThisEnv(elem) !=None:
-                flag = True
-        else:
-            for childSym in symtable.ChildTableList:
-                if childSym.EnvName == elem:
-                    symtable=childSym
-                    flag = True
-                    break
-        if flag == False:
-            fullFlag = True
-            break
-    if fullFlag == True:
-        tmpTable=GlobalEnv
-        for elem in funcList:
-            flag = False
-            if elem == funcList[-1]:
-                if tmpTable.getSymbolInThisEnv(elem) != None:
-                    flag = True
+    if symtable.getSymbolInThisEnv(funcList[-1]) !=None:
+        curList=[]
+        #自底向上搜索
+        for elem in funcList[::-1]:
+            if symtable.getSymbolInThisEnv(elem) != None:
+                if symtable.EnvName != 'Global':
+                    # curList.append(symtable.EnvName)
+                    symtable=symtable.PrevTable
             else:
-                for childSym in tmpTable.ChildTableList:
-                    if childSym.EnvName == elem:
-                        flag = True
-                        tmpTable = childSym
+                 raise NotImplementedError("getFuncName error")
+        if symtable.EnvName == 'Global':
+            # funcList=curList+funcList
+            if len(funcList)==1:
+                return funcList,funcList[-1]
+            else:
+                return funcList,funcList[-1]+"_"+"_".join(funcList[:-1])
+        else:
+            while symtable.EnvName != 'Global':
+                curList.append(symtable.EnvName)
+                symtable=symtable.PrevTable
+            funcList=curList[::-1]+funcList
+            return funcList,funcList[-1]+"_"+"_".join(funcList[:-1])
+    else:
+        #自顶向下搜索
+        symtable=GlobalEnv
+        for elem in funcList:
+            flag=False
+            if symtable.getSymbolInThisEnv(elem) != None:
+                for childSymtable in symtable.ChildTableList:
+                    if childSymtable.EnvName==elem:
+                        flag=True
+                        symtable=childSymtable
                         break
-                if flag == False:
-                    curFunc = inspect.currentframe()
-                    callerFunc = curFunc.f_back
-                    funcName = callerFunc.f_code.co_name
-                    raise NotImplementedError(f" '{funcName}' error")
-        return funcList[-1]+"_"+"_".join(funcList[:-1])
-    curList=[]
-    while symtable != GlobalEnv:
-        curList.append(symtable.EnvName)
-        symtable=symtable.PrevTable
-    funcList=curList[::-1]+funcList[1:]
-    return funcList[-1]+"_"+"_".join(funcList[:-1])
+                if flag==False:
+                    raise NotImplementedError("getFuncName error")
+        return funcList,"_".join(funcList)
+
+# def getFuncName(funcList,symtable):
+#     fullFlag=False
+#     for elem in funcList:
+#         flag = False
+#         if elem == funcList[-1]:
+#             if symtable.getSymbolInThisEnv(elem) !=None:
+#                 flag = True
+#         else:
+#             for childSym in symtable.ChildTableList:
+#                 if childSym.EnvName == elem:
+#                     symtable=childSym
+#                     flag = True
+#                     break
+#         if flag == False:
+#             fullFlag = True
+#             break
+#     if fullFlag == True:
+#         tmpTable=GlobalEnv
+#         for elem in funcList:
+#             flag = False
+#             if elem == funcList[-1]:
+#                 if tmpTable.getSymbolInThisEnv(elem) != None:
+#                     flag = True
+#             else:
+#                 for childSym in tmpTable.ChildTableList:
+#                     if childSym.EnvName == elem:
+#                         flag = True
+#                         tmpTable = childSym
+#                         break
+#                 if flag == False:
+#                     curFunc = inspect.currentframe()
+#                     callerFunc = curFunc.f_back
+#                     funcName = callerFunc.f_code.co_name
+#                     raise NotImplementedError(f" '{funcName}' error")
+#         return funcList[-1]+"_"+"_".join(funcList[:-1])
+#     curList=[]
+#     while symtable != GlobalEnv:
+#         curList.append(symtable.EnvName)
+#         symtable=symtable.PrevTable
+#     funcList=curList[::-1]+funcList[1:]
+#     return funcList[-1]+"_"+"_".join(funcList[:-1])
     
 def p_path_id(p):
     '''Path_id : LV6ID Path_1'''
@@ -1903,18 +1986,24 @@ def p_path_id(p):
         funcList.append(p[1].value)
         for elem in p[2].objects:
             funcList.append(elem.value)
-        func_name=getFuncName(funcList,thisEnv.PrevTable)
+        funcList,func_name=getFuncName(funcList,thisEnv.PrevTable)
         p[0]=lex_value("Path_id",func_name)
-        symbol=Symbol(func_name)
-        symbol.isPathId=True
-        thisEnv.setSymbol(func_name,symbol)
+        if thisEnv.getSymbolInThisEnv(func_name)==None:
+            symbol=Symbol(func_name)
+            # print("Path_id=",funcList)
+            symbol.pathList=funcList
+            symbol.isPathId=True
+            thisEnv.setSymbol(func_name,symbol)
     else:
         #这种情况，不一定是路径，const中若存在=,也走这条路径 
         # 这种情况下，不存在包的前缀，应从当前Env或前序Env中查找symbol
         preSymbol=thisEnv.getSymbolInThisAndPreEnv(p[1].value)
         thisSymbol=thisEnv.getSymbolInThisEnv(p[1].value)
         if thisSymbol==None and preSymbol!=None and preSymbol.Kind =="OpKind":
+            funcList=[p[1].value]
+            funcList,func_name=getFuncName(funcList,thisEnv.PrevTable)
             symbol=Symbol(p[1].value)
+            symbol.pathList=funcList
             thisEnv.setSymbol(p[1].value,symbol)
         p[0] = p[1]
     
@@ -1930,7 +2019,7 @@ def p_id_expr(p):
         #     p[0].objects.append(p[3])
         # else:
         realType = getIdType(p[3].value, thisEnv)
-        lastName = getName("lastTmp")
+        lastName = getName("lastTmp",thisEnv)
         lastSymbol = Symbol(lastName, "TmpVar", realType.Type)
         thisEnv.setSymbol(lastName, lastSymbol)
         p[0].objects.append(lex_value("lv6id", lastName))
@@ -1980,13 +2069,13 @@ def p_tempo_expr(p):
         p[0].beforeObjects.extend(p[3].beforeObjects)
 
         for idx in range(len(p[1].objects)):
-            initName = getName("init")
+            initName = getName("init",thisEnv)
             initSymbol = Symbol(initName, "Init", "bool")
             initSymbol.IsReturn = True
             thisEnv.setSymbol(initName, initSymbol)
             # symbol.Returns.append(initName)
 
-            initTmp = getName("initTmp")
+            initTmp = getName("initTmp",thisEnv)
             initLex = lex_value("lv6id", initTmp)
             initTmpSym = Symbol(initTmp, "TmpVar")
             initTmpSym.StateType = 'ifCondition'
@@ -2017,14 +2106,14 @@ def p_tempo_expr(p):
         # expr可能是列表
         for idx in range(len(p[2].objects)):
             type = getTypefromObjects(p[2].objects[idx])
-            preName = getName("mem_pre")
+            preName = getName("mem_pre",thisEnv)
             # symbol.Returns.append(preName)
             preSymbol = Symbol(preName, "Pre", type)
             preSymbol.IsReturn = True
             preSymbol.StateType = 'equation'
             thisEnv.setSymbol(preName, preSymbol)
 
-            tmpPreName = getName("tmp_pre")
+            tmpPreName = getName("tmp_pre",thisEnv)
             tmpPreSymbol = Symbol(tmpPreName, "TmpVar", type)
             tmpPreSymbol.Code.append(lex_value("lv6id", preName))
             tmpPreSymbol.StateType = 'equation'
@@ -2046,14 +2135,14 @@ def p_tempo_expr(p):
         p[0].beforeObjects += p[3].beforeObjects + p[5].beforeObjects + p[7].beforeObjects
         p[0].afterObjects += p[3].afterObjects + p[5].afterObjects + p[7].afterObjects
         for idx in range(len(p[3].objects)):
-            initName = getName("init")
+            initName = getName("init",thisEnv)
             initSymbol = Symbol(initName, "Init", "bool")
             initSymbol.IsReturn = True
             thisEnv.setSymbol(initName, initSymbol)
             # symbol.Returns.append(initName)
 
-            fbyIdx = getName("fbyIdx")
-            fbyArr = getName("fbyArray")
+            fbyIdx = getName("fbyIdx",thisEnv)
+            fbyArr = getName("fbyArray",thisEnv)
 
             type = getTypefromObjects(p[5].objects[0])
             if type == "":
@@ -2073,7 +2162,7 @@ def p_tempo_expr(p):
             type = checkType(p[3], p[7], idx)
             fbyArrSymbol.Type = type
 
-            fbyTmp = getName('fbyTmp')
+            fbyTmp = getName('fbyTmp',thisEnv)
             fbyTmpSymbol = Symbol(fbyTmp, "TmpVar", type)
             thisEnv.setSymbol(fbyTmp, fbyTmpSymbol)
 
@@ -2163,7 +2252,7 @@ def p_switch_expr(p):
             raise NotImplementedError("switch_expr if error")
         p[0].beforeObjects += p[2].beforeObjects + p[4].beforeObjects + p[6].beforeObjects
         for idx in range(len(p[4].objects)):
-            ifTmp = getName("ifTmp")
+            ifTmp = getName("ifTmp",thisEnv)
             ifSymbol = Symbol(ifTmp, "TmpVar")
             ifSymbol.StateType = 'ifCondition'
             thisEnv.setSymbol(ifTmp, ifSymbol)
@@ -2194,7 +2283,7 @@ def p_switch_expr(p):
         conditionNode=Node('switchCondition')
         conditionNode.value.extend(p[3].objects[0])
         for idx in range(len(p[5].objects)):
-            caseName = getName("caseTmp")
+            caseName = getName("caseTmp",thisEnv)
             caseSymbol = Symbol(caseName, "TmpVar")
             caseSymbol.StateType = 'switchCondition'
             caseSymbol.Code.append(conditionNode)
@@ -2264,17 +2353,17 @@ def p_pattern_1(p):
 def p_arith_expr(p):
     '''Arith_expr : LPARENTHESE Expr COLON Type_expr RPARENTHESE'''
     p[0] = lex_value("Arith_expr")
-    realType = p[4].value
-    if realType not in typeArr:
-        realType = getIdType(p[4].value, GlobalEnv).Type
-    p[0].objects.append(lex_value("", "(kcg_%s)" % (realType)))
-    if len(p[2].objects[0]) != 1:
-        p[0].objects.append(lex_value("", "("))
-    setObjectsType(p[2].objects[0], realType)
+    # realType = p[4].value
+    # if realType not in typeArr:
+    #     realType = getIdType(p[4].value, GlobalEnv).Type
+    # p[0].objects.append(lex_value("", "(kcg_%s)" % (realType)))
+    # if len(p[2].objects[0]) != 1:
+    #     p[0].objects.append(lex_value("", "("))
+    # setObjectsType(p[2].objects[0], realType)
     p[0].objects.extend(p[2].objects[0])
 
-    if len(p[2].objects[0]) != 1:
-        p[0].objects.append(lex_value("", ")"))
+    # if len(p[2].objects[0]) != 1:
+    #     p[0].objects.append(lex_value("", ")"))
 
 
 def p_arith_expr_unary(p):
@@ -2310,7 +2399,6 @@ def p_arith_expr_binOp(p):
     | Expr LSL Expr
     | Expr LSR Expr'''
     p[0] = lex_value("Arith_expr")
-    print("p[1].value=",p[1].objects," p[3].value=",p[3].objects)
     checkType(p[1], p[3], 0)
     if p[2].strs == 'mod':
         p[2].value = ' % '

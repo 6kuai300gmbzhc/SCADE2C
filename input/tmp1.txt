@@ -1,0 +1,15 @@
+package smlk
+package Transfer_Fcn_First_Order
+const ICPrevOutput : float64 = 0;
+const PoleZ : float64 = 0.135335283237 ;
+
+function Data_Type_Duplicate ( In1 : float64 ;
+In2 : float64 ;
+_Pole____Y_k_1____U_k___ : float64 ) returns ( ) let
+_ = _Pole____Y_k_1____U_k___ ;
+_ = In2 ;
+_ = In1 ;
+tel
+
+end;
+end;

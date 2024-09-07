@@ -39,7 +39,6 @@ class topologyNode:
         self.index=index
         self.tpIdx=tpIdx
         self.inNum=inNum
-        self.outNum=outNum
         self.finish=False
 
 def topologySort(symbolList,adjList,nodeList):
@@ -72,15 +71,12 @@ def topologyReady(symbolList):
             nodeDict[leftName]=num
             num+=1
             adjList.append([])
-        else:
-            raise NotImplementedError('%s redefined'%leftName)
     for elem in symbolList:
         adjIdx1=nodeDict[elem.Name]
         for relyElem in elem.relyList:
             if relyElem in nodeDict.keys():
                 adjIdx2=nodeDict[relyElem]
                 nodeList[adjIdx1].inNum+=1
-                nodeList[adjIdx2].outNum+=1
                 adjList[adjIdx2].append(adjIdx1)
     return topologySort(symbolList,adjList,nodeList)
     
@@ -117,12 +113,15 @@ def checkElemInStruct(symbolName,params,idx,thisEnv):
     
 def objectsToString(objects,thisEnv):
     sstr=""
+    print("objectsToString thisEnv=",thisEnv.EnvName,objects)
+    globalSymbol=None
     if thisEnv.PrevTable!=None:
         globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(thisEnv.EnvName)
     for elem in objects:
+        print("elem.value=",elem.value)
         symbol=thisEnv.getSymbolInThisAndPreEnv(elem.value)
         #没有被调用，或者被调用了，且是node，则可以使用outC
-        if elem.strs=='lv6id' and ((not globalSymbol.isCalled) or (globalSymbol.isCalled and globalSymbol.hasInternalState==True) ):    
+        if elem.strs=='lv6id' and globalSymbol!=None and ((not globalSymbol.isCalled) or (globalSymbol.isCalled and globalSymbol.hasInternalState==True) ):    
             # type=symbol.Type
             if symbol.IsReturn:
                 sstr+=symbol.changeName(thisEnv)
@@ -138,10 +137,10 @@ def objectsToString(objects,thisEnv):
                     for structElem in elem.objects:
                         sstr+=".%s"%structElem.value
         elif elem.strs=='lv6id':
-            if len(globalSymbol.Returns) != 1:
+            if globalSymbol!=None and len(globalSymbol.Returns) != 1:
                 if symbol.Name in globalSymbol.Returns and (symbol.Type in intArr or symbol.Type in floatArr or symbol.Type=='bool'):
                     sstr+="*"
-            sstr+=symbol.Name
+                sstr+=symbol.Name
         elif elem.strs=='Path_id':
             # print("symbol.Kind=",symbol.Kind)
             sstr+=elem.value
@@ -221,7 +220,7 @@ def typeToString(symbol,leftLex,symtable):
         str+="%s=0;\n"%objectsToString(symbol.Code[1],symtable)
         str+="}\n"
         str+="%s=%s[%s];\n"%(leftName,objectsToString(symbol.Code[2],symtable),objectsToString(symbol.Code[1],symtable))
-        str+="%s[%s]=%s;\n"%(objectsToString(symbol.Code[2],symtable),objectsToString(symbol.Code[1],symtable),objectsToString(objectsToString(symbol.Code[3],symtable)))
+        str+="%s[%s]=%s;\n"%(objectsToString(symbol.Code[2],symtable),objectsToString(symbol.Code[1],symtable),objectsToString(symbol.Code[3],symtable))
         str+="%s=(%s+1)%%(%s);\n"%(objectsToString(symbol.Code[1],symtable),objectsToString(symbol.Code[1],symtable),objectsToString(symbol.Code[4],symtable))
     elif symbol.StateType=='struct':
         for key,value in symbol.FieldValueList.items():

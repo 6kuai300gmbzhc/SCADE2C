@@ -46,6 +46,7 @@ class Symbol:
         self.arrSize = list()  #数组长度的表达式
         self.arrValueList = list()
         self.relyList = list()
+        self.pathList = list()
 
         self.initState = None  # 初始状态
         self.StrongOrWeak = None # 强迁移: 1, 弱迁移: 0
@@ -144,3 +145,11 @@ class SymbolTable:
         for elem in self.ChildTableList:
             print(elem.EnvName)
         print("======End")
+    
+    def printPath(self):
+        print("=======getPath======",self.EnvName)
+        prev=self.PrevTable
+        while prev!=None and prev.EnvName != 'Global':
+            print("prevTable.EnvName=",prev.EnvName)
+            prev=prev.PrevTable
+        print("=====================")

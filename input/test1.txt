@@ -521,9 +521,10 @@ _L29 = errtovd ( _L9 ) ;
 _L32 = 0 ;
 tel
 package airdynamic
+
 package Transfer_Fcn_First_Order
-const ICPrevOutput : float64 = 0._f64 ;
-const PoleZ : float64 = 0.135335283237_f64 ;
+const ICPrevOutput : float64 = 0 ;
+const PoleZ : float64 = 0.135335283237 ;
 function Data_Type_Duplicate ( In1 : float64 ;
 In2 : float64 ;
 _Pole____Y_k_1____U_k___ : float64 ) returns ( ) let
@@ -546,10 +547,12 @@ Y_k_1_ = libsi::UnitDelayHelper ( _L_1 , ICPrevOutput ) ;
 Y = _L_1 ;
 tel
 end;
+
 function Subtract1 ( In1 : float64 ;
 In2 : float64 ) returns ( Out1 : float64 ) let
 Out1 = In2 + In1 ;
 tel
+
 function sum_pmmmm ( x1 : ' t ;
 x2 : ' t ;
 x3 : ' t ;
@@ -557,16 +560,19 @@ x4 : ' t ;
 x5 : ' t ) returns ( y : ' t ) where ' t numeric let
 y = x1 - x2 - x3 - x4 - x5 ;
 tel
+
 node Integrator1 ( In1 : float64 ) returns ( Out1 : float64 ) var x : float64 ;
 y : float64 ;
 let
-y = ( 0._f64 ) -> ( pre ( x ) ) ;
-x = Out1 + 1.0_f64 * 0.02_f64 * In1 ;
+y = ( 0 ) -> ( pre ( x ) ) ;
+x = Out1 + 1.0 * 0.02 * In1 ;
 Out1 = y ;
 tel
+
 function Constant ( ) returns ( Out1 : float64 ) let
-Out1 = 70._f64 ;
+Out1 = 70 ;
 tel
+
 node airdynamic ( Fwf : float64 ) returns ( dec___ : float64 ;
 V_plane : float64 ) var Y : float64 ;
 probe Scope13 : float64 ;
@@ -587,7 +593,7 @@ _L = Integrator1 ( _L_6 ) ;
 Scope13 = _L_1 ;
 _L_1 = Subtract1 ( _L_2 , _L ) ;
 Y = Transfer_Fcn_First_Order::Transfer_Fcn_First_Order_1 ( _L_7 ) ;
-_L_6 = libsi::UnitDelayHelper ( Y , 0._f64 ) ;
+_L_6 = libsi::UnitDelayHelper ( Y , 0 ) ;
 _L_7 = Discrete::zero_order_hold ( _L2 ) ;
 dec___ = _L2 ;
 V_plane = _L_1 ;
@@ -596,18 +602,22 @@ _L2 = _L3 * _L1 ;
 _L3 = _L_4 * _L4 ;
 _L4 = - 2 ;
 tel
+
 function Subtract ( In1 : float64 ;
 In2 : float64 ;
 In3 : float64 ;
 In4 : float64 ;
-In5 : float64 ) returns ( Out1 : float64 ) let
-Out1 = sum_pmmmm ( In1 , In2 , In3 , In4 , In5 ) ;
+In5 : float64 ) returns ( Out1 : float64 )
+let
+    Out1 = sum_pmmmm ( In1 , In2 , In3 , In4 , In5 ) ;
 tel
+
 end;
+
 package Hydraulic_system
 package Transfer_Fcn_First_Order
-const ICPrevOutput : float64 = 0._f64 ;
-const PoleZ : float64 = 0.997010465608_f64 ;
+const ICPrevOutput : float64 = 0 ;
+const PoleZ : float64 = 0.997010465608 ;
 function Data_Type_Duplicate ( In1 : float64 ;
 In2 : float64 ;
 _Pole____Y_k_1____U_k___ : float64 ) returns ( ) let
@@ -615,6 +625,7 @@ _ = _Pole____Y_k_1____U_k___ ;
 _ = In2 ;
 _ = In1 ;
 tel
+
 node Transfer_Fcn_First_Order_1 ( U : float64 ) returns ( Y : float64 ) var _Pole____Y_k_1____U_k___ : float64 ;
 __Y_k_1____U_k___ : float64 ;
 Y_k_1_ : float64 ;
@@ -630,6 +641,7 @@ Y_k_1_ = libsi::UnitDelayHelper ( _L_1 , ICPrevOutput ) ;
 Y = _L_1 ;
 tel
 end;
+
 node Hydraulic ( brake_command : float64 ) returns ( Pb : float64 ) var Y : float64 ;
 _L_4 : float64 ;
 _L_3 : float64 ;
@@ -638,10 +650,10 @@ _L_1 : float64 ;
 _L : float64 ;
 let
 _L = brake_command ;
-_L_1 = libsi::Gain ( _L_2 , 1000000._f64 ) ;
-_L_2 = pwlinear::LimiterUnSymmetrical ( _L , 0._f64 , 21._f64 ) ;
+_L_1 = libsi::Gain ( _L_2 , 1000000 ) ;
+_L_2 = pwlinear::LimiterUnSymmetrical ( _L , 0 , 21 ) ;
 Y = Transfer_Fcn_First_Order::Transfer_Fcn_First_Order_1 ( _L_3 ) ;
-_L_4 = libsi::UnitDelayHelper ( Y , 0._f64 ) ;
+_L_4 = libsi::UnitDelayHelper ( Y , 0 ) ;
 _L_3 = Discrete::zero_order_hold ( _L_1 ) ;
 Pb = _L_4 ;
 tel
@@ -689,12 +701,15 @@ _L10 = _L13 * _L9 ;
 _L11 = wheelload ;
 _L12 = _L10 * _L11 ;
 Flw = _L12 ;
-_L13 = pwlinear::LimiterUnSymmetrical ( _L4 , 0.3_f64 , 0.6_f64 ) ;
+_L13 = pwlinear::LimiterUnSymmetrical ( _L4 , 0.3 , 0.6 ) ;
 tel
 end;
+
 package slidratio
 function slidratio ( V_plane : float64 ;
-w : float64 ) returns ( slid_ratio : float64 ) var probe Scope2 : float64 ;
+w : float64 ) returns ( slid_ratio : float64 ) 
+var 
+probe Scope2 : float64 ;
 probe Scope1 : float64 ^ 2 ;
 _L_6 : float64 ;
 _L_5 : float64 ^ 2 ;
@@ -707,23 +722,27 @@ let
 _L_4 = V_plane ;
 _L_6 = w ;
 _L_5 = [ _L_4 , _L_6 ] ;
-_L_3 = pwlinear::LimiterUnSymmetrical ( _L1 , 0._f64 , 1._f64 ) ;
+_L_3 = pwlinear::LimiterUnSymmetrical ( _L1 , 0 , 1 ) ;
 Scope1 = _L_5 ;
 Scope2 = _L ;
 _L = _L_4 - _L_2 ;
-_L_2 = libsi::Gain ( _L_6 , 0.35_f64 ) ;
+_L_2 = libsi::Gain ( _L_6 , 0.35 ) ;
 slid_ratio = _L_3 ;
 _L1 = _L / _L_4 ;
 tel
+
 function product_dp ( x1 : ' t ;
-x2 : ' t ) returns ( y : ' t ) where ' t numeric let
-y = ( 1._f64 : ' t ) / x1 * x2 ;
+x2 : ' t ) returns ( y : ' t ) where ' t numeric 
+let
+y = ( 1 : ' t ) / x1 * x2 ;
 tel
+
 end;
+
 package smlk
 package Transfer_Fcn_First_Order
-const ICPrevOutput : float64 = 0._f64 ;
-const PoleZ : float64 = 0.135335283237_f64 ;
+const ICPrevOutput : float64 = 0 ;
+const PoleZ : float64 = 0.135335283237 ;
 function Data_Type_Duplicate ( In1 : float64 ;
 In2 : float64 ;
 _Pole____Y_k_1____U_k___ : float64 ) returns ( ) let
@@ -746,24 +765,30 @@ Y_k_1_ = libsi::UnitDelayHelper ( _L_1 , ICPrevOutput ) ;
 Y = _L_1 ;
 tel
 end;
+
 function Subtract1 ( In1 : float64 ;
 In2 : float64 ) returns ( Out1 : float64 ) let
 Out1 = In2 + In1 ;
 tel
+
+
 function sum_mm ( x1 : ' t ;
 x2 : ' t ) returns ( y : ' t ) where ' t numeric let
 y = - x1 - x2 ;
 tel
+
 node Integrator1 ( In1 : float64 ) returns ( Out1 : float64 ) var x : float64 ;
 y : float64 ;
 let
-y = ( 0._f64 ) -> ( pre ( x ) ) ;
-x = Out1 + 1.0_f64 * 0.02_f64 * In1 ;
+y = ( 0 ) -> ( pre ( x ) ) ;
+x = Out1 + 1 * 0.02 * In1 ;
 Out1 = y ;
 tel
+
 function Constant ( ) returns ( Out1 : float64 ) let
-Out1 = 70._f64 ;
+Out1 = 70 ;
 tel
+
 node lugre ( Fwf : float64 ) returns ( dec___ : float64 ;
 V_plane : float64 ) var Y : float64 ;
 probe Scope1 : float64 ;
@@ -777,21 +802,23 @@ _L_1 : float64 ;
 _L : float64 ;
 let
 _L_5 = Fwf ;
-_L_3 = libsi::Gain ( _L_2 , 1._f64 / 10000._f64 ) ;
+_L_3 = libsi::Gain ( _L_2 , 1 / 10000 ) ;
 _L_1 = Constant ( ) ;
 _L = Integrator1 ( _L_7 ) ;
 Scope1 = _L_4 ;
 _L_2 = sum_mm ( _L_5 , _L_5 ) ;
 _L_4 = Subtract1 ( _L_1 , _L ) ;
 Y = Transfer_Fcn_First_Order::Transfer_Fcn_First_Order_1 ( _L_6 ) ;
-_L_7 = libsi::UnitDelayHelper ( Y , 0._f64 ) ;
+_L_7 = libsi::UnitDelayHelper ( Y , 0 ) ;
 _L_6 = Discrete::zero_order_hold ( _L_3 ) ;
 dec___ = _L_3 ;
 V_plane = _L_4 ;
 tel
 end;
+
 package aircraft_brake_system
 const Constant1 : float64 = 0.0 ;
+
 node t ( ) returns ( t : float64 last = 0 ) var _L4 : float64 ;
 _L5 : float64 ;
 _L7 : float64 ;
@@ -803,6 +830,7 @@ _L5 = _L8 + _L4 ;
 _L7 = pre ( _L5 ) ;
 _L8 = ( 0 ) -> ( _L7 ) ;
 tel
+
 node brake_system ( brake_pressure : float64 ;
 t : float64 last = 0 ) returns ( Kbbm : float64 ;
 Tb : float64 ;
