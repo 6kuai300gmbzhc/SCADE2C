@@ -36,6 +36,7 @@ class Symbol:
         self.IsInput = False
         self.IsReturn = False
         self.StateType = '' #ifBlock(变量赋值为if块),equation(变量赋值为等式),switchBlock,fbyBlock,structNormal,ApplyExpr
+        self.IsLast = False #若变量有last，且在node中有被使用到last，才会初始化为last的值
 
         self.Value = None  # 常量、变量等的值
 

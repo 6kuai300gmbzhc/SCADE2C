@@ -139,6 +139,8 @@ def objectsToString(objects,thisEnv):
                 if symbol.Name in globalSymbol.Returns and (symbol.Type in intArr or symbol.Type in floatArr or symbol.Type=='bool'):
                     sstr+="*"
                 sstr+=symbol.Name
+            else:
+                sstr+=elem.value
         elif elem.strs=='Path_id':
             # print("symbol.Kind=",symbol.Kind)
             sstr+=elem.value

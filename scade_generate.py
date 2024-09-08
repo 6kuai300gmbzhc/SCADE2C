@@ -150,7 +150,6 @@ def testInputDirFiles():
             GlobalEnv=SymbolTable('Global')
 
 def testInputFile():
-    dir_path='./input'
     fileName='./input/test1.txt'
     sc.outputDir=os.path.splitext(os.path.basename(fileName))[0]
     dirPath=os.path.join("./output",sc.outputDir)

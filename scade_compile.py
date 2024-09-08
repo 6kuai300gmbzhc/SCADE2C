@@ -21,20 +21,21 @@ def symbolInit(symbol, symbolTable):
         realType = getIdType(symbol.Name, symbolTable).Type
         setObjectsType(symbol.Default[0], realType)
         str = objectsToString(symbol.Default[0], thisEnv)
-    elif len(symbol.Last) != 0:
-        realType = getIdType(symbol.Name, symbolTable).Type
-        setObjectsType(symbol.Last[0], realType)
-        str = objectsToString(symbol.Last[0], thisEnv)
     else:
-        realType = symbol.Type
-        if realType in intArr:
-            str = "kcg_lit_%s(0)" % realType
-        elif realType in floatArr:
-            str = "kcg_lit_%s(0.0)" % realType
-        elif realType == 'bool':
-            str = "kcg_true"
+        if symbol.IsLast == True and len(symbol.Last)!=0:
+            realType = getIdType(symbol.Name, symbolTable).Type
+            for elem in symbol.Last:
+                str += objectsToString(elem, thisEnv)
         else:
-            symbolInit(getIdType(realType, thisEnv), thisEnv)
+            realType = symbol.Type
+            if realType in intArr:
+                str = "kcg_lit_%s(0)" % realType
+            elif realType in floatArr:
+                str = "kcg_lit_%s(0.0)" % realType
+            elif realType == 'bool':
+                str = "kcg_true"
+            else:
+                symbolInit(getIdType(realType, thisEnv), thisEnv)
     return str
 
 def structInitial(c_content, structName, symbol):
@@ -526,8 +527,10 @@ def setTemplateType(applySym,instantSymtable,templateSymtable,leftLex,rightLex):
     instantApplySym.Name=name
     instantApplySymtable.EnvName=name
     # instantSymtable.setSymbol(name,instantApplySym)
-    templateSymtable.PrevTable.ChildTableList.append(instantApplySymtable)
-    templateSymtable.PrevTable.setSymbol(name,instantApplySym)
+    #若该模板的实例类型一致，只用生成一份就行
+    if templateSymtable.PrevTable.getSymbolInThisEnv(name) == None :
+        templateSymtable.PrevTable.ChildTableList.append(instantApplySymtable)
+        templateSymtable.PrevTable.setSymbol(name,instantApplySym)
     return instantApplySym
         
 
@@ -2021,6 +2024,7 @@ def p_id_expr(p):
         realType = getIdType(p[3].value, thisEnv)
         lastName = getName("lastTmp",thisEnv)
         lastSymbol = Symbol(lastName, "TmpVar", realType.Type)
+        lastSymbol.IsLast=True
         thisEnv.setSymbol(lastName, lastSymbol)
         p[0].objects.append(lex_value("lv6id", lastName))
         lastSymbol.StateType = 'equation'
