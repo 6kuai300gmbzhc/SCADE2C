@@ -526,7 +526,7 @@ def setTemplateType(applySym,instantSymtable,templateSymtable,leftLex,rightLex):
     instantApplySym.Name=name
     instantApplySymtable.EnvName=name
     # instantSymtable.setSymbol(name,instantApplySym)
-    templateSymtable.ChildTableList.append(instantApplySymtable)
+    templateSymtable.PrevTable.ChildTableList.append(instantApplySymtable)
     templateSymtable.PrevTable.setSymbol(name,instantApplySym)
     return instantApplySym
         

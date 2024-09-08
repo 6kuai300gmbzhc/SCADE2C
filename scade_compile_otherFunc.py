@@ -113,12 +113,10 @@ def checkElemInStruct(symbolName,params,idx,thisEnv):
     
 def objectsToString(objects,thisEnv):
     sstr=""
-    print("objectsToString thisEnv=",thisEnv.EnvName,objects)
     globalSymbol=None
     if thisEnv.PrevTable!=None:
         globalSymbol=thisEnv.PrevTable.getSymbolInThisEnv(thisEnv.EnvName)
     for elem in objects:
-        print("elem.value=",elem.value)
         symbol=thisEnv.getSymbolInThisAndPreEnv(elem.value)
         #没有被调用，或者被调用了，且是node，则可以使用outC
         if elem.strs=='lv6id' and globalSymbol!=None and ((not globalSymbol.isCalled) or (globalSymbol.isCalled and globalSymbol.hasInternalState==True) ):    
