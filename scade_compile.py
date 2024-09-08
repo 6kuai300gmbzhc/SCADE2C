@@ -271,7 +271,8 @@ def generate_c_file_reset_func(symtable,opKindSymbol):
 
 def generate_c_file(symtable,opKindSymbol):
     name = opKindSymbol.Name + opKindSymbol.PackageName
-    c_content = "#include \"%s.h\"\n" % name
+    print("generate_c_file opKindSymbol.Name=",opKindSymbol.Name," opKindSymbol.PackageName",opKindSymbol.PackageName)
+    c_content = "#include \"%s.h\"\n" % name 
 
     c_content += generate_c_file_func(symtable,opKindSymbol)
     if  opKindSymbol.isCalled ==False or (opKindSymbol.isCalled == True and opKindSymbol.hasInternalState == True):
@@ -526,6 +527,7 @@ def setTemplateType(applySym,instantSymtable,templateSymtable,leftLex,rightLex):
         name+="_"+"_".join(instantApplySym.templateTypeList)
     instantApplySym.Name=name
     instantApplySymtable.EnvName=name
+    print("111 funcName=",name)
     # instantSymtable.setSymbol(name,instantApplySym)
     #若该模板的实例类型一致，只用生成一份就行
     if templateSymtable.PrevTable.getSymbolInThisEnv(name) == None :
@@ -1403,6 +1405,7 @@ def p_simple_equation(p):
                         funcName=p[3].objects[idx][opLexIdx].value
                         if len(applySymbol.templateTypeList)!=0:
                             funcName+="_"+"_".join(applySymbol.templateTypeList)
+                        print("222 funcName=",funcName)
                         globalSymbol.callOperators.append(funcName)
                         p[3].objects[idx][opLexIdx].value=funcName
                     if applySymbol.hasInternalState == True:
@@ -1937,48 +1940,6 @@ def getFuncName(funcList,symtable):
                 if flag==False:
                     raise NotImplementedError("getFuncName error")
         return funcList,"_".join(funcList)
-
-# def getFuncName(funcList,symtable):
-#     fullFlag=False
-#     for elem in funcList:
-#         flag = False
-#         if elem == funcList[-1]:
-#             if symtable.getSymbolInThisEnv(elem) !=None:
-#                 flag = True
-#         else:
-#             for childSym in symtable.ChildTableList:
-#                 if childSym.EnvName == elem:
-#                     symtable=childSym
-#                     flag = True
-#                     break
-#         if flag == False:
-#             fullFlag = True
-#             break
-#     if fullFlag == True:
-#         tmpTable=GlobalEnv
-#         for elem in funcList:
-#             flag = False
-#             if elem == funcList[-1]:
-#                 if tmpTable.getSymbolInThisEnv(elem) != None:
-#                     flag = True
-#             else:
-#                 for childSym in tmpTable.ChildTableList:
-#                     if childSym.EnvName == elem:
-#                         flag = True
-#                         tmpTable = childSym
-#                         break
-#                 if flag == False:
-#                     curFunc = inspect.currentframe()
-#                     callerFunc = curFunc.f_back
-#                     funcName = callerFunc.f_code.co_name
-#                     raise NotImplementedError(f" '{funcName}' error")
-#         return funcList[-1]+"_"+"_".join(funcList[:-1])
-#     curList=[]
-#     while symtable != GlobalEnv:
-#         curList.append(symtable.EnvName)
-#         symtable=symtable.PrevTable
-#     funcList=curList[::-1]+funcList[1:]
-#     return funcList[-1]+"_"+"_".join(funcList[:-1])
     
 def p_path_id(p):
     '''Path_id : LV6ID Path_1'''

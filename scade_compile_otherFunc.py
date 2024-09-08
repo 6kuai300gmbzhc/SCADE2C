@@ -210,10 +210,10 @@ def typeToString(symbol,leftLex,symtable):
         str+='memcpy(&%s,&%s,sizeof(%s));\n'%(leftName,objectsToString(symbol.Code,symtable),symbol.Type)
     elif symbol.StateType=='ifCondition':
         ifNode=symbol.Code[0]
-        str+=blockToString(ifNode,leftName,symtable)
+        str+=blockToString(ifNode,leftLex,symtable)
     elif symbol.StateType=='switchCondition':
         switchNode=symbol.Code[0]
-        str+=blockToString(switchNode,leftName,symtable)
+        str+=blockToString(switchNode,leftLex,symtable)
     elif symbol.StateType=='fbyBlock':
         str+="if(%s){\n for(int idx=0;idx<%s;idx++){\n"%(objectsToString(symbol.Code[0],symtable),objectsToString(symbol.Code[4],symtable))
         str+="%s[idx]=%s;\n}\n"%(objectsToString(symbol.Code[2],symtable),objectsToString(symbol.Code[5],symtable))
@@ -255,18 +255,22 @@ def typeToString(symbol,leftLex,symtable):
         str+=");\n"
     return str
 
-def blockToString(root,leftName,symtable):
+def blockToString(root,leftLex,symtable):
     str=""
+    leftName=objectsToString(leftLex,symtable)
     if root.type=='ifCondition':
         str+="if(%s)"%(objectsToString(root.value,symtable))
         if len(root.childNodeList)==1:
             leftNode=root.childNodeList[0]
-            str+="{\n%s}\n"%blockToString(leftNode,leftName,symtable)
+            str+="{\n%s}\n"%blockToString(leftNode,leftLex,symtable)
         elif len(root.childNodeList)==2:
             leftNode=root.childNodeList[0]
             rightNode=root.childNodeList[1]
-            str+="{\n%s}else{\n%s}\n"%(blockToString(leftNode,leftName,symtable),blockToString(rightNode,leftName,symtable))
+            str+="{\n%s}else{\n%s}\n"%(blockToString(leftNode,leftLex,symtable),blockToString(rightNode,leftLex,symtable))
     elif root.type=='equation':
+        opKindSymbol=symtable.PrevTable.getSymbolInThisEnv(symtable.EnvName)
+        if opKindSymbol.isCalled == True and opKindSymbol.hasInternalState==False and len(opKindSymbol.Returns) >1 and symtable.getSymbolInThisEnv(leftLex[0].value).IsReturn ==True:
+            str+="*"    
         str+="%s = %s;\n"%(leftName,objectsToString(root.value,symtable))
     elif root.type=='switchCondition':
         str += "switch(%s){\n" % (objectsToString(root.value, symtable))
@@ -277,7 +281,7 @@ def blockToString(root,leftName,symtable):
                 str += "default :\n{\n"
             else:
                 str += "case %s :\n{\n" % objectsToString(elem.pattern, symtable)
-            str += "%s" % (blockToString(elem, leftName, symtable))
+            str += "%s" % (blockToString(elem, leftLex, symtable))
             str += "break;\n}\n"
         if isDefault == False:
             str += "default :\nbreak;\n}\n"
