@@ -1939,7 +1939,7 @@ def getFuncName(funcList,symtable):
                         break
                 if flag==False:
                     raise NotImplementedError("getFuncName error")
-        return funcList,"_".join(funcList)
+        return funcList,funcList[-1]+"_"+"_".join(funcList[:-1])
     
 def p_path_id(p):
     '''Path_id : LV6ID Path_1'''
