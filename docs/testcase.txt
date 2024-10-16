@@ -1,0 +1,266 @@
+/***********************  testcase1   ******************************/
+const n : int32 = 3;
+
+function Exists(T : bool^n) returns (S : bool)
+var
+  _L1 : bool^n;
+  _L2 : bool;
+  _L4 : bool;
+let
+  _L1= T;
+  _L2= false;
+  S= _L4;
+  _L4= false;
+tel
+
+/***********************  testcase2   ******************************/
+const n : int32 = 3;
+
+type
+  fr_color = enum {
+    #pragma kcg C:enum_val 1 #end
+    #pragma kcg 
+									Ada:enum_val 1
+								 #end f_none,
+    #pragma kcg 
+									Ada:enum_val 2
+								 #end black,
+    #pragma kcg 
+									Ada:enum_val 3
+								 #end white
+  };
+
+type
+  bk_color = enum {
+    #pragma kcg C:enum_val 1 #end
+    #pragma kcg 
+									Ada:enum_val 1
+								 #end b_none,
+    #pragma kcg 
+									Ada:enum_val 2
+								 #end grey,
+    #pragma kcg 
+									Ada:enum_val 3
+								 #end yellow,
+    #pragma kcg 
+									Ada:enum_val 4
+								 #end green
+  };
+
+node Button(Button : bool; Lock : bool; Unlock : bool; Any : bool)
+  returns (background : bk_color; foreground : fr_color)
+let
+
+  automaton StateMachine1
+    state WaitUnlock
+      var
+        _L2 : fr_color;
+        _L3 : bk_color;
+      let
+        background= _L3;
+        _L2= black;
+        foreground= _L2;
+        _L3= grey;
+      tel
+      until
+        if Unlock restart Unselected;
+
+    state Preselected
+      var
+        _L3 : fr_color;
+        _L2 : bk_color;
+      let
+        _L3= white;
+        background= _L2;
+        foreground= _L3;
+        _L2= yellow;
+      tel
+      until
+        if Lock restart Locked;
+        if Any restart Unselected;
+
+    state Locked
+      var
+        _L2 : fr_color;
+        _L3 : bk_color;
+      let
+        _L2= white;
+        background= _L3;
+        foreground= _L2;
+        _L3= green;
+      tel
+      until
+        if Unlock restart Preselected;
+
+    initial state Unselected
+      var
+        _L2 : fr_color;
+        _L1 : bk_color;
+      let
+        background= _L1;
+        foreground= _L2;
+        _L2= f_none;
+        _L1= b_none;
+      tel
+      until
+        if Lock restart WaitUnlock;
+        if Button restart Preselected;
+  returns ..;
+tel
+
+/***********************  testcase3   ******************************/
+type tPercent = float64;
+
+type tRpm = float64;
+
+type tSpeed = float64;
+
+type tTorq = float64;
+
+const ZeroSpeed : tSpeed = 0.0;
+
+const ZeroPercent : tPercent = 0.0;
+
+const SpeedMin : tSpeed = 30.0;
+
+const SpeedMax : tSpeed = 150.0;
+
+const SpeedInc : tSpeed = 2.5;
+
+const RegulThrottleMax : tPercent = 100.0;
+
+const PedalsMin : tPercent = 3.0;
+
+const Kp : float64 = 8.113;
+
+const Ki : float64 = 0.5;
+
+package linear
+  function Gain(G_Input : 'T; Gain : 'T)
+    returns (G_Output : 'T)
+    where 'T numeric
+  var
+    _L1 : 'T;
+    _L2 : 'T;
+    _L3 : 'T;
+  let
+    _L1= G_Input;
+    _L2= Gain;
+    G_Output= _L3;
+    _L3= _L1 #1 * _L2;
+  tel
+end;
+
+
+package CruiseControl
+  function SaturateThrottle(ThrottleIn : tPercent)
+    returns (ThrottleOut : tPercent; Saturate : bool)
+  var
+    _L9 : bool;
+    _L8 : tPercent;
+    _L7 : bool;
+    _L6 : tPercent;
+    _L12 : tPercent;
+    _L13 : bool;
+    _L14 : tPercent;
+    _L16 : tPercent;
+  let
+    _L6= #1 if _L9 then (_L14) else (_L12);
+    _L7= _L12 #1 > _L16;
+    _L8= #2 if _L7 then (_L16) else (_L6);
+    _L9= _L12 #1 < _L14;
+    _L12= ThrottleIn;
+    ThrottleOut= _L8;
+    Saturate= _L13;
+    _L13= _L7 #1 or _L9;
+    _L14= ZeroPercent;
+    _L16= RegulThrottleMax;
+  tel
+
+  node CruiseRegulation(CruiseSpeed : tSpeed; VehiculeSpeed : tSpeed)
+    returns (Throttle : tPercent)
+  var
+    HoldIntegralAction : bool;
+    IntegralAction : float64;
+    ProportionnalAction : tPercent;
+    _L1 : tSpeed;
+    _L2 : tSpeed;
+    _L3 : float64;
+    _L4 : float64;
+    _L10 : float64;
+    _L14 : bool;
+    _L13 : tPercent;
+    _L16 : tSpeed;
+    _L18 : float64;
+    _L26 : tSpeed;
+    _L29 : tSpeed;
+  let
+    _L1= CruiseSpeed;
+    _L2= VehiculeSpeed;
+    _L3= _L1 #1 - _L2;
+    _L4= ProportionnalAction #1 + IntegralAction;
+    _L10= _L16 #2 + _L18;
+    Throttle= _L13;
+    _L13, _L14= #1 SaturateThrottle(_L4);
+    HoldIntegralAction= #1 fby(_L14; 1; true);
+    _L16= #1 if HoldIntegralAction then (_L26) else (_L3);
+    _L18= #2 fby(_L10; 1; _L29);
+    ProportionnalAction= #2 linear::Gain(_L3, Kp);
+    IntegralAction= #3 linear::Gain(_L10, Ki);
+    _L26= ZeroSpeed;
+    _L29= ZeroSpeed;
+  tel
+end;
+
+/***********************  testcase4   ******************************/
+package RollMode
+  const kFailSoftRoll : float32 = 20.0;
+
+  type TRollMode = enum { off, nominal, failsoft };
+
+  node RollMode(absRollRate : float32; onOffPressed : bool)
+    returns (mode : TRollMode)
+  let
+
+    automaton SMRollMode
+      initial state Off
+        unless
+          if onOffPressed restart On;
+        var
+          _L1 : TRollMode;
+        let
+          mode= _L1;
+          _L1= off;
+        tel
+
+      state On
+        unless
+          if onOffPressed restart Off;
+        let
+
+          automaton SMOn
+            initial state Nominal
+              unless
+                if absRollRate #1 > kFailSoftRoll restart Failsoft;
+              var
+                _L1 : TRollMode;
+              let
+                mode= _L1;
+                _L1= nominal;
+              tel
+
+            state Failsoft
+              unless
+                if absRollRate #1 <= kFailSoftRoll restart Nominal;
+              var
+                _L4 : TRollMode;
+              let
+                mode= _L4;
+                _L4= failsoft;
+              tel
+          returns ..;
+        tel
+    returns ..;
+  tel
+
+end;
