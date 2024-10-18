@@ -5,7 +5,7 @@ from ply.yacc import yacc
 import re
 from scade_compile_otherFunc import *
 
-outputDir="/home/xuqianhui/scade2c/output/example"
+outputDir=""
 
 def type_change(type):
     list = ["char", "bool", "float32", "float64", "size", "uint64", "uint32", "uint16", "uint8", "int64", "int32",

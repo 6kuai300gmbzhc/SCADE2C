@@ -1,15 +1,21 @@
-package smlk
-package Transfer_Fcn_First_Order
-const ICPrevOutput : float64 = 0;
-const PoleZ : float64 = 0.135335283237 ;
+package airdynamic
 
-function Data_Type_Duplicate ( In1 : float64 ;
-In2 : float64 ;
-_Pole____Y_k_1____U_k___ : float64 ) returns ( ) let
-_ = _Pole____Y_k_1____U_k___ ;
-_ = In2 ;
-_ = In1 ;
+function sum_pmmmm ( x1 : ' t ;
+x2 : ' t ;
+x3 : ' t ;
+x4 : ' t ;
+x5 : ' t ) returns ( y : ' t ) where ' t numeric 
+let
+y = x1 - x2 - x3 - x4 - x5 ;
 tel
 
-end;
+function Subtract ( In1 : float64 ;
+In2 : float64 ;
+In3 : float64 ;
+In4 : float64 ;
+In5 : float64 ) returns ( Out1 : float64 )
+let
+    Out1 = sum_pmmmm ( In1 , In2 , In3 , In4 , In5 ) ;
+tel
+
 end;

@@ -1,9 +1,9 @@
 import os
-import copy
 import scade_compile as sc
 from queue import Queue
 from scade_compile_otherFunc import GlobalEnv
 from SymbolClass import SymbolTable
+import argparse
 
 def gen_struct_elem(elem):
     str=""
@@ -149,20 +149,18 @@ def testInputDirFiles():
             GlobalEnv=None
             GlobalEnv=SymbolTable('Global')
 
-def testInputFile():
-    fileName='./input/test1.txt'
-    sc.outputDir=os.path.splitext(os.path.basename(fileName))[0]
-    dirPath=os.path.join("./output",sc.outputDir)
+def testInputFile(in_path:str,output_dir:str):
+    sc.outputDir=os.path.splitext(os.path.basename(in_path))[0]
+    dirPath=os.path.join(output_dir,sc.outputDir)
     sc.outputDir=dirPath
-    print("====outputDir=",sc.outputDir)
     if not os.path.exists(dirPath):
         os.makedirs(dirPath)
         os.makedirs(os.path.join(dirPath,"include"))
         os.makedirs(os.path.join(dirPath,"src"))
-    file=open(fileName,'r')
+    file=open(in_path,'r')
     strs=file.read()
     program,symboltable=sc.get_parse(strs)
-    print("*************************************",fileName)
+    print("*************************************",in_path)
     print(program)
     print("*************************************")
     gen=Scade_generate(program,symboltable)
@@ -176,9 +174,13 @@ def testInputFile():
 
 
 if __name__=='__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-i','--input_path',required=True,type=str)
+    parser.add_argument('-o','--output_dir',required=True,type=str)
+    args=parser.parse_args()
     #test files in input dir
     # testInputDirFiles()
-    testInputFile()
+    testInputFile(args.input_path,args.output_dir)
 #     strs='''
 # package P4
 # function myAdd(in1:'T;in2:'T) returns(out1:'T) where 'T numeric
