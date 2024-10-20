@@ -19,3 +19,72 @@ let
 tel
 
 end;
+
+package pbtb
+  const k1 : float64 = Tsm / Pm;
+
+  const k2 : float64 = Tsm / Px;
+
+  const P0 : float64 = 0.0;
+
+  const Pm : float64 = 21000000.0;
+
+  const Px : float64 = 19000000.0;
+
+  const Tsm : float64 = 20000;
+
+  node pbtb(Pb : float64; t : float64)
+    returns (
+      Tb : float64 default = 7000 last = 7000;
+      Kb : float64 last = Tsm #18 / 21;
+      Pr : float64 default = Pb last = Pb)
+  var
+    _L13 : float64;
+    _L14 : float64;
+    _L15 : float64;
+    _L16 : float64;
+  let
+    activate IfBlock1 if Pb #2 < P0
+      then let
+        Tb= 0.0;
+      tel
+      else if last 'Tb #21 / k2 #9 >= Pb #11 and Pb #9 > P0
+      then var
+        _L6 : float64;
+        _L5 : float64;
+        _L4 : float64;
+        _L2 : float64;
+        _L9 : float64;
+      let
+        Tb= _L5;
+        _L2= P0;
+        _L4= Pb;
+        _L5= _L9 #2 * _L6;
+        _L6= _L4 #2 - _L2;
+        _L9= k2;
+      tel
+      else if last 'Tb #24 / k2 #11 + P0 #16 < Pb #14 and last 'Pr #12 > Pb
+      then let
+        Tb= last 'Tb;
+      tel
+      else if last 'Tb #25 / k1 #12 + P0 #13 > Pb #15 and last 'Pr #17 < Pb
+      then let
+        Tb= last 'Tb;
+      tel
+      else if last 'Tb #26 / k1 #13 + P0 #18 < Pb #16 and Pm #10 >= Pb
+      then let
+        Tb= k1 #1 * (Pb #1 - P0);
+      tel
+      else let
+        Tb= last 'Tb;
+      tel
+    returns ..;
+    Pr= _L13;
+    _L13= Pb;
+    Kb= _L14;
+    _L14= _L15 #1 / _L16;
+    _L15= Tsm;
+    _L16= 21;
+  tel
+
+end;

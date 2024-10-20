@@ -854,14 +854,19 @@ def p_clocked_block(p):
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
     p[0].objects.extend(p[3].objects)
-
-
+    global curSymtable
+    curSymtable = curSymtable.PrevTable
+    
 def p_id_zero_or_one(p):
     '''Id_zero_or_one : LV6ID
     | empty'''
     p[0]=lex_value("Id_zero_or_one")
     if p[1].strs=='lv6id':
         p[0].objects.append(p[1])
+        global curSymtable
+        symtable = SymbolTable(p[1].value,curSymtable)
+        curSymtable.ChildTableList.append(symtable)
+        curSymtable = symtable
 
 
 def p_if_block(p):
@@ -925,6 +930,19 @@ def p_simple_equation(p):
     p[0].objects.extend(p[1].objects)
     p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects)
+    lhs_list=[]
+    rely_list=[]
+    global curSymtable
+    for elem in p[3].objects:
+        if elem.strs == 'lv6id' or elem.strs == 'pathId':
+            rely_list.append(elem)
+    for elem in p[1].objects:
+        if elem.strs == 'lv6id':
+            lhs_list.append(elem)
+    print("lhs_list=",lhs_list)
+    print("rely_list=",rely_list)
+
+
     
 def p_lhs(p):
     '''Lhs : LPARENTHESE RPARENTHESE
@@ -1026,11 +1044,19 @@ def p_in_params(p):
     'In_Params : Params'
     p[0]=lex_value("In_Params")
     p[0].objects.extend(p[1].objects)
+    for elem in p[1].objects:
+        if elem.strs == 'lv6id':
+            symbol = curSymtable.getSymbolInThisEnv(elem.value)
+            symbol.IsInput = True
 
 def p_out_params(p):
     'Out_Params : Params'
     p[0]=lex_value("Out_Params")
     p[0].objects.extend(p[1].objects)
+    for elem in p[1].objects:
+        if elem.strs == 'lv6id':
+            symbol = curSymtable.getSymbolInThisEnv(elem.value)
+            symbol.IsReturn = True 
 
 def p_params(p):
     'Params : LPARENTHESE Params_1 RPARENTHESE'
@@ -1363,9 +1389,16 @@ def p_path_id(p):
     '''Path_id : LV6ID Path_1'''
     p[0]=lex_value("pathId")
     tmpStr=p[1].value
-    for elem in p[2].objects:
-        tmpStr+=elem.value
+    if len(p[2].objects)==0:
+        p[0].strs='lv6id'
+    else:
+        for elem in p[2].objects:
+            tmpStr+=elem.value
     p[0].value=tmpStr
+    global curSymtable
+    if curSymtable.getSymbolInThisEnv(tmpStr) == None:
+        symbol=Symbol(tmpStr)
+        curSymtable.setSymbol(tmpStr,symbol)
 
 def p_id_expr(p):
     '''Id_expr : Path_id
@@ -1591,6 +1624,7 @@ def p_prefix(p):
     '''Prefix : Path_id'''
     #TODO:PREFIXOP没有添加，PREFIXOP需要在scade_lex.py里面添加
     p[0]=lex_value("Prefix")
+    p[1].strs = 'Operator'
     p[0].objects.append(p[1])
 
 # not finish
@@ -1978,7 +2012,7 @@ def get_parse(strs):
 
 if __name__ == '__main__':
     parser = yacc(debug=1)
-    file = open("airBrakeSystem.txt",'r')
+    file = open("./input/tmp1.txt",'r')
     strs = file.read()
     get_parse(strs)
     # parser.parse(strs, lexer=scade_lexer)
