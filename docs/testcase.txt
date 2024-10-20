@@ -264,3 +264,192 @@ package RollMode
   tel
 
 end;
+
+
+/***********************  testcase5   ******************************/
+package linear
+  function Gain(G_Input : 'T; Gain : 'T)
+    returns (G_Output : 'T)
+    where 'T numeric
+  var
+    _L1 : 'T;
+    _L2 : 'T;
+    _L3 : 'T;
+  let
+    _L1= G_Input;
+    _L2= Gain;
+    G_Output= _L3;
+    _L3= _L1 #1 * _L2;
+  tel
+end;
+
+const pi : float64 = 3.1415926535;
+
+const dt : float64 = 0.01;
+
+const PowerUnit_wb : float64 = - 141.4;
+
+const PowerUnit_CR : float64 = 1148;
+
+const ConEfficiency_drone_R : float64 = 0.225;
+
+const ConEfficiency_drone_cT : float64 = 1.105e-05;
+
+const ConEfficiency_drone_cM : float64 = 1.779e-07;
+
+const PosDyna_Mass : float64 = 1.4;
+
+const PosDyna_GravityAcc : float64 = 9.8;
+
+const AttDyna_Ixx : float64 = 0.0211;
+
+const AttDyna_Iyy : float64 = 0.0219;
+
+const AttDyna_Izz : float64 = 0.0366;
+
+const AttDyna_JRP : float64 = 0.0001287;
+
+
+package attitude_control
+  const dt : float64 = 0.001;
+
+  node Saturation(Input1 : float64; low : float64; hight : float64)
+    returns (Output1 : float64)
+  var
+    _L1 : float64;
+    _L2 : float64;
+    _L3 : float64;
+    _L4 : float64;
+    _L5 : bool;
+    _L6 : float64;
+    _L7 : bool;
+  let
+    _L1= Input1;
+    _L2= low;
+    _L3= hight;
+    _L4= #1 if _L5 then (_L3) else (_L1);
+    _L5= _L1 #1 >= _L3;
+    _L6= #2 if _L7 then (_L2) else (_L4);
+    _L7= _L4 #1 <= _L2;
+    Output1= _L6;
+  tel
+
+
+  node pid(ek : float64; P : float64; I : float64; D : float64)
+    returns (Output1 : float64)
+  var
+    _L1 : float64;
+    _L4 : float64;
+    _L5 : float64;
+    _L6 : float64;
+    _L7 : float64;
+    _L8 : float64;
+    _L9 : float64;
+    _L10 : float64;
+    _L11 : float64;
+    _L12 : float64;
+    _L13 : float64;
+    _L14 : float64;
+    _L15 : float64;
+    _L16 : float64;
+    _L17 : float64;
+    _L18 : float64;
+    _L19 : float64;
+  let
+    _L1= P;
+    _L4= I;
+    _L5= D;
+    _L6= ek;
+    _L7= _L1 #1 * _L6;
+    _L8= _L4 #2 * _L9 #2 * _L10;
+    _L9= dt;
+    _L10= _L6 #1 + _L12;
+    _L11= #1 pre (_L10);
+    _L12= (0) #1 -> (_L11);
+    _L13= _L7 #2 + _L8 #2 + _L18;
+    _L14= _L6 #1 - _L16;
+    _L15= #2 pre (_L6);
+    _L16= (0) #2 -> (_L15);
+    _L17= _L14 #3 * _L5;
+    _L18= _L17 #1 / _L19;
+    _L19= dt;
+    Output1= _L13;
+  tel
+  
+  node attitude_control(
+      roll_deg_d : float64;
+      pitch_deg_d : float64;
+      yaw_deg_d : float64;
+      roll_act : float64;
+      yaw_act : float64;
+      picth_act : float64;
+      wbx_act : float64;
+      wby_act : float64;
+      wbz_act : float64)
+    returns (tao_x : float64; tao_y : float64; tao_z : float64)
+  var
+    _L1 : float64;
+    _L2 : float64;
+    _L3 : float64;
+    _L4 : float64;
+    _L5 : float64;
+    _L6 : float64;
+    _L9 : float64;
+    _L10 : float64;
+    _L11 : float64;
+    _L12 : float64;
+    _L13 : float64;
+    _L14 : float64;
+    _L15 : float64;
+    _L16 : float64;
+    _L17 : float64;
+    _L19 : float64;
+    _L20 : float64;
+    _L21 : float64;
+    _L22 : float64;
+    _L23 : float64;
+    _L24 : float64;
+    _L25 : float64;
+    _L26 : float64;
+    _L27 : float64;
+    _L28 : float64;
+    _L29 : float64;
+    _L30 : float64;
+  let
+    _L1= roll_deg_d;
+    _L2= pitch_deg_d;
+    _L3= yaw_deg_d;
+
+    _L4= #1 linear::Gain(_L1, pi #1 / 180.0);
+    _L5= #2 linear::Gain(_L2, pi #2 / 180.0);
+    _L6= #3 linear::Gain(_L3, pi #3 / 180.0);
+    _L9= #6 linear::Gain(_L12, 30);
+    _L10= #7 linear::Gain(_L13, 30);
+    _L11= #8 linear::Gain(_L14, 1);
+
+    tao_x= _L22;
+    tao_y= _L23;
+    tao_z= _L24;
+    _L12= _L4 #1 - _L25;
+    _L13= _L5 #2 - _L27;
+    _L14= _L6 #3 - _L26;
+    _L15= _L9 #4 - _L28;
+    _L16= _L10 #5 - _L29;
+    _L17= _L11 #6 - _L30;
+
+    _L19= #2 pid(_L15, 0.3, 1.4, 0.01);
+    _L20= #3 pid(_L16, 0.3, 1.4, 0.01);
+    _L21= #4 pid(_L17, 20, 0, 0.1);
+
+    _L22= #1 Saturation(_L19, - 1, 1);
+    _L23= #2 Saturation(_L20, - 1, 1);
+    _L24= #3 Saturation(_L21, - 1, 1);
+
+    _L25= roll_act;
+    _L26= yaw_act;
+    _L27= picth_act;
+    _L28= wbx_act;
+    _L29= wby_act;
+    _L30= wbz_act;
+  tel
+end;
