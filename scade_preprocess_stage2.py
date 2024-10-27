@@ -1956,9 +1956,10 @@ def get_parse(filename):
     output_filename = os.path.splitext(os.path.basename(filename))[0]
     output_file=open(f"stage2_{output_filename}.scade",'w')
     output_file.write(content)
-    print("=== content begin ===")
-    print(content)
-    print("=== content end ===")
+    # print("=== content begin ===")
+    # print(content)
+    # print("=== content end ===")
+    print(f'output_file path: stage2_{output_filename}.scade') #不能删除，run.sh脚本中使用了
     
 if __name__ == '__main__':
     argParser = argparse.ArgumentParser()

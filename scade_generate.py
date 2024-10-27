@@ -170,7 +170,7 @@ def testInputFile(in_path:str,output_dir:str):
     gen.gen_assign_file()
     gen.gen_imported_types_file()
     gen.gen_macro_libmathext_file()
-    print("outputDir finish",sc.outputDir)
+    print("output_dir path: ",sc.outputDir)
 
 
 if __name__=='__main__':

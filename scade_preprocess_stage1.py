@@ -4,6 +4,7 @@ from scade_lex import *
 from SymbolClass import *
 import re
 import argparse
+import os
 
 class graphTree:
     def __init__(self,Name = "",Type= ""):
@@ -49,8 +50,8 @@ def writeFile(node):
     tmpstr+="}"
     file=open("test_aircraft_brake_system.dot",'w')
     file.write(tmpstr)
-    print("======dot file=====\n")
-    print(tmpstr)
+    # print("======dot file=====\n")
+    # print(tmpstr)
 
 programNode=graphTree("","root")
 curNode=programNode
@@ -2009,8 +2010,9 @@ def get_parse(filename):
         content+=elem
     
     output_filename = os.path.splitext(os.path.basename(filename))[0]
-    file=open(f"stage1_{output_filename}",'w')
+    file=open(f"stage1_{output_filename}.scade",'w')
     file.write(content)
+    print(f"output_file path: stage1_{output_filename}.scade")#不能删除，run.sh脚本中使用了
     
 if __name__ == '__main__':
     argParser = argparse.ArgumentParser()
