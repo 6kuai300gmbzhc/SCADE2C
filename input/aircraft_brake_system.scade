@@ -1,4 +1,5 @@
- const D_Vdt : float64 = 0.5;
+
+const D_Vdt : float64 = 0.5;
 
 const D_Vdt1 : float64 = 0.15;
 
@@ -25,7 +26,6 @@ const kp : float64 = 1;
 const Ts : float64 = 0.02;
 
 
-/* xscade source: D:/lab/aircraft_brake_system/err.xscade */
 node err(vw : float64) returns (err : float64 last = 0.0)
 var
   _L1 : float64;
@@ -47,7 +47,6 @@ let
 tel
 
 
-/* xscade source: D:/lab/aircraft_brake_system/errtovd.xscade */
 node errtovd(err : float64 last = 0) returns (vd : float64 last = 0)
 var
   _L1 : float64;
@@ -63,7 +62,6 @@ let
 tel
 
 
-/* xscade source: D:/lab/aircraft_brake_system/errtovd0.xscade */
 node errtovd0(err : float64 last = 0)
   returns (temp3 : float64; vd0 : float64 last = 0)
 var
@@ -97,7 +95,6 @@ let
 tel
 
 
-/* xscade source: D:/lab/aircraft_brake_system/errtovi.xscade */
 node errtovi(err : float64 last = 0)
   returns (vi : float64 last = 0; vi1 : float64; Num_Abs : float64 last = 0)
 var
@@ -154,7 +151,6 @@ let
 tel
 
 
-/* xscade source: D:/lab/aircraft_brake_system/errtovi0.xscade */
 node errtovi0(
     err : float64 last = 0;
     Num0 : float64 last = 0;
@@ -194,7 +190,6 @@ let
 tel
 
 
-/* xscade source: D:/lab/aircraft_brake_system/errtovp.xscade */
 node errtovp(err : float64) returns (vp : float64 last = 0; temp2 : float64)
 var
   _L1 : float64;
@@ -220,8 +215,7 @@ let
   _L12= 0;
 tel
 
-/*pbm已经检验正确*/
-/* xscade source: D:/lab/aircraft_brake_system/pbm.xscade */
+
 node pbm(command : float64; vw : float64; t : float64)
   returns (
     brkcmd : float64 last = 0;
@@ -272,7 +266,6 @@ let
 tel
 
 
-/* xscade source: D:/lab/aircraft_brake_system/vwtovr.xscade */
 node vwtovr(vw : float64 last = 70)
   returns (vr : float64 default = 70 last = 70)
 var
@@ -295,7 +288,6 @@ let
 tel
 
 
-/* xscade source: D:/lab/aircraft_brake_system/aircraft_brake_system.xscade */
 package aircraft_brake_system
   const Constant1 : float64 = 0.0;
 
@@ -374,7 +366,6 @@ package aircraft_brake_system
 end;
 
 
-/* xscade source: D:/lab/aircraft_brake_system/airdynamic.xscade */
 package airdynamic
   package Transfer_Fcn_First_Order
     const ICPrevOutput : float64 = 0._f64;
@@ -492,6 +483,7 @@ package airdynamic
 
 end;
 
+
 package antiskidwithoutVp
   const Constant1 : float64 = 0.0;
 
@@ -605,7 +597,6 @@ package antiskidwithoutVp
 end;
 
 
-/* xscade source: D:/lab/aircraft_brake_system/Hydraulic_system.xscade */
 package Hydraulic_system
   package Transfer_Fcn_First_Order
     const ICPrevOutput : float64 = 0._f64;
@@ -666,7 +657,6 @@ package Hydraulic_system
 end;
 
 
-/* xscade source: D:/lab/aircraft_brake_system/lugrerunwaymodel.xscade */
 package lugrerunwaymodel
   function magicequation4(t : float64)
     returns (b : float64; c : float64; d : float64)
@@ -719,7 +709,6 @@ package lugrerunwaymodel
 end;
 
 
-/* xscade source: D:/lab/aircraft_brake_system/pbtb.xscade */
 package pbtb
   const k1 : float64 = Tsm / Pm;
 
@@ -790,7 +779,6 @@ package pbtb
 end;
 
 
-/* xscade source: D:/lab/aircraft_brake_system/slidratio.xscade */
 package slidratio
   function slidratio(V_plane : float64; w : float64)
     returns (slid_ratio : float64)
@@ -827,7 +815,6 @@ package slidratio
 end;
 
 
-/* xscade source: D:/lab/aircraft_brake_system/wheelload.xscade */
 package wheelload
   const Constant1 : float64 = 0.0;
 
@@ -842,7 +829,6 @@ package wheelload
 end;
 
 
-/* xscade source: D:/lab/aircraft_brake_system/wheelmodel.xscade */
 package wheelmodel
   const Constant1 : float64 = 0.0;
 
@@ -998,7 +984,6 @@ package wheelmodel
 end;
 
 
-/* xscade source: D:/lab/aircraft_brake_system/smlk/smlk.xscade */
 package smlk
   package Transfer_Fcn_First_Order
     const ICPrevOutput : float64 = 0._f64;
@@ -1096,8 +1081,45 @@ package smlk
 
 end;
 
+package mathext
+
+  function imported AtanR(Input1 : 'T) returns (Output1 : 'T) where 'T float;
+
+  function imported SinR(Input1 : 'T) returns (Output1 : 'T) where 'T float;
+end;
+
+
+package pwlinear
+  function #pragma kcg expand #end LimiterUnSymmetrical(
+      LUS_Input : 'T;
+      LowLimit : 'T;
+      HighLimit : 'T)
+    returns (LUS_Output : 'T)
+    where 'T numeric
+  var
+    _L1 : bool;
+    _L11 : 'T;
+    _L13 : 'T;
+    _L15 : 'T;
+    _L2 : bool;
+    _L3 : 'T;
+    _L9 : 'T;
+  let
+    _L1= _L3 #1 >= _L15;
+    _L2= _L3 #2 <= _L13;
+    _L3= LUS_Input;
+    _L9= #3 if _L1 then (_L15) else (_L11);
+    _L11= #6 if _L2 then (_L13) else (_L3);
+    _L13= LowLimit;
+    _L15= HighLimit;
+    LUS_Output= _L9;
+    assume A1 : LowLimit #3 <= HighLimit;
+  tel
+
+end;
+
+
 package libsi
-  const imported #pragma kcg C:name Infinity__libsi #end Infinity : float64;
 
   function Gain(u : 'T; K : 'T) returns (y : 'T) where 'T numeric
   var
@@ -1126,39 +1148,6 @@ package libsi
 
 end;
 
-package mathext
-  function imported AtanR(Input1 : 'T) returns (Output1 : 'T) where 'T float;
-  function imported SinR(Input1 : 'T) returns (Output1 : 'T) where 'T float;
-end;
-
-package pwlinear
-  function #pragma kcg expand #end LimiterUnSymmetrical(
-      LUS_Input : 'T;
-      LowLimit : 'T;
-      HighLimit : 'T)
-    returns (LUS_Output : 'T)
-    where 'T numeric
-  var
-    _L1 : bool;
-    _L11 : 'T;
-    _L13 : 'T;
-    _L15 : 'T;
-    _L2 : bool;
-    _L3 : 'T;
-    _L9 : 'T;
-  let
-    _L1= _L3 #1 >= _L15;
-    _L2= _L3 #2 <= _L13;
-    _L3= LUS_Input;
-    _L9= #3 if _L1 then (_L15) else (_L11);
-    _L11= #6 if _L2 then (_L13) else (_L3);
-    _L13= LowLimit;
-    _L15= HighLimit;
-    LUS_Output= _L9;
-    assume A1 : LowLimit #3 <= HighLimit;
-  tel
-end;
-
 package Discrete
 
   function
@@ -1166,3 +1155,4 @@ package Discrete
     zero_order_hold (x: 't) returns (y: 't)
     y = x;
 end;
+

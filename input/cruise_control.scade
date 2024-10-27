@@ -1,0 +1,744 @@
+package CruiseControl
+  function SaturateThrottle(ThrottleIn : tPercent)
+    returns (ThrottleOut : tPercent; Saturate : bool)
+  var
+    _L9 : bool;
+    _L8 : tPercent;
+    _L7 : bool;
+    _L6 : tPercent;
+    _L12 : tPercent;
+    _L13 : bool;
+    _L14 : tPercent;
+    _L16 : tPercent;
+  let
+    _L6= #1 if _L9 then (_L14) else (_L12);
+    _L7= _L12 #1 > _L16;
+    _L8= #2 if _L7 then (_L16) else (_L6);
+    _L9= _L12 #1 < _L14;
+    _L12= ThrottleIn;
+    ThrottleOut= _L8;
+    Saturate= _L13;
+    _L13= _L7 #1 or _L9;
+    _L14= ZeroPercent;
+    _L16= RegulThrottleMax;
+  tel
+
+  node CruiseRegulation(CruiseSpeed : tSpeed; VehiculeSpeed : tSpeed)
+    returns (Throttle : tPercent)
+  var
+    HoldIntegralAction : bool;
+    IntegralAction : float32;
+    ProportionnalAction : tPercent;
+    _L1 : tSpeed;
+    _L2 : tSpeed;
+    _L3 : float32;
+    _L4 : float32;
+    _L10 : float32;
+    _L14 : bool;
+    _L13 : tPercent;
+    _L16 : tSpeed;
+    _L18 : float32;
+    _L26 : tSpeed;
+    _L29 : tSpeed;
+  let
+    _L1= CruiseSpeed;
+    _L2= VehiculeSpeed;
+    _L3= _L1 #1 - _L2;
+    _L4= ProportionnalAction #1 + IntegralAction;
+    _L10= _L16 #2 + _L18;
+    Throttle= _L13;
+    _L13, _L14= #1 SaturateThrottle(_L4);
+    HoldIntegralAction= #1 fby(_L14; 1; true);
+    _L16= #1 if HoldIntegralAction then (_L26) else (_L3);
+    _L18= #2 fby(_L10; 1; _L29);
+    ProportionnalAction= #2 linear::Gain(_L3, Kp);
+    IntegralAction= #3 linear::Gain(_L10, Ki);
+    _L26= ZeroSpeed;
+    _L29= ZeroSpeed;
+  tel
+
+  node #pragma kcg doc "Date_1" {Date = " $Date$"} #end
+    #pragma kcg doc "Version_1" {Version = " $Revision$"} #end
+    #pragma kcg doc "Author_1" {Author = " Created by : ANSYS"} #end
+    #pragma kcg doc "Title_1" {Title = " Title : Top Level of the Cruise Control application"} #end
+    CruiseControl(
+      On : bool;
+      Off : bool;
+      Resume : bool;
+      Set : bool;
+      QuickAccel : bool;
+      QuickDecel : bool;
+      Accel : tPercent;
+      Brake : tPercent;
+      Speed : tSpeed)
+    returns (
+      CruiseSpeed : tSpeed default = ZeroSpeed;
+      ThrottleCmd : tPercent default = Accel;
+      CruiseState : tCruiseState default = OFF)
+  let
+
+    automaton SM1
+      initial state Off
+        unless
+          if On restart Enabled;
+        let
+        tel
+
+      state Enabled
+        unless
+          if Off restart Off;
+        var
+          local_CruiseSpeed : tSpeed;
+          _L9 : bool;
+          _L8 : tSpeed;
+          _L7 : bool;
+          _L6 : bool;
+          _L5 : tSpeed;
+        let
+
+          automaton SM2
+            initial state Active
+              unless
+                if Brake #4 > PedalsMin restart Interrupt;
+              var
+                StdbyCondition : bool;
+                _L4 : bool;
+                _L3 : bool;
+                _L2 : bool;
+                _L1 : bool;
+              let
+
+                automaton SM3
+                  initial state On
+                    unless
+                      if StdbyCondition restart StandBy;
+                    var
+                      _L3 : tPercent;
+                      _L8 : tSpeed;
+                      _L11 : tSpeed;
+                      _L12 : tCruiseState;
+                    let
+                      _L3= #2 CruiseRegulation(_L11, _L8);
+                      _L8= Speed;
+                      ThrottleCmd= _L3;
+                      CruiseState= _L12;
+                      _L11= local_CruiseSpeed;
+                      _L12= ON;
+                    tel
+
+                  state StandBy
+                    unless
+                      if #1 not StdbyCondition restart On;
+                    var
+                      _L3 : tCruiseState;
+                    let
+                      CruiseState= _L3;
+                      _L3= STDBY;
+                    tel
+                returns ..;
+                _L1= Speed #2 > SpeedMax;
+                _L2= _L3 #1 or _L4 #1 or _L1;
+                _L3= Accel #1 > PedalsMin;
+                _L4= Speed #1 < SpeedMin;
+                StdbyCondition= _L2;
+              tel
+
+            state Interrupt
+              unless
+                if Resume restart Active;
+              var
+                _L3 : tCruiseState;
+              let
+                CruiseState= _L3;
+                _L3= INT;
+              tel
+          returns ..;
+          _L5= Speed;
+          _L6= Set;
+          CruiseSpeed= _L8;
+          _L7= QuickAccel;
+          _L8= #1 CruiseSpeedMgt(_L6, _L7, _L9, _L5);
+          _L9= QuickDecel;
+          local_CruiseSpeed= _L8;
+        tel
+    returns ..;
+  tel
+
+  node CruiseSpeedMgt(
+      Set : bool;
+      QuickAccel : bool;
+      QuickDecel : bool;
+      Speed : tSpeed)
+    returns (CruiseSpeed : tSpeed last = Speed)
+  var
+    LocalCruiseSpeed : tSpeed;
+    _L43 : tSpeed;
+    _L42 : tSpeed;
+  let
+    activate IfBlock1 if Set
+      then var
+        _L2 : tSpeed;
+      let
+        _L2= Speed;
+        LocalCruiseSpeed= _L2;
+      tel
+      else if QuickAccel
+      then var
+        _L1 : tSpeed;
+        _L2 : float32;
+        _L3 : tSpeed;
+      let
+        _L1= last 'CruiseSpeed;
+        _L2= _L1 #1 + _L3;
+        LocalCruiseSpeed= _L2;
+        _L3= SpeedInc;
+      tel
+      else if QuickDecel
+      then var
+        _L2 : tSpeed;
+        _L4 : float32;
+        _L3 : tSpeed;
+      let
+        _L2= last 'CruiseSpeed;
+        _L4= _L2 #1 - _L3;
+        LocalCruiseSpeed= _L4;
+        _L3= SpeedInc;
+      tel
+      else var
+        _L1 : tSpeed;
+      let
+        _L1= last 'CruiseSpeed;
+        LocalCruiseSpeed= _L1;
+      tel
+    returns ..;
+    CruiseSpeed= _L42;
+    _L42= #1 pwlinear::LimiterUnSymmetrical(_L43, SpeedMin, SpeedMax);
+    _L43= LocalCruiseSpeed;
+  tel
+
+end;
+
+open Defs;
+
+package System
+  open CruiseControl;
+  node SystemSimul(
+      On : bool;
+      Off : bool;
+      Resume : bool;
+      Set : bool;
+      QuickAccel : bool;
+      QuickDecel : bool;
+      Accel : float32;
+      Brake : float32)
+    returns (
+      CruiseSpeed : float32;
+      CruiseState : tCruiseState;
+      CarSpeed : float32)
+  var
+    probe ThrottleCmd : tPercent;
+    _L3 : tCruiseState;
+    _L2 : tPercent;
+    _L1 : tSpeed;
+    _L4 : bool;
+    _L6 : bool;
+    _L7 : bool;
+    _L8 : bool;
+    _L9 : bool;
+    _L10 : float32;
+    _L11 : float32;
+    _L12 : CarType::tSpeed;
+    _L13 : tSpeed;
+    _L15 : float32;
+    _L19 : tSpeed;
+    _L21 : CarType::tPercent;
+    _L14 : tSpeed;
+    _L24 : CarType::tPercent;
+    _L25 : bool;
+  let
+    _L1, _L2, _L3=
+      #2 CruiseControl(_L4, _L25, _L6, _L7, _L8, _L9, _L10, _L11, _L13);
+    _L4= On;
+    _L6= Resume;
+    _L7= Set;
+    _L8= QuickAccel;
+    _L9= QuickDecel;
+    _L10= Accel;
+    _L11= Brake;
+    CruiseSpeed= _L1;
+    CruiseState= _L3;
+    _L12= #1 Car::CarModel(_L24, _L21);
+    CarSpeed= _L19;
+    _L13= #1 fby(_L19; 1; _L14);
+    _L15= Brake;
+    ThrottleCmd= _L2;
+    _L19= (_L12 #3 : tSpeed);
+    _L21= (_L15 #5 : CarType::tPercent);
+    _L14= ZeroSpeed;
+    _L24= (_L2 #8 : CarType::tPercent);
+    _L25= Off;
+  tel
+
+end;
+
+
+package Proof
+  open Defs;
+  node Proof(
+      On : bool;
+      Off : bool;
+      Resume : bool;
+      Set : bool;
+      QuickAccel : bool;
+      QuickDecel : bool;
+      Accelerator : tPercent;
+      Brake : tPercent;
+      VehiculeSpeed : tSpeed)
+    returns (
+      prop1 : bool;
+      prop2 : bool;
+      prop3 : bool;
+      prop4 : bool;
+      prop5 : bool)
+  var
+    _L24 : bool;
+    _L23 : bool;
+    _L22 : tPercent;
+    _L21 : tSpeed;
+    _L20 : tPercent;
+    _L18 : bool;
+    _L17 : bool;
+    _L16 : tPercent;
+    _L25 : tSpeed;
+    _L54 : bool;
+    _L55 : bool;
+    _L56 : tCruiseState;
+    _L59 : tPercent;
+    _L60 : tSpeed;
+    _L61 : bool;
+    _L15 : bool;
+    _L19 : bool;
+    _L65 : bool;
+    _L68 : tPercent;
+    _L69 : bool;
+    _L70 : bool;
+  let
+    _L24= Set;
+    _L23= QuickDecel;
+    _L20= Brake;
+    _L18= Resume;
+    _L17= QuickAccel;
+    _L16= Accelerator;
+    _L25= VehiculeSpeed;
+    prop1= _L54;
+    prop2= _L55;
+    _L54= #1 Prop1(_L56, _L59);
+    _L55= #1 Prop2(_L60, _L56);
+    _L21, _L22, _L56=
+      #2 CruiseControl::CruiseControl(_L19, _L15, _L18, _L24, _L17, _L23, _L16,
+        _L20, _L25);
+    _L59= Brake;
+    _L60= VehiculeSpeed;
+    _L61= #1 Prop3(_L56, _L65);
+    prop3= _L61;
+    _= _L21;
+    assume A1 : VehiculeSpeed #2 <= 200.0;
+    assume A2 : VehiculeSpeed #1 >= 0.0;
+    assume A3 : Brake #2 >= 0.0;
+    assume A4 : Brake #3 <= 100.0;
+    assume A5 : Accelerator #4 <= 100.0;
+    assume A6 : Accelerator #3 >= 0.0;
+    _L15= Off;
+    _L19= On;
+    _L65= Off;
+    _L68= Accelerator;
+    _L69= #2 Prop4(_L60, _L22, _L68);
+    prop4= _L69;
+    _L70= #1 Prop5(_L68, _L22, _L56);
+    prop5= _L70;
+  tel
+
+  function Prop1(CruiseState : tCruiseState; Brake : tPercent)
+    returns (prop : bool)
+  var
+    _L2 : bool;
+    _L8 : tPercent;
+    _L10 : bool;
+    _L16 : tCruiseState;
+    _L17 : bool;
+    _L21 : bool;
+    _L22 : tCruiseState;
+    _L24 : bool;
+    _L19 : tPercent;
+    _L25 : tCruiseState;
+    _L26 : tCruiseState;
+  let
+    _L2= #2 verif::Implies(_L10, _L24);
+    _L8= Brake;
+    _L10= _L8 #1 > _L19;
+    prop= _L2;
+    _L16= CruiseState;
+    _L17= _L16 #1 = _L25;
+    _L21= _L22 #2 = _L26;
+    _L22= CruiseState;
+    _L24= _L17 #1 or _L21;
+    _L19= PedalsMin;
+    _L25= INT;
+    _L26= OFF;
+  tel
+
+  function Prop2(VehiculeSpeed : tSpeed; CruiseState : tCruiseState)
+    returns (prop : bool)
+  var
+    _L9 : bool;
+    _L6 : bool;
+    _L10 : tSpeed;
+    _L12 : bool;
+    _L16 : bool;
+    _L25 : tSpeed;
+    _L26 : tSpeed;
+    _L29 : bool;
+    _L27 : tCruiseState;
+    _L28 : tCruiseState;
+  let
+    _L9= _L10 #1 < _L26;
+    _L6= #2 verif::Implies(_L16, _L29);
+    _L10= VehiculeSpeed;
+    _L12= _L10 #1 > _L25;
+    prop= _L6;
+    _L16= _L12 #1 or _L9;
+    _L25= (150.0 #2 : tSpeed);
+    _L26= (40.0 #1 : tSpeed);
+    _L27= CruiseState;
+    _L29= _L27 #1 <> _L28;
+    _L28= ON;
+  tel
+
+  function Prop3(CruiseState : tCruiseState; Off : bool) returns (prop : bool)
+  var
+    _L8 : bool;
+    _L12 : bool;
+    _L10 : tCruiseState;
+    _L15 : bool;
+    _L16 : tCruiseState;
+  let
+    _L8= #2 verif::Implies(_L15, _L12);
+    prop= _L8;
+    _L10= CruiseState;
+    _L12= _L10 #1 = _L16;
+    _L15= Off;
+    _L16= OFF;
+  tel
+
+  function Prop4(
+      VehiculeSpeed : tSpeed;
+      Throttle : tPercent;
+      Accelerator : tPercent)
+    returns (prop : bool)
+  var
+    _L6 : bool;
+    _L29 : bool;
+    _L30 : tPercent;
+    _L31 : tPercent;
+    _L16 : bool;
+    _L9 : bool;
+    _L12 : bool;
+    _L25 : tSpeed;
+    _L26 : tSpeed;
+    _L10 : tSpeed;
+  let
+    _L6= #2 verif::Implies(_L16, _L29);
+    prop= _L6;
+    _L29= _L30 #1 = _L31;
+    _L30= Throttle;
+    _L31= Accelerator;
+    _L16= _L12 #1 or _L9;
+    _L9= _L10 #1 < _L26;
+    _L12= _L10 #1 > _L25;
+    _L25= (150.0 #1 : tSpeed);
+    _L26= (40.0 #2 : tSpeed);
+    _L10= VehiculeSpeed;
+  tel
+
+  function Prop5(
+      Accelerator : tPercent;
+      Throttle : tPercent;
+      CruiseState : tCruiseState)
+    returns (prop : bool)
+  var
+    _L6 : bool;
+    _L29 : bool;
+    _L30 : tPercent;
+    _L31 : tPercent;
+    _L32 : tCruiseState;
+    _L33 : bool;
+    _L34 : tCruiseState;
+  let
+    _L6= #2 verif::Implies(_L33, _L29);
+    prop= _L6;
+    _L29= _L30 #1 = _L31;
+    _L30= Throttle;
+    _L31= Accelerator;
+    _L32= CruiseState;
+    _L33= _L32 #1 <> _L34;
+    _L34= ON;
+  tel
+
+end;
+
+
+package Defs
+  const ZeroSpeed : tSpeed = 0.0;
+
+  const ZeroPercent : tPercent = 0.0;
+
+  const SpeedMin : tSpeed = 30.0;
+
+  const SpeedMax : tSpeed = 150.0;
+
+  const SpeedInc : tSpeed = 2.5;
+
+  const RegulThrottleMax : tPercent = 100.0;
+
+  const PedalsMin : tPercent = 3.0;
+
+  const Kp : float32 = 8.113;
+
+  const Ki : float32 = 0.5;
+
+  type tCruiseState = enum { OFF, INT, STDBY, ON };
+
+  type tPercent = float32;
+
+  type tSpeed = float32;
+
+  type tRpm = float32;
+
+end;
+
+
+package linear
+  function #pragma kcg expand #end Gain(G_Input : 'T; Gain : 'T)
+    returns (G_Output : 'T)
+    where 'T numeric
+  var
+    _L1 : 'T;
+    _L2 : 'T;
+    _L3 : 'T;
+  let
+    _L1= G_Input;
+    _L2= Gain;
+    G_Output= _L3;
+    _L3= _L1 #1 * _L2;
+  tel
+end;
+
+package pwlinear
+  function #pragma kcg expand #end LimiterUnSymmetrical(
+      LUS_Input : 'T;
+      LowLimit : 'T;
+      HighLimit : 'T)
+    returns (LUS_Output : 'T)
+    where 'T numeric
+  var
+    _L1 : bool;
+    _L11 : 'T;
+    _L13 : 'T;
+    _L15 : 'T;
+    _L2 : bool;
+    _L3 : 'T;
+    _L9 : 'T;
+  let
+    _L1= _L3 #1 >= _L15;
+    _L2= _L3 #2 <= _L13;
+    _L3= LUS_Input;
+    _L9= #3 if _L1 then (_L15) else (_L11);
+    _L11= #6 if _L2 then (_L13) else (_L3);
+    _L13= LowLimit;
+    _L15= HighLimit;
+    LUS_Output= _L9;
+    assume A1 : LowLimit #3 <= HighLimit;
+  tel
+end;
+
+
+
+/* xscade source: D:/lab/examples/CruiseControl/Libraries/Car/Car.xscade */
+package Car
+  open CarType;
+  const Iengine : float64 = 0.025;
+
+  const KBRAKE : float64 = 200.0;
+
+  const KTRANSM : float64^5 = [4.75, 2.68, 1.87, 1.42, 1.17];
+
+  const MASS : float64 = 1450.0;
+
+  const TCYCLE : float64 = 0.1;
+
+  const Tengine : float64 = - 0.04;
+
+  const TorqMax : float64 = 400.0;
+
+  const VehicleDynamic : float64 = 2.5;
+
+  node Body(Torq : tTorq; Brake : tSpeed) returns (VehicleSpeed : tSpeed)
+  var
+    _L24 : float64;
+    _L21 : float64;
+    _L20 : float64;
+    _L19 : float64;
+    _L18 : float64;
+    _L17 : float64;
+    _L16 : float64;
+    _L14 : float64;
+    _L13 : float64;
+    _L12 : float64;
+    _L11 : float64;
+    _L10 : float64;
+    _L9 : float64;
+    _L8 : float64;
+    _L7 : float64;
+    _L6 : float64;
+    _L2 : tSpeed;
+    _L26 : tTorq;
+    _L27 : bool;
+    _L28 : float64;
+    _L30 : float64;
+    _L31 : float64;
+    _L34 : float64;
+    _L35 : float64;
+    _L36 : bool;
+    _L37 : float64;
+    _L38 : bool;
+    _L39 : float64;
+    _L40 : float64;
+    _L41 : float64;
+    _L42 : float64;
+    _L49 : float64;
+  let
+    _L24= KBRAKE;
+    _L21= #15 pre (_L18);
+    _L20= 0.0;
+    VehicleSpeed= _L18;
+    _L19= (_L20) #14 -> (_L21);
+    _L18= _L16 #13 + _L19;
+    _L17= MASS;
+    _L16= _L13 #12 / _L17;
+    _L14= TCYCLE;
+    _L13= _L6 #11 * _L14 #11 * _L49;
+    _L12= _L2 #2 * _L24;
+    _L11= _L40 #3 + _L12 #3 + _L7 #3 + _L9;
+    _L10= 2.5;
+    _L9= _L19 #5 * _L10;
+    _L8= 0.3;
+    _L7= _L19 #4 * _L19 #4 * _L8;
+    _L6= _L26 #10 - _L34;
+    _L2= Brake;
+    _L26= Torq;
+    _L27= _L19 #8 > _L28;
+    _L28= 0.1;
+    _L30= #7 if _L27 then (_L11) else (_L35);
+    _L31= #6 - _L11;
+    _L34= #16 if _L36 then (_L31) else (_L30);
+    _L35= 0.0;
+    _L36= _L19 #9 < _L37;
+    _L37= - 0.1;
+    _L38= _L26 #0 <= _L39;
+    _L39= 1.0;
+    _L40= #1 if _L38 then (_L42) else (_L41);
+    _L41= 0.0;
+    _L42= 150.0;
+    _L49= VehicleDynamic;
+  tel
+
+  function PowerTrainStatic(Throttle : tSpeed) returns (Torq : tTorq)
+  var
+    _L7 : tSpeed;
+    _L8 : float64;
+    _L9 : float64;
+    _L11 : float64;
+    _L12 : float64;
+    _L13 : float64;
+    _L14 : float64;
+    _L15 : float64;
+    _L16 : float64;
+    _L18 : float64;
+    _L19 : bool;
+    _L21 : bool;
+    _L27 : float64;
+    _L28 : float64;
+    _L29 : float64;
+    _L30 : float64;
+    _L32 : float64;
+  let
+    _L7= Throttle;
+    Torq= _L14;
+    _L8= _L30 #3 * _L9;
+    _L9= Tengine;
+    _L11= #8 mathext::ExpR(_L8);
+    _L12= _L13 #2 - _L11;
+    _L13= 1.0;
+    _L14= _L12 #0 * _L12 #0 * _L18;
+    _L15= TorqMax;
+    _L16= Iengine;
+    _L18= _L15 #1 / _L16;
+    _L19= _L7 #4 > _L27;
+    _L21= _L7 #5 < _L28;
+    _L27= 100.0;
+    _L28= 0.0;
+    _L29= #6 if _L19 then (_L27) else (_L7);
+    _L30= #7 if _L21 then (_L32) else (_L29);
+    _L32= 0.0;
+  tel
+
+  node CarModel(Throttle : tPercent; Brake : tPercent)
+    returns (VehicleSpeed : tSpeed)
+  var
+    _L2 : tPercent;
+    _L53 : tTorq;
+    _L54 : tPercent;
+    _L55 : tSpeed;
+  let
+    _L2= Brake;
+    VehicleSpeed= _L55;
+    _L53= #1 PowerTrainStatic(_L54);
+    _L54= Throttle;
+    _L55= #0 Body(_L53, _L2);
+  tel
+
+end;
+
+
+/* xscade source: D:/lab/examples/CruiseControl/Libraries/CarType/CarType.xscade */
+package CarType
+  type tPercent = float64;
+
+  type tRpm = float64;
+
+  type tSpeed = float64;
+
+  type tTorq = float64;
+
+end;
+
+package verif
+  function #pragma kcg expand #end Implies(A : bool; B : bool)
+    returns (C : bool)
+  var
+    _L1 : bool;
+    _L2 : bool;
+    _L3 : bool;
+    _L4 : bool;
+  let
+    _L1= A;
+    _L2= B;
+    C= _L3;
+    _L3= _L4 #1 or _L2;
+    _L4= #2 not _L1;
+  tel
+end;
+
+package mathext
+function imported ExpR(Input1 : 'T) returns (Output1 : 'T) where 'T float;
+end;

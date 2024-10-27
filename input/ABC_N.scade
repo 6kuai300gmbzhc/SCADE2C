@@ -1,8 +1,3 @@
-/* $******* SCADE Suite KCG 32-bit 6.6.1 beta (build i1) ********
-** Command: kcg661.exe -config D:/�����ͬ��Ŀ¼/˶ʿ��ҵ���/SCADE�������/wss_scade_project/ABC_N/ABC_N/KCG/config.txt
-** Generation date: 2024-01-15T17:31:00
-*************************************************************$ */
-
 /* xscade source: D:/�����ͬ��Ŀ¼/˶ʿ��ҵ���/SCADE�������/wss_scade_project/ABC_N/ABC_N/ABC_N.xscade */
 package ABC_N
   const n : int32 = 3;
@@ -107,7 +102,7 @@ package ABC_N
   let
     _L1= T;
     _L2= false;
-    _L3= ( fold #1 $or$ <<n>>)(_L2, _L1);
+    _L3= ( fold $or$ <<n>>)(_L2, _L1);
     S= _L3;
   tel
 
@@ -174,7 +169,3 @@ package ABC_N
 
 end;
 
-/* $******* SCADE Suite KCG 32-bit 6.6.1 beta (build i1) ********
-** -
-** Generation date: 2024-01-15T17:31:00
-*************************************************************$ */

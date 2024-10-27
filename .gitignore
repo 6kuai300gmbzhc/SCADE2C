@@ -5,3 +5,4 @@ grammar_file/*
 output/*
 parser.out
 parsetab.py
+.ignore_this/*

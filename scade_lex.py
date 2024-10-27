@@ -8,6 +8,7 @@ class lex_value:
         self.value = value
         self.type = Type
         self.objects = list()
+        self.relyLists = list()
         self.beforeObjects = list()
         self.afterObjects = list()
         self.arrSize=list()
@@ -16,7 +17,6 @@ class lex_value:
         self.scope = scope
 
         self.entity = None
-        self.syms = list()
         self.rets = list()
     
     def set_value(self, value):
