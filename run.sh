@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# example
+# bash ./run.sh -i ./input/control_block.scade -o ./output/
+
 green="\033[32m"
 red="\033[31m"
 black="\033[0m"
