@@ -7,3 +7,6 @@ parser.out
 parsetab.py
 .ignore_this/*
 test_*.dot
+log.txt
+stage1_*.scade
+stage2_*.scade

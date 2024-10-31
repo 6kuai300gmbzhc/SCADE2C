@@ -4,7 +4,7 @@
     "clang-format.style" : "file",
     // 依次从当前目录、工作目录、path变量，加载默认风格配置文件(.clang-format)。
     // 如果找不到则使用fallbackStyle, 没有fallbackStyle则默认LLVM,C++。
-    "clang-format.assumeFilename": "C:/Users/Admin/Desktop/SCADE2C/scade/bin/.clang-format", //使用工作区独立配置文件
+    "clang-format.assumeFilename": "C:/Users/Admin/Desktop/SCADE2C/scade/.clang-format", //使用工作区独立配置文件
     // "clang-format.assumeFilename": "${workspaceFolder}/bin/.clang-format", 
     // "clang-format.assumeFilename": "/home/user/.clang-format", //绝对路径，用于全局统一配置
     "clang-format.executable": "C:/Users/Admin/Desktop/SCADE2C/scade/bin/clang-format.exe",
