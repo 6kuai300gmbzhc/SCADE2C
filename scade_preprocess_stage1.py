@@ -53,6 +53,13 @@ def writeFile(node):
     # print("======dot file=====\n")
     # print(tmpstr)
 
+def getName(name,symtable):
+    for index in range(100):
+        tmp_name=f"{name}_{index}"
+        if symtable.getSymbolInThisEnv(tmp_name) == None:
+            return tmp_name
+
+
 programNode=graphTree("","root")
 curNode=programNode
 rootSymtable=SymbolTable('Global')
@@ -84,6 +91,8 @@ class topologyNode:
         self.tpIdx=tpIdx
         self.inNum=inNum
         self.finish=False
+    def __repr__(self): 
+        return f'name:{self.name} index:{self.index} inNum:{self.inNum}\n'
 
 def topologySort(symbolList,adjList,nodeList):
     sum=len(nodeList)
@@ -135,9 +144,12 @@ def getWholePathFromTopToDown(pathList,idx,symtable):
         for elem in symtable.ChildTableList:
             if elem.EnvName==pathList[idx]:
                 return getWholePathFromTopToDown(pathList,idx+1,elem)
+        return True
+    # print("==None",symtable.EnvName)
     return False
 
 def getSameLevelRely(symtable):
+    print("getSameLevelRely symtable.EnvName:",symtable.EnvName)
     global rootSymtable
     nodeList=[]
     nodeIdxDict={}
@@ -154,15 +166,21 @@ def getSameLevelRely(symtable):
             adjList.append([])
     for _,symbol in symtable.SymbolTable.items():
         if symbol.Kind =='OpKind' or symbol.Kind=='Package':
-            for idx in range(len(symbol.relyList)):
-                pathList=symbol.relyList[idx].split("::")
+            print("getSameLevelRely symbol.Name=",symbol.Name," relyList=",symbol.relyList,symbol.Kind)
+            for idx,elem in enumerate(symbol.relyList):
+                pathList=elem.split("::")
                 ret=getWholePathFromTopToDown(pathList,0,rootSymtable)
+                # print("rootSymtable.EnvName=",rootSymtable.EnvName)
                 if ret==False:
                     ret=getWholePathFromTopToDown(pathList,0,symtable)
-                    curPath=symtable.PrevTable.getSymbolInThisEnv(symtable.EnvName).PackageName.split('::')
+                    if symtable.EnvName == 'Global':
+                        curPath=[]
+                    else:
+                        curPath=symtable.PrevTable.getSymbolInThisEnv(symtable.EnvName).PackageName.split('::')
                     pathList=curPath+pathList
                     if ret==True:
-                        symbol.relyList[idx]='::'.join(pathList)
+                        symbol.relyList[idx] ='::'.join(pathList)
+                        print("elem",elem)
                     else:
                         raise NotImplementedError("Path error",pathList)
             global rootSymbol
@@ -190,7 +208,7 @@ def getSameLevelRely(symtable):
     retList=topologySort(symbolList,adjList,nodeList)
     return retList
 
-def ReOrder(symtable):
+def ReOrder(symtable): 
     for symbolName,symbol in symtable.SymbolTable.items():
         if symbol.Kind=='Package':
              for childTable in symtable.ChildTableList:
@@ -327,6 +345,9 @@ def p_Type_decl(p):
     p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects)
     p[0].objects.extend(p[4].objects)
+    global curSymtable
+    symbol = Symbol(p[2].value,'Type')
+    curSymtable.setSymbol(p[2].value,symbol)
 
 
 def p_Type_decl_1(p):
@@ -475,8 +496,7 @@ def p_user_op_decl_Lv6id(p):
 
 def p_state_lv6id(p):
     'State_Lv6id : LV6ID'
-    p[0]=lex_value("State_Lv6id")
-    p[0].objects.append(p[1])
+    p[0]=p[1]
 
 
 def p_op_kind(p):
@@ -581,13 +601,15 @@ def p_emission_body(p):
                     | LPARENTHESE SINGLEQUOTE LV6ID Emission_body_2 RPARENTHESE Emission_body_1'''
     #TODO:not finish
     p[0]=lex_value("Emission_body")
-    if len(p)!=4:
-        p[0].objects.append(p[1])
+    if len(p)==4:
+        # p[0].objects.append(p[1])
+        p[2].value = p[1].value + p[2].value
         p[0].objects.append(p[2])
         p[0].objects.extend(p[3].objects)
     else:
         p[0].objects.append(p[1])
-        p[0].objects.append(p[2])
+        # p[0].objects.append(p[2])
+        p[3].value = p[2].value + p[3].value
         p[0].objects.append(p[3])
         p[0].objects.extend(p[4].objects)
         p[0].objects.append(p[5])
@@ -649,13 +671,11 @@ def p_returns_var_1(p):
         p[0].objects.extend(p[1].objects)
         p[0].objects.extend([p[2],p[3]])
 
-
 def p_returns_var_2(p):
     '''Returns_var_2 : LV6ID
     | TPOINT'''
     p[0]=lex_value("Returns_var_2")
     p[0].objects.append(p[1])
-
 
 def p_state_machine(p):
     '''State_machine : AUTOMATON Id_zero_or_one State_machine_1'''
@@ -664,6 +684,8 @@ def p_state_machine(p):
     p[0].objects.extend(p[2].objects)
     p[0].objects.extend(p[3].objects)
 
+    global curSymtable
+    curSymtable=curSymtable.PrevTable
 
 def p_state_machine_1(p):
     '''State_machine_1 : State_decl State_machine_1
@@ -672,7 +694,8 @@ def p_state_machine_1(p):
     if len(p)!=2:
         p[0].objects.extend(p[1].objects)
         p[0].objects.extend(p[2].objects)
-
+        global curSymtable
+        curSymtable=curSymtable.PrevTable
 
 def p_state_decl(p):
     '''State_decl : State_decl_1 State_decl_2 STATE State_Lv6id State_decl_3 Data_def State_decl_4'''
@@ -680,10 +703,18 @@ def p_state_decl(p):
     p[0].objects.extend(p[1].objects)
     p[0].objects.extend(p[2].objects)
     p[0].objects.append(p[3])
-    p[0].objects.extend(p[4].objects)
+    p[0].objects.append(p[4])
     p[0].objects.extend(p[5].objects)
     p[0].objects.extend(p[6].objects)
     p[0].objects.extend(p[7].objects)
+    global curSymtable
+    symbol=Symbol(p[4].value,'State')
+    curSymtable.setSymbol(p[4].value,symbol)
+
+    symtable = SymbolTable(p[4].value,curSymtable)
+    curSymtable.ChildTableList.append(symtable)
+    curSymtable = symtable
+    print("this state is",curSymtable.EnvName)
 
 def p_state_decl_1(p):
     '''State_decl_1 : INITIAL
@@ -887,14 +918,30 @@ def p_clocked_block(p):
     p[0].objects.extend(p[2].objects)
     p[0].objects.extend(p[3].objects)
 
+    global curSymtable
+    curSymtable=curSymtable.PrevTable
+
 
 
 def p_id_zero_or_one(p):
     '''Id_zero_or_one : LV6ID
     | empty'''
     p[0]=lex_value("Id_zero_or_one")
+    tmpName=""
+    global curSymtable
     if p[1].strs=='lv6id':
+        tmpName = p[1].value
         p[0].objects.append(p[1])
+    else:
+        tmpName = getName('Control_block',curSymtable)
+    symbol=Symbol(tmpName)
+    curSymtable.setSymbol(tmpName,symbol)
+
+    symtable=SymbolTable(tmpName)
+    symtable.PrevTable=curSymtable
+    curSymtable.ChildTableList.append(symtable)
+    curSymtable=symtable
+    print("this symbol Table is",curSymtable.EnvName)
 
 def p_if_block(p):
     'If_block : IF Expr THEN If_block_1 ELSE If_block_1'
@@ -1003,13 +1050,12 @@ def p_size_decl(p):
     p[0]=lex_value("Size_decl")
     if len(p)!=3:
         p[0].objects.append(p[1])
-        p[0].objects.append(p[2])
-    else:
-        p[0].objects.append(p[1])
         p[0].objects.extend(p[2].objects)
         p[0].objects.append(p[3])
-
-
+    else:
+        p[0].objects.append(p[1])
+        p[0].objects.append(p[2])
+        
 def p_user_op_decl_2(p):
     '''User_op_decl_2 : Where_decl
                         | empty'''
@@ -1243,6 +1289,9 @@ def p_const_decl(p):
     if len(p)==7:
         p[0].objects.append(p[5])
         p[0].objects.extend(p[6].objects)
+    symbol=Symbol(p[2].value,'Const')
+    global curSymtable
+    curSymtable.setSymbol(p[2].value,symbol)
 
 
 def p_interface_status(p):
@@ -1313,6 +1362,9 @@ def p_id_one_or_more_with_comma(p):
     p[0]=lex_value("Id_one_or_more_with_comma")
     p[0].objects.append(p[1])
     p[0].objects.extend(p[2].objects)
+    global curSymtable
+    symbol = Symbol(p[1].value,'Size')
+    curSymtable.setSymbol(p[1].value,symbol)
 
 
 def p_id_one_or_more_with_comma_1(p):
@@ -1323,6 +1375,10 @@ def p_id_one_or_more_with_comma_1(p):
         p[0].objects.append(p[1])
         p[0].objects.append(p[2])
         p[0].objects.extend(p[3].objects)
+        global curSymtable
+        print("Id_one_or_more curSymtable.EnvName=",curSymtable.EnvName)
+        symbol=Symbol(p[2].value,'Size')
+        curSymtable.setSymbol(p[2].value,symbol)
 
 
 # not finish
@@ -1607,22 +1663,29 @@ def p_apply_expr(p):
     curNode.son.append(node)
 
     p[0]=lex_value("Apply_expr")
-    p[1].strs="operatorLv6id"
+
+    tmpStr=""
+    for elem in p[1].objects:
+        if elem.strs=='pathId':
+            elem.strs='operatorLv6id'
+            tmpStr=elem.value
     p[0].objects.extend(p[1].objects)
     p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects)
     p[0].objects.append(p[4])
 
-    tmpStr=p[1].objects[0].value
-    if curSymtable.getSymbolInThisEnv(tmpStr)==None:
+    if tmpStr!= '' and curSymtable.getSymbolInThisEnv(tmpStr)==None:
+        print("curSymtable:",curSymtable.EnvName,tmpStr)
         preSymtable=curSymtable.PrevTable
         preOpKindSymbol=preSymtable.getSymbolInThisEnv(curSymtable.EnvName)
+        print("relyList append",preOpKindSymbol.Name,preOpKindSymbol.Kind,tmpStr)
         preOpKindSymbol.relyList.append(tmpStr)
 
     
 # not finish
 def p_prefix(p):
-    '''Prefix : Path_id'''
+    '''Prefix : Path_id
+    | PREFIXOP'''
     #TODO:PREFIXOP没有添加，PREFIXOP需要在scade_lex.py里面添加
     p[0]=lex_value("Prefix")
     p[0].objects.append(p[1])
@@ -1672,7 +1735,7 @@ def p_operator(p):
         p[0].objects.extend([p[6],p[7]])
     elif len(p)==9:
         p[0].objects.extend([p[1],p[2]])
-        p[0].objects.exend(p[3].objects)
+        p[0].objects.extend(p[3].objects)
         p[0].objects.append(p[4])
         p[0].objects.extend(p[5].objects)
         p[0].objects.append(p[6])
@@ -1836,7 +1899,7 @@ def p_struct_expr(p):
         p[0].objects.append(p[1])
         p[0].objects.extend(p[2].objects)
         p[0].objects.extend(p[3].objects)
-        p[0].object.append(p[4])
+        p[0].objects.append(p[4])
 
 
 def p_struct_expr_1(p):
@@ -1846,7 +1909,7 @@ def p_struct_expr_1(p):
     if len(p)!=2:
         p[0].objects.append(p[1])
         p[0].objects.extend(p[2].objects)
-        p[0].object.extend(p[3].objects)
+        p[0].objects.extend(p[3].objects)
 
 
 def p_label_expr(p):
@@ -2003,7 +2066,7 @@ def get_parse(filename):
     string_tokens = get_tokens(strs)
     scade_lexer.set_tokens(string_tokens)
     nodes = parser.parse(strs, lexer=scade_lexer)
-    writeFile(programNode)
+    # writeFile(programNode)
 
     content=""
     for elem in rootSymbol.Code:

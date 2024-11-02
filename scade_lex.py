@@ -151,10 +151,11 @@ reserved = {
 }
 
 tokens = [
+    "PREFIXOP",
     "INTEGERNUM",  # ++
     "FLOATNUM",  # ++
-    "TYPED_FLOAT",
     "TYPED_INTEGER",
+    "TYPED_FLOAT",
     "CHARACTER", #++
     "LV6ID",  # id
     "LV6IDREF",  # ++
@@ -346,11 +347,10 @@ t_DO = r'do'
 t_ELSIF = r'elsif'
 t_UNDERLINE = r'\_'
 
-def t_CHARACTER(t):
-    r"'[^']'"
-    t.value = lex_value('character', t.value)
+def t_PREFIXOP(t):
+    r'\$(\+|-|\*|/|mod|=|<>|<|>|<=|>=|@|times|and|or|xor|land|lor|lxor|lsl|lsr)\$|(\+|-|not|lnot|reverse)\$'
+    t.value = lex_value('prefixop',t.value)
     return t
-
 
 def t_FLOATNUM(t):
     r'((\d+\.\d*)|(\.\d+))([eE][+-]?\d+)?(_f32|_f64)?'
@@ -391,6 +391,11 @@ def t_LV6ID(t):
 def t_newline(t):
     r'\n+'
     t.lexer.lineno += len(t.value)
+
+def t_CHARACTER(t):
+    r"'[^']'"
+    t.value = lex_value('character', t.value)
+    return t
 
 def t_error(t):
     print("Illegal charactor '%s'" % t.value[0])
@@ -514,27 +519,17 @@ lexer = lex.lex()
 
 if __name__ == '__main__':
     data = '''
-    node simple_automaton(i: int32; c: bool) returns (o: int32)
-    let
-    automaton
-    initial state ADD1
-    let
-        o = i + 1 ;
-    tel
-    until if c restart MINUS1;
-
-    state MINUS1
-    let
-        o = i - 1;
-    tel
-    until if c restart ADD1;
-    returns o;
-    tel
-
-    node edge (X: bool) returns (Y: bool);
-    let
-     Y = r_edge (X) or r_edge (not(X));
-    tel
+function Exists(T : bool^n) returns (S : bool)
+  var
+    _L1 : bool^n;
+    _L2 : bool;
+    _L3 : bool;
+  let
+    _L1= T;
+    _L2= false;
+    _L3= ( fold not$ <<n>>)(_L2, _L1);
+    S= _L3;
+  tel
     '''
     toks = get_tokens(data)
     for tok in toks:

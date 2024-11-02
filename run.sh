@@ -80,9 +80,9 @@ if [ ! -z "${files}" ]; then
 fi
 
 #若生成错误。可以把这三行注释掉。看是哪个阶段错误了
-rm tmp_preprocess_stage1.txt
-rm tmp_preprocess_stage2.txt
-rm tmp_generate.txt
+# rm tmp_preprocess_stage1.txt
+# rm tmp_preprocess_stage2.txt
+# rm tmp_generate.txt
 
-rm ${output_stage1}
-rm ${output_stage2}
+# rm ${output_stage1}
+# rm ${output_stage2}

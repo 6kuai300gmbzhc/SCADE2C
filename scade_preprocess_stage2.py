@@ -24,6 +24,13 @@ rootSymbol=Symbol('Global')
 curSymtable=rootSymtable
 scade_lexer=scade_lex()
 
+def getName(name,symtable):
+    for index in range(100):
+        tmp_name=f"{name}_{index}"
+        if symtable.getSymbolInThisEnv(tmp_name) == None:
+            return tmp_name
+
+
 precedence = (
     ('left', 'ARROW'),
     ('left', 'LOR', 'LXOR'),
@@ -93,11 +100,7 @@ def getNode(lex,tDict,lexList,adjList,nodeList):
     return node
 
 def equation2str(lex_objects):
-    tmpStr= ""
-    for elem in lex_objects:
-        tmpStr += lexObjectsToString(elem)
-    tmpStr += " ; "
-    return tmpStr
+    return f"{lexObjectsToString(lex_objects)};"
 
 #此处进行拓扑排序
 def equations2str(lex_objects):
@@ -105,7 +108,11 @@ def equations2str(lex_objects):
     lexList=[]
     adjList=[]
     nodeList=[]
-    controlSymbol = curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
+    global rootSymbol
+    if curSymtable.EnvName == 'Global':
+        controlSymbol = rootSymbol
+    else:
+        controlSymbol = curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
     for elem in lex_objects:
         # print("=== equation2str ===",elem)
         if elem.strs == 'controlBlockLv6id' or elem.strs == 'operatorLv6id':
@@ -135,13 +142,31 @@ def equations2str(lex_objects):
     retList=topologySort(lexList,adjList,nodeList)
     return retList
 
+def const2str(symtable):
+    lexObjects = []
+    for k,v in symtable.SymbolTable.items():
+        if v.Kind == 'Const':
+            lexObj = lex_value('lv6id',k)
+            lexObj.relyLists = v.relyList
+            lexObj.objects = v.Code
+            lexObjects.append(lexObj)
+    retList = equations2str(lexObjects)
+    tmpStr = ""
+    for retElem in retList:
+        tmpStr += lexObjectsToString(retElem.objects)
+    return tmpStr
+
+#在此处对const变量进行拓扑排序
 def p_program(p):
     'Program : Decls_zero_or_more'
+    global rootSymbol,curSymtable
     p[0]=lex_value("Program")
+    content = const2str(curSymtable)
     p[0].objects.extend(p[1].objects)
-    content = lexObjectsToString(p[0].objects)
-    global rootSymbol
+    content += lexObjectsToString(p[0].objects)
     rootSymbol.Code.append(lex_value("",content))
+
+
 
 def p_decls_zero_or_more(p):
     '''Decls_zero_or_more : Decls Decls_zero_or_more
@@ -150,6 +175,7 @@ def p_decls_zero_or_more(p):
     if len(p)!=2:
         p[0].objects.extend(p[1].objects)
         p[0].objects.extend(p[2].objects)
+        
 
 def p_decls(p):
     '''Decls : Const_block
@@ -286,6 +312,10 @@ def p_package_decl(p):
     p[0].objects.extend(p[1].objects)
     p[0].objects.extend(p[2].objects)
     p[0].objects.extend(p[3].objects)
+    global curSymtable
+    constStr = const2str(curSymtable)
+    p[0].objects.append(lex_value("",constStr))
+
     p[0].objects.extend(p[4].objects)
     p[0].objects.append(p[5])
     p[0].objects.append(p[6])
@@ -294,8 +324,9 @@ def p_package_decl(p):
     #     tmpstr+=p[4].Code[0]
     # tmpstr += p[5].value + p[6].value
     # p[0].Code.append(tmpstr)
+    
 
-    global curSymtable
+    
     curSymtable=curSymtable.PrevTable
 
 def p_user_op_decl(p):
@@ -313,20 +344,10 @@ def p_user_op_decl(p):
     p[0].objects.extend(p[10].objects)
 
     global curSymtable
-    # print("==== before print ====")
-    # curSymtable.printSymbol()
     curSymtable=curSymtable.PrevTable
-    # print("==== after print ====")
-    # curSymtable.printSymbol()
-    # print("User_op_decl : ",p[3].objects[0].value , "curSymtable : ",curSymtable.EnvName)
     symbol=curSymtable.getSymbolInThisEnv(p[3].objects[0].value)
     tmpstr=lexObjectsToString(p[0].objects)
     symbol.Code.append(tmpstr)
-    # print("=====Node:",p[3].objects[0].value," relyList======")
-    # print(symbol.relyList)
-    # print(tmpstr)
-    # print("======")
-    # p[0].Code.append(tmpstr)
 
 def p_pack_lv6id(p):
     'Pack_Lv6id : LV6ID'
@@ -371,8 +392,8 @@ def p_user_op_decl_Lv6id(p):
 
 def p_state_lv6id(p):
     'State_Lv6id : LV6ID'
-    p[0]=lex_value("State_Lv6id")
-    p[0].objects.append(p[1])
+    p[0]=p[1]
+    # p[0].objects.append(p[1])
 
 def p_op_kind(p):
     '''Op_kind : FUNCTION
@@ -406,6 +427,7 @@ def p_opt_body(p):
         p[0].objects.extend(p[2].objects)
         p[0].objects.append(p[3])
         for elem in p[4].objects:
+            print("elem.value=",elem.value,curSymtable.EnvName)
             symbol = curSymtable.getSymbolInThisEnv(elem.value)
             if elem.strs == 'controlBlockLv6id':
                 elem.relyLists = unique_list(symbol.Params)
@@ -484,8 +506,10 @@ def p_equation(p):
                 | Emission'''
     #TODO:Emission未完成
     p[0]=lex_value("Equation")
-    p[0].objects.extend(p[1].objects)
+    if p[1].strs != 'Assert':
+        p[0].objects.extend(p[1].objects)
     if len(p) != 2:
+        print(p[1].objects)
         ifSymbol = curSymtable.getSymbolInThisEnv(p[1].objects[0].value)
         ifSymbol.Code.extend(p[2].objects)
         ifSymbol.Code.append(lex_value('',';'))
@@ -502,13 +526,13 @@ def p_emission_body(p):
                     | LPARENTHESE SINGLEQUOTE LV6ID Emission_body_2 RPARENTHESE Emission_body_1'''
     #TODO:not finish
     p[0]=lex_value("Emission_body")
-    if len(p)!=4:
-        p[0].objects.append(p[1])
+    if len(p)==4:
+        p[2].value = p[1].value + p[2].value
         p[0].objects.append(p[2])
         p[0].objects.extend(p[3].objects)
     else:
         p[0].objects.append(p[1])
-        p[0].objects.append(p[2])
+        p[3].value = p[2].value + p[3].value
         p[0].objects.append(p[3])
         p[0].objects.extend(p[4].objects)
         p[0].objects.append(p[5])
@@ -598,6 +622,8 @@ def p_state_machine_1(p):
     if len(p)!=2:
         p[0].objects.extend(p[1].objects)
         p[0].objects.extend(p[2].objects)
+        global curSymtable
+        curSymtable = curSymtable.PrevTable
 
 def p_state_decl(p):
     '''State_decl : State_decl_1 State_decl_2 STATE State_Lv6id State_decl_3 Data_def State_decl_4'''
@@ -609,6 +635,15 @@ def p_state_decl(p):
     p[0].objects.extend(p[5].objects)
     p[0].objects.extend(p[6].objects)
     p[0].objects.extend(p[7].objects)
+    
+    global curSymtable
+    symbol=Symbol(p[4].value,'State')
+    curSymtable.setSymbol(p[4].value,symbol)
+    
+    symtable = SymbolTable(p[4].value,curSymtable)
+    curSymtable.ChildTableList.append(symtable)
+    curSymtable = symtable
+    print("this state is ",curSymtable.EnvName)
 
 def p_state_decl_1(p):
     '''State_decl_1 : INITIAL
@@ -829,17 +864,24 @@ def p_id_zero_or_one(p):
     '''Id_zero_or_one : LV6ID
     | empty'''
     p[0]=lex_value("Id_zero_or_one")
+    global curSymtable
+    tmpName=""
     if p[1].strs=='lv6id':
+        tmpName = p[1].value
         p[0].objects.append(p[1])
         p[1].strs= 'controlBlockLv6id'
+    else:
+        tmpName = getName('Control_block',curSymtable)
+        p[0].objects.append(lex_value('lv6id',tmpName))
+    symbol = Symbol(tmpName)
+    curSymtable.setSymbol(tmpName,symbol)
 
-        global curSymtable
-        symbol=Symbol(p[1].value)
-        curSymtable.setSymbol(p[1].value,symbol)
+    symtable = SymbolTable(tmpName)
+    symtable.PrevTable=curSymtable
+    curSymtable.ChildTableList.append(symtable)
+    curSymtable=symtable
+    print("this symbol Table is",curSymtable.EnvName)
 
-        symtable=SymbolTable(p[1].value)
-        symtable.PrevTable=curSymtable
-        curSymtable=symtable
 
 def p_if_block(p):
     'If_block : IF Expr THEN If_block_1 ELSE If_block_1'
@@ -1002,7 +1044,8 @@ def p_where_decl_1(p):
 def p_typevar(p):
     '''Typevar : SINGLEQUOTE LV6ID'''
     p[0]=lex_value("Typevar")
-    p[0].objects.append(p[1])
+    # p[0].objects.append(p[1])
+    p[2].value = p[1].value + p[2].value
     p[0].objects.append(p[2])
 
 def p_user_op_decl_3(p):
@@ -1166,18 +1209,27 @@ def p_package(p):
     p[0]=lex_value("Package")
     p[0].objects.append(p[1])
 
-
 def p_const_block(p):
     'Const_block : CONST Const_block_1'
     p[0]=lex_value("Const_block")
-    p[0].objects.append(p[1])
-    p[0].objects.extend(p[2].objects)
-    if curSymtable.EnvName=='Global':
-        global rootSymbol
-        rootSymbol.Code.append(lexObjectsToString(p[0].objects))
-    else:
-        packageSymbol=curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
-        packageSymbol.Code.append(lexObjectsToString(p[0].objects))
+    # p[0].objects.append(p[1])
+    # p[0].objects.extend(p[2].objects)
+
+    # print("=== before topology ===")
+    for elem in p[2].objects:
+        symbol = curSymtable.getSymbolInThisEnv(elem.value)
+        symbol.Code[0].value = p[1].value + symbol.Code[0].value
+    # retList = equations2str(p[2].objects)
+    # print("==== const_block ====")
+    # for elem in retList:
+        # print(elem)
+
+    # if curSymtable.EnvName=='Global':
+    #     global rootSymbol
+    #     rootSymbol.Code.append(lexObjectsToString(p[0].objects))
+    # else:
+    #     packageSymbol=curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
+    #     packageSymbol.Code.append(lexObjectsToString(p[0].objects))
 
 
 def p_const_block_1(p):
@@ -1186,22 +1238,35 @@ def p_const_block_1(p):
     p[0]=lex_value("Const_block_1")
     if len(p)!=2:
         p[0].objects.extend(p[1].objects)
-        p[0].objects.append(p[2])
         p[0].objects.extend(p[3].objects)
+        # p[0].objects.extend(p[1].objects)
+        # p[0].objects.append(p[2])
+        # p[0].objects.extend(p[3].objects)
 
 
 def p_const_decl(p):
     '''Const_decl : Interface_status LV6ID COLON Type_expr EQU Expr
     | Interface_status LV6ID COLON Type_expr'''
     p[0]=lex_value("Const_decl")
-    p[0].objects.extend(p[1].objects)
-    p[0].objects.append(p[2])
-    p[0].objects.append(p[3])
-    p[0].objects.extend(p[4].objects)
+    # p[0].objects.extend(p[1].objects)
+    # p[0].objects.append(p[2])
+    # p[0].objects.append(p[3])
+    # p[0].objects.extend(p[4].objects)
+    tmpStr = f'{lexObjectsToString(p[1].objects)} {p[2].value} {p[3].value} {lexObjectsToString(p[4].objects)} '
+    symbol = Symbol(p[2].value,'Const')
     if len(p)==7:
-        p[0].objects.append(p[5])
-        p[0].objects.extend(p[6].objects)
+        tmpStr += p[5].value + lexObjectsToString(p[6].objects)
+        relyList= [] 
+        for elem in p[6].objects:
+            if elem.strs == 'lv6id':
+                relyList.append(elem)
+    tmpStr += ";"
+    global curSymtable
+    symbol.relyList.extend(relyList)
+    symbol.Code.append(lex_value("",tmpStr))
+    curSymtable.setSymbol(p[2].value,symbol) 
 
+    p[0].objects.append(p[2])
 
 def p_interface_status(p):
     '''Interface_status : Visibility_zero_or_one External
@@ -1556,45 +1621,55 @@ def p_arith_expr_binOp(p):
 
 def p_apply_expr(p):
     '''Apply_expr : Operator LPARENTHESE List RPARENTHESE'''
-    opStr=lexObjectsToString(p[1].objects)
-
     p[0]=lex_value("Apply_expr")
+    global curSymtable
+
+    tmpStr=""
+    for elem in p[1].objects:
+        if elem.strs == 'operatorLv6id':
+            tmpStr = elem.value
+            print("operatorLv6id ",tmpStr)
     p[0].objects.extend(p[1].objects)
     p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects)
     p[0].objects.append(p[4])
 
-    tmpStr=p[1].objects[0].value
-    if curSymtable.getSymbolInThisEnv(tmpStr)==None:
+    # tmpStr=p[1].objects[0].value
+    if tmpStr != '' and curSymtable.getSymbolInThisEnv(tmpStr)==None:
         preSymtable=curSymtable.PrevTable
         preOpKindSymbol=preSymtable.getSymbolInThisEnv(curSymtable.EnvName)
         preOpKindSymbol.relyList.append(tmpStr)
 
+        
+        symbol = Symbol(tmpStr,'ApplyOp')
+        curSymtable.setSymbol(tmpStr,symbol)
+
     
 # not finish
 def p_prefix(p):
-    '''Prefix : Path_id'''
+    '''Prefix : Path_id
+    | PREFIXOP'''
     #TODO:PREFIXOP没有添加，PREFIXOP需要在scade_lex.py里面添加
-    p[0]=lex_value("Prefix")
-    p[0].objects.append(p[1])
+    p[0]=p[1]
 
 # not finish
 def p_operator(p):
     '''Operator : Prefix
-    | LPARENTHESE Prefix LSHIFT Operator_1 RSHIFT RPARENTHESE
-    | LPARENTHESE MAKE Path_id RPARENTHESE
-    | LPARENTHESE FLATTEN Path_id RPARENTHESE
-    | LPARENTHESE Iterator Operator LSHIFT Expr RSHIFT RPARENTHESE
-    | LPARENTHESE ACTIVATE Operator EVERY Clock_expr RPARENTHESE
+    | LPARENTHESE Prefix LSHIFT Operator_1 RSHIFT RPARENTHESE 
+    | LPARENTHESE MAKE Path_id RPARENTHESE 
+    | LPARENTHESE FLATTEN Path_id RPARENTHESE 
+    | LPARENTHESE Iterator Operator LSHIFT Expr RSHIFT RPARENTHESE 
+    | LPARENTHESE ACTIVATE Operator EVERY Clock_expr RPARENTHESE 
     | LPARENTHESE ACTIVATE Operator EVERY Expr DEFAULT Expr RPARENTHESE
-    | LPARENTHESE ACTIVATE Operator EVERY Expr INITIAL DEFAULT Expr RPARENTHESE
-    | LPARENTHESE RESTART EVERY Expr RPARENTHESE
-    | LPARENTHESE Iterator_mw Operator LSHIFT Expr RSHIFT IF Expr DEFAULT Expr RPARENTHESE
-    | LPARENTHESE FOLDW Operator LSHIFT Expr RSHIFT IF Expr RPARENTHESE
-    | LPARENTHESE FOLDWI Operator LSHIFT Expr RSHIFT IF Expr RPARENTHESE'''
+    | LPARENTHESE ACTIVATE Operator EVERY Expr INITIAL DEFAULT Expr RPARENTHESE 
+    | LPARENTHESE RESTART EVERY Expr RPARENTHESE 
+    | LPARENTHESE Iterator_mw Operator LSHIFT Expr RSHIFT IF Expr DEFAULT Expr RPARENTHESE 
+    | LPARENTHESE FOLDW Operator LSHIFT Expr RSHIFT IF Expr RPARENTHESE 
+    | LPARENTHESE FOLDWI Operator LSHIFT Expr RSHIFT IF Expr RPARENTHESE '''
     p[0]=lex_value("Operator")
     if len(p)==2:
-        p[0].objects.extend(p[1].objects)
+        p[1].strs='operatorLv6id'
+        p[0].objects.append(p[1])
     elif len(p)==5:
         p[0].objects.extend([p[1],p[2],p[3],p[4]])
     elif len(p)==6:
@@ -1604,13 +1679,16 @@ def p_operator(p):
     elif len(p)==7:
         if p[2].strs=='activate':
             p[0].objects.extend([p[1],p[2]])
+            if len(p[3].objects)==1 and p[3].objects[0].strs != 'prefixop':
+                p[3].objects[0].strs='operatorLv6id'
             p[0].objects.extend(p[3].objects)
             p[0].objects.append(p[4])
             p[0].objects.extend(p[5].objects)
             p[0].objects.append(p[6])
         else:
             p[0].objects.append(p[1])
-            p[0].objects.extend(p[2].objects)
+            p[2].strs='operatorLv6id'
+            p[0].objects.append(p[2])
             p[0].objects.append(p[3])
             p[0].objects.extend(p[4].objects)
             p[0].objects.extend([p[5],p[6]])
@@ -1621,9 +1699,9 @@ def p_operator(p):
         p[0].objects.append(p[4])
         p[0].objects.extend(p[5].objects)
         p[0].objects.extend([p[6],p[7]])
-    elif len(p)==9:
+    elif len(p)==9:#未完成
         p[0].objects.extend([p[1],p[2]])
-        p[0].objects.exend(p[3].objects)
+        p[0].objects.extend(p[3].objects)
         p[0].objects.append(p[4])
         p[0].objects.extend(p[5].objects)
         p[0].objects.append(p[6])
@@ -1631,15 +1709,19 @@ def p_operator(p):
         p[0].objects.append(p[8])
     elif len(p)==10:
         p[0].objects.extend([p[1],p[2]])
+        if len(p[3].objects)==1 and p[3].objects[0].strs != 'prefixop':
+            p[3].objects[0].strs='operatorLv6id'
         p[0].objects.extend(p[3].objects)
         p[0].objects.append(p[4])
         p[0].objects.extend(p[5].objects)
         p[0].objects.extend([p[6],p[7]])
         p[0].objects.extend(p[8].objects)
         p[0].objects.append(p[9])
-    elif len(p)==12:
+    elif len(p)==12:#未完成
         p[0].objects.append(p[1])
         p[0].objects.extend(p[2].objects)
+        if len(p[3].objects) == 1 and p[3].objects[0].strs != 'prefixop':
+            p[3].objects[0].strs = 'operatorLv6id' 
         p[0].objects.extend(p[3].objects)
         p[0].objects.append(p[4])
         p[0].objects.extend(p[5].objects)
