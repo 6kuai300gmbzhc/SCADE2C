@@ -170,7 +170,6 @@ def getSameLevelRely(symtable):
             for idx,elem in enumerate(symbol.relyList):
                 pathList=elem.split("::")
                 ret=getWholePathFromTopToDown(pathList,0,rootSymtable)
-                # print("rootSymtable.EnvName=",rootSymtable.EnvName)
                 if ret==False:
                     ret=getWholePathFromTopToDown(pathList,0,symtable)
                     if symtable.EnvName == 'Global':
@@ -180,7 +179,6 @@ def getSameLevelRely(symtable):
                     pathList=curPath+pathList
                     if ret==True:
                         symbol.relyList[idx] ='::'.join(pathList)
-                        print("elem",elem)
                     else:
                         raise NotImplementedError("Path error",pathList)
             global rootSymbol
@@ -190,6 +188,7 @@ def getSameLevelRely(symtable):
             fname=fSymbol.PackageName
             #在此处进行拓扑排序
             symbol.relyList=list(set(symbol.relyList))
+            print("symbol.Name",symbol.Name,symbol.relyList)
             for relyElem in symbol.relyList:
                 if len(relyElem)>len(fname) and relyElem[:len(fname)]==fname:
                     relyName=relyElem
@@ -1376,7 +1375,6 @@ def p_id_one_or_more_with_comma_1(p):
         p[0].objects.append(p[2])
         p[0].objects.extend(p[3].objects)
         global curSymtable
-        print("Id_one_or_more curSymtable.EnvName=",curSymtable.EnvName)
         symbol=Symbol(p[2].value,'Size')
         curSymtable.setSymbol(p[2].value,symbol)
 
@@ -1669,18 +1667,15 @@ def p_apply_expr(p):
         if elem.strs=='pathId':
             elem.strs='operatorLv6id'
             tmpStr=elem.value
+            if curSymtable.getSymbolInThisEnv(tmpStr)==None:
+                preSymtable=curSymtable.PrevTable
+                preOpKindSymbol=preSymtable.getSymbolInThisEnv(curSymtable.EnvName)
+                preOpKindSymbol.relyList.append(tmpStr)
+
     p[0].objects.extend(p[1].objects)
     p[0].objects.append(p[2])
     p[0].objects.extend(p[3].objects)
     p[0].objects.append(p[4])
-
-    if tmpStr!= '' and curSymtable.getSymbolInThisEnv(tmpStr)==None:
-        print("curSymtable:",curSymtable.EnvName,tmpStr)
-        preSymtable=curSymtable.PrevTable
-        preOpKindSymbol=preSymtable.getSymbolInThisEnv(curSymtable.EnvName)
-        print("relyList append",preOpKindSymbol.Name,preOpKindSymbol.Kind,tmpStr)
-        preOpKindSymbol.relyList.append(tmpStr)
-
     
 # not finish
 def p_prefix(p):
@@ -1726,6 +1721,7 @@ def p_operator(p):
             p[0].objects.append(p[3])
             p[0].objects.extend(p[4].objects)
             p[0].objects.extend([p[5],p[6]])
+            # print("map",p[0].objects)
     elif len(p)==8:
         p[0].objects.append(p[1])
         p[0].objects.extend(p[2].objects)

@@ -78,15 +78,6 @@ def topologySort(symbolList,adjList,nodeList):
     print(nodeList)
     return retList
 
-def getWholePathFromTopToDown(pathList,idx,symtable):
-    if idx>=len(pathList):
-        return True
-    if symtable.getSymbolInThisEnv(pathList[idx])!=None:
-        for elem in symtable.ChildTableList:
-            if elem.EnvName==pathList[idx]:
-                return getWholePathFromTopToDown(pathList,idx+1,elem)
-    return False
-
 def getNode(lex,tDict,lexList,adjList,nodeList):
     idx=len(nodeList)
     node=None
@@ -263,10 +254,10 @@ def p_type_block(p):
     p[0].objects.extend(p[2].objects)
     if curSymtable.EnvName=='Global':
         global rootSymbol
-        rootSymbol.Code.append(lexObjectsToString(p[0].objects))
+        rootSymbol.Code.append(lex_value("",lexObjectsToString(p[0].objects)))
     else:
         packageSymbol=curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
-        packageSymbol.Code.append(lexObjectsToString(p[0].objects))
+        packageSymbol.Code.append(lex_value("",lexObjectsToString(p[0].objects)))
     
 def p_type_block_1(p):
     '''Type_block_1 : Type_decl SEMICOLON Type_block_1
@@ -2066,7 +2057,11 @@ def get_parse(filename):
     nodes = parser.parse(strs, lexer=scade_lexer)
 
     content=""
+    # print("rootSymbol.Code")
+    # print(rootSymbol.Code)
     for elem in rootSymbol.Code:
+        # print(type(elem))
+        # print(elem)
         content+=elem.value
 
     output_filename = os.path.splitext(os.path.basename(filename))[0]
