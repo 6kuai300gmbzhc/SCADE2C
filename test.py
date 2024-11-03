@@ -104,6 +104,7 @@ def test_scade_generate(input_dir: str, output_dir: str):
             except Exception as e:
                 logging.error(f"Error during generation for file: {stage2_output_path}")
                 logging.error(f"Error message: {str(e)}")
+                logging.info(f"\n================================================== Next Input File ===========================================================")
                 continue  # 继续处理下一个文件
         else:
             logging.error(f"Skipping generation for file: {input_file} due to preprocessing errors.")
