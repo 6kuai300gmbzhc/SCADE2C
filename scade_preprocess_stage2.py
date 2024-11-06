@@ -48,12 +48,17 @@ precedence = (
     ('left', 'POINT')
 )
 
+
 class topologyNode:
+    """拓扑节点，将scade代码中的变量转为节点形式，以分析其依赖关系并进行排序"""
     def __init__(self,name='',index=0,tpIdx=0,inNum=0):
         self.name=name
+        """节点的名字，对应变量的名字"""
         self.index=index
+        """在nodeList中下标"""
         self.tpIdx=tpIdx
         self.inNum=inNum
+        '''入度，依赖其的节点数量'''
         self.finish=False
     
     def __repr__(self):
@@ -78,7 +83,9 @@ def topologySort(symbolList,adjList,nodeList):
     print(nodeList)
     return retList
 
+
 def getNode(lex,tDict,lexList,adjList,nodeList):
+    """将词法对象lex加入到拓扑序列中，建立node和lex之间的关系"""
     idx=len(nodeList)
     node=None
     if lex.value not in tDict:
@@ -101,12 +108,17 @@ def findValueInLexLists(v,lists):
             return True
     return False
 
-#此处进行拓扑排序
+
 def equations2str(lex_objects):
+    """将多语句进行拓扑排序，返回一个经过排序的node列表而不是str（？？？？）"""
     tDict={}
+    """记录了lex.value到nodeList对应节点的位置下标的关系"""
     lexList=[]
+    """lex的列表"""
     adjList=[]
+    """依赖列表，adjList[i][j]意味着j号node依赖i号node，配合nodeList使用"""
     nodeList=[]
+    """节点的列表"""
     global rootSymbol
     if curSymtable.EnvName == 'Global':
         controlSymbol = rootSymbol
@@ -116,13 +128,14 @@ def equations2str(lex_objects):
         print("=== equation2str ===",elem,elem.relyLists)
         if elem.strs == 'controlBlockLv6id' or elem.strs == 'operatorLv6id':
             controlNode = getNode(elem,tDict,lexList,adjList,nodeList)
-            for lhsLex in elem.rets:
+            #controlNode是当前elem对应节点（为什么不叫cur_elem_node）
+            for lhsLex in elem.rets:#左值，添加入度，既对其他node有依赖关系
                 lhsNode = getNode(lhsLex,tDict,lexList,adjList,nodeList)
                 lhsNode.inNum +=1
                 adjList[controlNode.index].append(lhsNode.index)
             for relyLex in elem.relyLists:
                 rhsSymbol=curSymtable.getSymbolInThisEnv(relyLex.value)
-                if rhsSymbol!=None:
+                if rhsSymbol!=None:#右值，让controlNode的入度增加
                     rhsNode = getNode(relyLex,tDict,lexList,adjList,nodeList)
                     controlNode.inNum += 1
                     adjList[rhsNode.index].append(controlNode.index)
@@ -142,7 +155,8 @@ def equations2str(lex_objects):
                 rhsNode = getNode(rely,tDict,lexList,adjList,nodeList)
                 lhsNode.inNum += 1
                 adjList[rhsNode.index].append(lhsNode.index)
-    print(nodeList)
+    print("nodeList:",nodeList)
+    print("adjList:")
     for elem in adjList:
         print(elem)
     print("before topologySort")
@@ -459,6 +473,7 @@ def p_opt_body(p):
             symbol = curSymtable.getSymbolInThisEnv(elem.value)
             if symbol!=None:
                 tmpStr += lexObjectsToString(symbol.Code)
+        #拿到经过拓扑排序后的node列表，挨个查询当前符号表里面生成好的代码，挨个粘贴进去，实现排序
         print("=== tmpStr ===")
         print(tmpStr)
         print("=== ===")
@@ -524,8 +539,7 @@ def p_equation(p):
     p[0]=lex_value("Equation")
     if p[1].strs != 'Assert':
         p[0].objects.extend(p[1].objects)
-    if len(p) != 2:
-        print(p[1].objects)
+    if len(p) != 2:#control_block
         ifSymbol = curSymtable.getSymbolInThisEnv(p[1].objects[0].value)
         ifSymbol.Code.extend(p[2].objects)
         ifSymbol.Code.append(lex_value('',';'))
@@ -587,6 +601,8 @@ def p_control_block(p):
     p[0]=lex_value("Control_block")
     p[0].objects.extend(p[1].objects)
 
+
+
 def p_return(p):
     '''Return : RETURNS Returns_var'''
     p[0] = lex_value("Return")
@@ -618,15 +634,14 @@ def p_state_machine(p):
     '''State_machine : AUTOMATON Id_zero_or_one State_machine_1'''
     p[0]=lex_value("State_machine")
     # p[0].objects.append(p[1])
-    # p[0].objects.extend(p[2].objects)
+
     # p[0].objects.extend(p[3].objects)
     global curSymtable
-
-    p[0].objects.extend(p[2].objects)
-    
     objs = [p[1]] + p[2].objects + p[3].objects
     code = lexObjectsToString(objs)
     print("curSymtable",curSymtable.EnvName)
+    p[0].objects.extend(p[2].objects)
+
     curSymbol = curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
     curSymbol.Code.append(lex_value("",code))
 
@@ -640,8 +655,13 @@ def p_state_machine_1(p):
         p[0].objects.extend(p[1].objects)
         p[0].objects.extend(p[2].objects)
 
+
 def p_state_decl(p):
     '''State_decl : State_decl_1 State_decl_2 STATE State_Lv6id State_decl_3 Data_def State_decl_4'''
+    #声明了状态机中的一个状态，由inital/final修饰，STATE关键字，状态机id和后续的转移方法与行为组成
+    #1234分别对应inital，final，unless（强），until（弱）的部分，后两者包括内部的各种声明
+    #Data_def为若状态机在此状态时，每个周期所执行的操作
+    #先进行状态转换，后进行转换后状态内的操作。
     p[0]=lex_value("State_decl")
     p[0].objects.extend(p[1].objects)
     p[0].objects.extend(p[2].objects)
@@ -672,6 +692,7 @@ def p_state_decl_2(p):
 def p_state_decl_3(p):
     '''State_decl_3 : UNLESS State_decl_5
     | empty'''
+    #强类型状态转移，从一个状态移动到另一个状态。
     p[0]=lex_value("State_decl_3")
     if len(p)!=2:
         p[0].objects.append(p[1])
@@ -679,6 +700,7 @@ def p_state_decl_3(p):
 
 def p_state_decl_5(p):
     '''State_decl_5 : Transition SEMICOLON State_decl_6'''
+    #很多(>=1)的状态转移，每个转移以分号结尾
     p[0]=lex_value("State_decl_5")
     p[0].objects.extend(p[1].objects)
     p[0].objects.append(p[2])
@@ -720,15 +742,22 @@ def p_eqs(p):
     
     print("Eqs:",p[2].objects,len(p[2].objects))
     retList = equations2str(p[2].objects)
+    print("retList:",retList)
     tmpStr = p[1].value + "\n"
     tmpList = []
+    #curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
     for elem in retList:
-        tmpList.extend(elem.objects)
+        if(elem.strs=="controlBlockLv6id"):
+            symbol=curSymtable.getSymbolInThisEnv(elem.value)
+            tmpList.extend(symbol.Code)
+        else:
+            tmpList.extend(elem.objects)
     tmpStr += lexObjectsToString(tmpList)
     tmpStr += p[3].value + "\n"
 
     tmpLex = lex_value('',tmpStr)
     p[0].objects.append(tmpLex)
+    print("Eqs_code:",tmpLex)
 
 def p_state_decl_4(p):
     '''State_decl_4 : UNTIL State_decl_6 State_decl_7
@@ -865,9 +894,8 @@ def p_clocked_block(p):
     | ACTIVATE Id_zero_or_one Match_block'''
     p[0]=lex_value("Clocked_block")
     # p[0].objects.append(p[1])
-    # p[0].objects.extend(p[2].objects)
-    # p[0].objects.extend(p[3].objects)
     p[0].objects.extend(p[2].objects)
+    # p[0].objects.extend(p[3].objects)
     global curSymtable
     
     curSymbol = curSymtable.PrevTable.getSymbolInThisEnv(curSymtable.EnvName)
