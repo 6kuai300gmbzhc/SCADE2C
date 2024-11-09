@@ -24,9 +24,13 @@ class lex_value:
 
     def set_scope(self, scope):
         self.scope = scope
+    
+    def init_objects(self,length):
+        self.beforeObjects=[[] for _ in range(length)]
+        self.afterObjects=[[] for _ in range(length)]
  
     def __repr__(self) -> str:
-        strs = str(self.strs) + ' ' + str(self.value)
+        strs = str(self.strs) + ' ' + str(self.value) 
         return strs
 
 reserved = {

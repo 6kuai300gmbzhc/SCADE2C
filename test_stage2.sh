@@ -1,5 +1,6 @@
 #!/bin/bash
 # for test stage2
+
 # FILES=$(find ./input -name "*.scade")
 # for file in ${FILES}; do
 #     name=$(basename ${file} .scade)
@@ -13,6 +14,7 @@
 # done
 
 # for test stage1
+
 # FILES=$(find ./input -name "*.scade")
 # for file in ${FILES}; do
 #     name=$(basename ${file} .scade)

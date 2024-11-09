@@ -11,19 +11,15 @@ isPackage = 0
 # global isStatemachine
 isStatemachine = 0
 
-packageName = "" # 用于记录当前需要添加的包后缀，如"_P1_P2"
-packageList = list() # 用于记录当前进入的包的名称，如["P1", "P2"]
-op_kind_id = "" #node的lv6id
-op_kind = "" #node or function
 
 scade_lexer = scade_lex()
 GlobalEnv = SymbolTable('Global')  #global的符号表中的符号为各个函数的函数名，该符号只填充了Returns,Params,isStatemachine,hasInternalState
                                    #global的符号表中还有子符号表，名为其子函数名的符号表，各个Package的符号表
+thisSymbol = Symbol('Global')
 thisEnv = GlobalEnv
 program = None
 
-# 全局变量，用于存储被调用过的函数名称
-calledOperators = []
+lhsLists = []
 
 
 class Node:
