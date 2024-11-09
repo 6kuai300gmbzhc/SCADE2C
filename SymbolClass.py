@@ -73,6 +73,9 @@ class Symbol:
             name=self.Name+self.PackageName
         return name
 
+    def __str__(self):
+        return str(self.Code)
+
 
 class SymbolTable:
     def __init__(self, EnvName=None, PrevTable=None) -> None:
@@ -86,8 +89,13 @@ class SymbolTable:
         for i in range(layer):
             tab += '  '
         strs = tab + 'Symbol_Table:' + self.EnvName
+        strs+="{"
         if self.SymbolTable:
-            strs += str(self.SymbolTable)
+            for key in self.SymbolTable.keys():
+                strs += key+":"
+                strs += str(self.SymbolTable.get(key))
+                strs += " "
+        strs += "}"
         strs += '\n'
         if self.ChildTableList:
             for chiletable in self.ChildTableList:
@@ -155,3 +163,6 @@ class SymbolTable:
             print("prevTable.EnvName=",prev.EnvName)
             prev=prev.PrevTable
         print("=====================")
+
+    def __str__(self):
+        return self.SymbolTable2Str(0)
