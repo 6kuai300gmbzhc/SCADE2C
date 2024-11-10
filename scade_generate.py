@@ -27,7 +27,7 @@ class Scade_generate:
         self.main_code=''
 
     #此时没有考虑包的因素
-    def gen_const_file(self):
+    def gen_const_file(self,outputDir):
         h_content = "#ifndef _KCG_CONSTS_H_\n#define _KCG_CONSTS_H_\n#include \"kcg_types.h\"\n\n"
         c_content = "#include \"kcg_consts.h\"\n"
         temp = self.symboltable
@@ -47,12 +47,12 @@ class Scade_generate:
         print(h_content)
         print("====const c_file")
         print(c_content)
-        with open("%s/include/kcg_consts.h"%(sc.outputDir),'w') as f:
+        with open("%s/include/kcg_consts.h"%(outputDir),'w') as f:
             f.write(h_content)
-        with open("%s/src/kcg_consts.c"%(sc.outputDir),'w') as f:
+        with open("%s/src/kcg_consts.c"%(outputDir),'w') as f:
             f.write(c_content)    
 
-    def gen_sensor_file(self):
+    def gen_sensor_file(self,outputDir):
         content="#ifndef _KCG_SENSORS_H_\n#define _KCG_SENSORS_H_\n#include \"kcg_types.h\"\n\n"
         for k, v in self.symboltable.SymbolTable.items():
             if v.Kind=="Sensor":
@@ -60,10 +60,10 @@ class Scade_generate:
         content+="\n#endif"
         print("====sensor")
         print(content)
-        with open('%s/include/kcg_sensors.h'%(sc.outputDir),'w') as f:
+        with open('%s/include/kcg_sensors.h'%(outputDir),'w') as f:
             f.write(content)
 
-    def gen_types_file(self):
+    def gen_types_file(self,outputDir):
         file=open('source_program/types.txt','r')
         content=file.read()
         content+="\n"
@@ -88,32 +88,32 @@ class Scade_generate:
         content+=typeContent
         print("====types_file")
         print(typeContent)
-        writeFile=open("%s/include/kcg_types.h"%(sc.outputDir),'w')
+        writeFile=open("%s/include/kcg_types.h"%(outputDir),'w')
         writeFile.write(content)
         
-    def gen_assign_file(self):
+    def gen_assign_file(self,outputDir):
         file=open('source_program/kcg_assign.txt','r')
         content=file.read()
-        writeFile = open("%s/include/kcg_assign.h"%(sc.outputDir),'w')
+        writeFile = open("%s/include/kcg_assign.h"%(outputDir),'w')
         writeFile.write(content)
 
     # kcg_types.h需要依赖kcg_imported_types.h，目前的生成只需要简单拷贝
-    def gen_imported_types_file(self):
+    def gen_imported_types_file(self,outputDir):
         file=open('source_program/kcg_imported_types.txt','r')
         content=file.read()
-        writeFile = open("%s/include/kcg_imported_types.h"%(sc.outputDir),'w')
+        writeFile = open("%s/include/kcg_imported_types.h"%(outputDir),'w')
         writeFile.write(content)
 
     # macro_libmathext64.h提供三角函数等基础函数的实现，目前的生成只需要简单拷贝
-    def gen_macro_libmathext_file(self):
+    def gen_macro_libmathext_file(self,outputDir):
         file32 = open('source_program/macro_libmathext32.h', 'r')
         content32 = file32.read()
-        writeFile32 = open("%s/include/macro_libmathext32.h"%(sc.outputDir), 'w')
+        writeFile32 = open("%s/include/macro_libmathext32.h"%(outputDir), 'w')
         writeFile32.write(content32)
 
         file64 = open('source_program/macro_libmathext64.h', 'r')
         content64 = file64.read()
-        writeFile64 = open("%s/include/macro_libmathext64.h"%(sc.outputDir), 'w')
+        writeFile64 = open("%s/include/macro_libmathext64.h"%(outputDir), 'w')
         writeFile64.write(content64)
 
 def testInputDirFiles():
@@ -150,27 +150,26 @@ def testInputDirFiles():
             GlobalEnv=SymbolTable('Global')
 
 def testInputFile(in_path:str,output_dir:str):
-    sc.outputDir=os.path.splitext(os.path.basename(in_path))[0]
-    dirPath=os.path.join(output_dir,sc.outputDir)
-    sc.outputDir=dirPath
-    if not os.path.exists(dirPath):
-        os.makedirs(dirPath)
-        os.makedirs(os.path.join(dirPath,"include"))
-        os.makedirs(os.path.join(dirPath,"src"))
+    file_name=os.path.splitext(os.path.basename(in_path))[0]
+    dir_path=os.path.join(output_dir,file_name)
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path)
+        os.makedirs(os.path.join(dir_path,"include"))
+        os.makedirs(os.path.join(dir_path,"src"))
     file=open(in_path,'r')
     strs=file.read()
-    program,symboltable=sc.get_parse(strs)
+    program,symboltable=sc.get_parse(strs,dir_path)
     print("*************************************",in_path)
     print(program)
     print("*************************************")
     gen=Scade_generate(program,symboltable)
-    gen.gen_const_file()
-    gen.gen_sensor_file()
-    gen.gen_types_file()
-    gen.gen_assign_file()
-    gen.gen_imported_types_file()
-    gen.gen_macro_libmathext_file()
-    print("output_dir path: ",sc.outputDir)
+    gen.gen_const_file(dir_path)
+    gen.gen_sensor_file(dir_path)
+    gen.gen_types_file(dir_path)
+    gen.gen_assign_file(dir_path)
+    gen.gen_imported_types_file(dir_path)
+    gen.gen_macro_libmathext_file(dir_path)
+    print("output_dir path: ",dir_path)
 
 
 if __name__=='__main__':

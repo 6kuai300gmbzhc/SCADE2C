@@ -28,7 +28,7 @@
 # done
 
 #for test stage1 && stage2
-FILES=$(find ./.ignore_this/input/ -name "*.scade")
+FILES=$(find ./input/ -name "*.scade")
 for file in ${FILES}; do
     name=$(basename ${file} .scade)
     python scade_preprocess_stage1.py -i ${file} > stage1_${name}.scade > stage1_${name}.log 2>&1

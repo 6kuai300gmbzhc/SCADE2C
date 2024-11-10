@@ -342,3 +342,6 @@ def getRely(symbol,symtable,relyList):
             if tmpSymbol != None:
                 if tmpSymbol.IsInput != True and tmpSymbol.Kind != 'Const' and tmpSymbol.Kind != 'Sensor':
                     relyList.append(elem.value)
+
+def listToStr(obj):
+    return ''.join(map(str,obj))

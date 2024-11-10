@@ -28,6 +28,7 @@ class lex_value:
     def init_objects(self,length):
         self.beforeObjects=[[] for _ in range(length)]
         self.afterObjects=[[] for _ in range(length)]
+        self.objects=[[] for _ in range(length)]
  
     def __repr__(self) -> str:
         strs = str(self.strs) + ' ' + str(self.value) 
