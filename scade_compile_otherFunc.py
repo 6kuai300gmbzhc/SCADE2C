@@ -343,5 +343,17 @@ def getRely(symbol,symtable,relyList):
                 if tmpSymbol.IsInput != True and tmpSymbol.Kind != 'Const' and tmpSymbol.Kind != 'Sensor':
                     relyList.append(elem.value)
 
-def listToStr(obj):
-    return ''.join(map(str,obj))
+def listToStr(obj,symtable):
+    retStr=''
+    for elem in obj:
+        symbol = symtable.getSymbolInThisEnv(str(elem))
+        if symbol != None:
+            if symbol.IsInput == True:
+                retStr += f"inC ->{elem}"
+            elif symbol.IsReturn ==True:
+                retStr += f"outC ->{elem}"
+            else:
+                retStr += elem
+        else:
+            retStr += str(elem)
+    return retStr

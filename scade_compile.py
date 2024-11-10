@@ -267,7 +267,7 @@ def generate_c_file_reset_func(symtable,opKindSymbol):
         elif para.Kind=="ApplyOut":
             text += "%s_reset(&outC->%s);\n"%(para.Code[0].value,para.Name)
         elif para.IsLast == True and len(para.Last)!=0:
-            text += f"outC -> {para.Name} = {listToStr(para.Last)};\n"
+            text += f"outC -> {para.Name} = {listToStr(para.Last,symtable)};\n"
     if opKindSymbol.isStatemachine:
         text += "outC->state_nxt=%s;\n"%opKindSymbol.initState
     text += "}\n"
@@ -840,7 +840,6 @@ def p_equation_zero_or_more_with_semicolon(p):
         p[0].value += p[1].value
         p[0].value += p[3].value 
 
-
 def p_equation(p):
     '''Equation : Simple_equation
                 | Assert
@@ -852,8 +851,8 @@ def p_equation(p):
         p[0].value += p[1].value
     elif len(p) == 3:  
         p[0].strs = 'Control_block'
-        p[0].objects.extend(p[1].objects)
-        p[0].value += p[1].value + p[2].value
+        # p[0].objects.extend(p[1].objects)
+        p[0].value += p[1].value
         # print("Control block, p[1],p[2] value: ", p[1].value, ", ", p[2].value)
 
 def p_assert(p):
@@ -868,8 +867,8 @@ def p_control_block(p):
     | Clocked_block'''
     p[0] = lex_value("Control_block")
     p[0].value += p[1].value
-    if p[1].strs=='Clocked_block':
-        p[0].objects.extend(p[1].objects)
+    # if p[1].strs=='Clocked_block':
+    #     p[0].objects.extend(p[1].objects)
 
 
 def p_return(p):
@@ -1053,7 +1052,7 @@ def p_data_def(p):
     #     p[0].value+=defToString(p[2].beforeObjects)
     #     p[0].value+=defToString(p[2].objects)
     #     p[0].value+=defToString(p[2].afterObjects)
-    p[0].objects = p[1].objects
+    p[0].value += p[1].value
 
 
 def p_scope(p):
@@ -1064,7 +1063,7 @@ def p_scope(p):
     #     symbol = thisEnv.getSymbolInThisEnv(elem.value)
     #     p[0].value += "kcg_%s %s;\n" % (symbol.Type, symbol.Name)
     if len(p) == 4:
-        p[0].objects = p[3].objects
+        p[0].value += p[3].value
 
 
 def p_eqs(p):
@@ -1115,12 +1114,15 @@ def p_clocked_block(p):
     | ACTIVATE Id_zero_or_one Match_block'''
     # 目前没发现Id_zero_or_one有什么作用。activate块为局部块，可以为其新建一个符号表，Id_zero_or_one为其符号表的标识。
     p[0] = lex_value("Clocked_block")
+    p[0].value += p[3].value
+    # for elem in p[3].objects:
+    #     p[0].value += listToStr(elem,thisEnv)
     # p[0].value += p[3].value
-    if p[3].strs=='If_block':
-        for elem in p[3].objects:
-            p[0].objects.append(elem[0])
-    else:
-        p[0].objects.extend(p[3].objects)
+    # if p[3].strs=='If_block':
+    #     for elem in p[3].objects:
+    #         p[0].objects.append(elem[0])
+    # else:
+    #     p[0].objects.extend(p[3].objects)
 
 def p_id_zero_or_one(p):
     '''Id_zero_or_one : LV6ID
@@ -1131,83 +1133,20 @@ def p_id_zero_or_one(p):
 def p_if_block(p):
     'If_block : IF Expr THEN If_block_1 ELSE If_block_1'
     p[0] = lex_value("If_block")
-    for elem in p[4].objects:
-        symbol = thisEnv.getSymbolInThisEnv(elem[0].value)
-        symbol.StateType = 'ifCondition'
-        flag = False
-        for nextElem in p[6].objects:
-            if nextElem[0].value == symbol.Name:
-                tmpList = list()
-                ifNode = Node('ifCondition')
-                ifNode.childNodeList.append(elem[1])
-                ifNode.childNodeList.append(nextElem[1])
-                ifNode.value.extend(p[2].objects[0])
-                symbol.Code.append(ifNode)
-                flag = True
-                tmpList.append(elem[0])
-                tmpList.append(ifNode)
-                p[0].objects.append(tmpList)
-                break
-        if flag == False:
-            ifNode = Node('ifCondition')
-            ifNode.childNodeList.append(elem[1])
-            ifNode.value.extend(p[2].objects[0])
-            symbol.Code.append(ifNode)
-            tmpList = list()
-            tmpList.append(elem[0])
-            tmpList.append(ifNode)
-            p[0].objects.append(tmpList)
-    for elem in p[6].objects:
-        flag=False
-        for nextElem in p[4].objects:
-            if nextElem[0].value==elem[0].value:
-                flag=True
-        if flag==False:
-            symbol=thisEnv.getSymbolInThisEnv(elem[0].value)
-            symbol.StateType='ifCondition'
-            ifNode=Node('ifCondition')
-            ifNode.childNodeList.append(elem[1])
-            valueObjects=[lex_value("","!")]
-            valueObjects.extend(p[2].objects[0])
-            ifNode.value.extend(valueObjects)
-            symbol.Code.append(ifNode)
-            p[0].objects.append([elem[0],ifNode])
+    p[0].value +=listToStr(p[2].beforeObjects[0],thisEnv)
+    p[0].value += "if(%s){\n%s}else{\n%s}\n"%(listToStr(p[2].objects[0],thisEnv),p[4].value,p[6].value)
+    p[0].value += listToStr(p[2].afterObjects[0],thisEnv)
 
 
 def p_if_block_1(p):
     '''If_block_1 : Data_def
     | If_block'''
     p[0] = lex_value()
-    p[0].strs = p[1].strs
-    if p[1].strs == 'Data_def':
-        for elem in p[1].objects:
-            tmplist = list()
-            symbol = thisEnv.getSymbolInThisEnv(elem.value)
-            if symbol != None:
-                tmplist.append(elem)
-                if symbol.StateType=='ifCondition' or symbol.StateType=='switchCondition':
-                    tmplist.append(symbol.Code[0])
-                else:
-                    ifNode = Node(symbol.StateType)
-                    ifNode.value.extend(symbol.Code)
-                    tmplist.append(ifNode)
-                # else:
-                #     ifNode.value.extend(symbol.Code)
-                #     print("data_def= symbol.Code=",symbol.Code," symbol.Name=",symbol.Name)
-                # ifNode.value.extend(symbol.Code)
-                symbol.Code.clear()
-            p[0].objects.append(tmplist)
-    else:
-        p[0]=p[1]
-        for elem in p[1].objects:
-            symbol=thisEnv.getSymbolInThisEnv(elem[0].value)
-            if symbol!=None:
-                symbol.Code.clear()
+    p[0].value += p[1].value
 
 
 def p_match_block(p):
     '''Match_block : WHEN Expr MATCH Match_block_1'''
-    # Match_block_1的objects格式为[[[Pattern][Data_def]],[[Pattern][Data_def]],[]]
     p[0] = lex_value("Match_block")
     for elem in p[4].objects:
         symbol=thisEnv.getSymbolInThisEnv(elem[0][0].value)
@@ -1348,10 +1287,10 @@ def p_simple_equation(p):
     tmpStr=""
     p[1].objects.reverse()
     for idx,lhs in enumerate(p[1].objects):
+        print("== lhs ==",lhs)
         for elem in p[3].beforeObjects[idx]:
             tmpStr += elem +"\n"
-        for elem in p[3].objects[idx]:
-            tmpStr +=f"{lhs.value} = {elem};\n"
+        tmpStr +=f"{listToStr([lhs],thisEnv)} = {listToStr(p[3].objects[idx],thisEnv)};\n"
         for elem in p[3].afterObjects[idx]:
             tmpStr += elem + "\n"
     p[0].value = tmpStr
@@ -1366,7 +1305,7 @@ def p_lhs(p):
     p[0] = lex_value("Lhs")
     global lhsLists
     if p[1].strs != 'lparenthese':
-        lhsLists.append(p[1])
+        lhsLists.append(p[1].value)
     else:
         lhsLists.append(lex_value('','()'))
     p[0].objects=copy.deepcopy(lhsLists)
@@ -1378,7 +1317,7 @@ def p_lhs_1(p):
     p[0] = lex_value("Lhs_1")
     global lhsLists
     if len(p) == 4:
-        lhsLists.append(p[2])
+        lhsLists.append(p[2].value)
 
 
 # not finish
@@ -1579,7 +1518,7 @@ def p_default_decl(p):
     '''Default_decl : DEFAULT EQU Expr'''
     p[0] = lex_value("Default_decl")
     for obj in p[3].objects:
-        p[0].value += listToStr(obj)
+        p[0].value += listToStr(obj,thisEnv)
 
 
 def p_var_decls_4(p):
@@ -1592,7 +1531,7 @@ def p_last_decl(p):
     '''Last_decl : LAST EQU Expr'''
     p[0] = lex_value("Last_decl")
     for obj in p[3].objects:
-        p[0].value += listToStr(obj)
+        p[0].value += listToStr(obj,thisEnv)
 
 
 def p_package(p):
@@ -1632,13 +1571,14 @@ def p_const_decl(p):
         typeSymbol.FieldList = objectsToStruct(p[4].objects)
     else:
         type = p[4].value
+    packageName = '' if thisEnv.EnvName == 'Global' else thisEnv.PrevTable.getSymbolInThisEnv(thisEnv.EnvName).PackageName
     if len(p) == 7:
         # 此处关于结构体的初始化还没有完成
         symbol = Symbol(p[2].value, 'Const', type, public, external, isPackage, packageName)
         symbol.arrSize.extend(p[4].objects)
-        setObjectsType(p[6].objects[0], type)
-        symbol.FieldList = objectsToStruct(p[4].objects)
-        symbol.Code = p[6].objects[0]
+        # setObjectsType(p[6].objects[0], type)
+        # symbol.FieldList = objectsToStruct(p[4].objects)
+        symbol.Code.append(listToStr(p[6].objects[0],thisEnv))
 
         thisEnv.setSymbol(p[2].value, symbol)
     elif len(p) == 5:
@@ -1945,62 +1885,74 @@ def p_tempo_expr(p):
     p[0] = lex_value("Tempo_expr")
     global thisEnv
     if len(p) == 4 and p[2].value == '->':
-        initName = getName("init",thisEnv)
-        p[0].value = f"( ({initName}) ? ({listToStr(p[1].objects[0])}):({listToStr(p[3].objects[0])}) )"
-        initSymbol =Symbol(initName,'Init','bool')
-        thisEnv.setSymbol(initName,initSymbol)
+        exprLen = len(p[1].objects)
+        p[0].init_objects(exprLen)
+        for idx in range(exprLen):
+            initName = getName("init",thisEnv)
+            code = f"( ({initName}) ? ({listToStr(p[1].objects[idx],thisEnv)}):({listToStr(p[3].objects[idx],thisEnv)}) )"
+            initSymbol =Symbol(initName,'Init','bool')
+            thisEnv.setSymbol(initName,initSymbol)
+            p[0].objects[idx].append(code)
     elif len(p) == 3:
         # 若是pre操作符，需要向out添加mem_pre，用来存储上一个周期的值。若在符号表未找到，则无需添加mem_pre。
         # 则此时只需要输出上一个周期的值。可能出现pre(2)
         # expr可能是列表
-        type = thisEnv.getSymbolInThisEnv(lhsLists[0]).Type
-        preName = getName("mem_pre",thisEnv)
-        preSymbol = Symbol(preName,"Pre",type)
-        preSymbol.IsReturn = True
-        thisEnv.setSymbol(preName,preSymbol)
-        preCode = f"{preName} = {''.join(p[2].objects[0])};\n"
-        preSymbol.Code.append(preCode)
+        exprLen = len(p[2].objects)
+        p[0].init_objects(exprLen)
+        for idx in range(exprLen):
+            type = thisEnv.getSymbolInThisEnv(lhsLists[idx]).Type
+            preName = getName("mem_pre",thisEnv)
+            preSymbol = Symbol(preName,"Pre",type)
+            preSymbol.IsReturn = True
+            thisEnv.setSymbol(preName,preSymbol)
+            preCode = f"{preName} = {listToStr(p[2].objects[idx],thisEnv)};\n"
+            preSymbol.Code.append(preCode)
 
-        p[0].value = f"{preName}" 
+            p[0].objects[idx].append(preName)
+        # p[0].value = f"{preName}" 
     elif len(p) == 9:
         # 若是fby操作符，首先在outC结构体中添加一个idx和数组
         # fby(input1;cycle;input2) cycle必须是静态表达式
+        print("fby===",p[3].objects,p[7].objects)
+        exprLen = len(p[3].objects)
+        p[0].init_objects(exprLen)
+        for idx in range(exprLen):
+            initName = getName("init",thisEnv)
+            initSymbol = Symbol(initName, "Init", "bool")
+            initSymbol.IsReturn = True
+            thisEnv.setSymbol(initName, initSymbol)
+            # symbol.Returns.append(initName)
 
-        initName = getName("init",thisEnv)
-        initSymbol = Symbol(initName, "Init", "bool")
-        initSymbol.IsReturn = True
-        thisEnv.setSymbol(initName, initSymbol)
-        # symbol.Returns.append(initName)
+            fbyIdx = getName("fbyIdx",thisEnv)
+            fbyArr = getName("fbyArray",thisEnv)
 
-        fbyIdx = getName("fbyIdx",thisEnv)
-        fbyArr = getName("fbyArray",thisEnv)
+            type = thisEnv.getSymbolInThisEnv(lhsLists[idx]).Type
 
-        type = thisEnv.getSymbolInThisEnv(lhsLists[0]).Type
-
-        fbyIdxSymbol = Symbol(fbyIdx, "FbyIdx", "int32")
-        fbyIdxSymbol.IsReturn = True
-        fbyArrSymbol = Symbol(fbyArr, "FbyArr",type)
-        fbyArrSymbol.IsReturn = True
-        fbyArrSymbol.IsArray = True
-        thisEnv.setSymbol(fbyIdx, fbyIdxSymbol)
-        thisEnv.setSymbol(fbyArr, fbyArrSymbol)
+            fbyIdxSymbol = Symbol(fbyIdx, "FbyIdx", "int32")
+            fbyIdxSymbol.IsReturn = True
+            fbyArrSymbol = Symbol(fbyArr, "FbyArr",type)
+            fbyArrSymbol.IsReturn = True
+            fbyArrSymbol.IsArray = True
+            thisEnv.setSymbol(fbyIdx, fbyIdxSymbol)
+            thisEnv.setSymbol(fbyArr, fbyArrSymbol)
             
-        p[0].value = f"outC ->{fbyArr}[outC->{fbyIdx}]"
+            code = f"outC ->{fbyArr}[outC->{fbyIdx}]"
 
-        beforeTmp=f'''
-        if(outC->{initName}){{\n
-            for(int i=0;i<{listToStr(p[5].objects[0])};i++){{\n
-                outC->{fbyArr}[i] = p[7].value;
-            }}\n
-            outC->{fbyIdx} = 0;\n
-        }}
-        '''
-        afterTmp=f'''
-            outC -> {fbyArr}[outC->{fbyIdx}] = {p[3].value};\n
-            outC -> {fbyIdx} = (outC->{fbyIdx}+1)%(p[5].value);\n
-        '''
-        p[0].beforeObjects.append(beforeTmp)
-        p[0].afterObjects.append(afterTmp)
+            beforeTmp=f'''
+                if(outC->{initName}){{\n
+                    for(int i=0;i<{listToStr(p[5].objects[0],thisEnv)};i++){{\n
+                    outC->{fbyArr}[i] = {listToStr(p[7].objects[idx],thisEnv)};
+                }}\n
+                outC->{fbyIdx} = 0;\n
+            }}
+            '''
+            afterTmp=f'''
+                outC -> {fbyArr}[outC->{fbyIdx}] = {listToStr(p[3].objects[idx],thisEnv)};\n
+                outC -> {fbyIdx} = (outC->{fbyIdx}+1)%({listToStr(p[5].objects[0],thisEnv)});\n
+            '''
+            p[0].objects[idx].append(code)
+            p[0].beforeObjects[idx].append(beforeTmp)
+            p[0].afterObjects[idx].append(afterTmp)
 
 
 def p_relation_expr(p):
@@ -2019,7 +1971,7 @@ def p_relation_expr(p):
     elif p[2].strs == '=':
         p[2].value = '=='
     for idx in range(exprLen):
-        p[0].objects[idx].append(f'({listToStr(p[1].objects[idx])} {p[2].value} {listToStr(p[3].objects[idx])})')
+        p[0].objects[idx].append(f'({listToStr(p[1].objects[idx],thisEnv)} {p[2].value} {listToStr(p[3].objects[idx],thisEnv)})')
         p[0].beforeObjects[idx].extend(p[1].beforeObjects[idx] + p[3].beforeObjects[idx])
         p[0].afterObjects[idx].extend(p[1].afterObjects[idx] + p[3].afterObjects[idx])
 
@@ -2069,6 +2021,7 @@ def p_switch_expr(p):
     '''Switch_expr : IF Expr THEN Expr ELSE Expr
     | LPARENTHESE CASE Expr OF Switch_expr_1 RPARENTHESE'''
     p[0] = lex_value("Switch_expr")
+    global thisEnv
     if p[1].value == 'if':
         exprLen=len(p[4].objects)
         p[0].init_objects(exprLen)
@@ -2077,10 +2030,9 @@ def p_switch_expr(p):
             p[0].afterObjects[idx].extend(p[2].afterObjects[0] + p[4].afterObjects[idx] + p[6].afterObjects[idx])
         # p[0].beforeObjects[0].extend(p[2].beforeObjects[0] + p[4].beforeObjects[0] + p[6].beforeObjects[0])
         # p[0].afterObjects[0].extend(p[2].afterObjects[0] + p[4].afterObjects[0] + p[6].afterObjects[0])
-            tmpStr = f"(({listToStr(p[2].objects[idx])}) ? {listToStr(p[4].objects[idx])} : {listToStr(p[6].objects[idx])})"
+            tmpStr = f"(({listToStr(p[2].objects[idx],thisEnv)}) ? {listToStr(p[4].objects[idx],thisEnv)} : {listToStr(p[6].objects[idx],thisEnv)})"
             p[0].objects[idx].append(tmpStr)
     else:
-        global thisEnv
         exprLen = len(p[5].objects)
         # type = thisEnv.getSymbolInThisEnv(lhsLists[0]).Type
         p[0].init_objects(exprLen)
@@ -2176,7 +2128,7 @@ def p_arith_expr(p):
     length = len(p[2].objects)
     p[0].init_objects(length)
     for idx in range(length):
-        code = f'({type_change(p[4].value)})({listToStr(p[2].objects[idx])})' #BUG: Type_expr 可能有问题
+        code = f'({type_change(p[4].value)})({listToStr(p[2].objects[idx],thisEnv)})' #BUG: Type_expr 可能有问题
         p[0].objects[idx].append(code)
         p[0].beforeObjects[idx].extend(p[2].beforeObjects[idx])
         p[0].afterObjects[idx].extend(p[2].afterObjects[idx])
@@ -2187,13 +2139,13 @@ def p_arith_expr_unary(p):
     | LNOT Expr'''
     p[0] = lex_value("Arith_expr")
     global thisEnv
-    symbol=thisEnv.getSymbolInThisEnv(lhsLists[0].value)  
+    symbol=thisEnv.getSymbolInThisEnv(lhsLists[0])  
     if p[1].strs == 'lnot':
         p[1].value = f'kcg_lnot_{symbol.Type}'
     length = len(p[2].objects)
     p[0].init_objects(length)
     for idx in range(length):
-        code = f'({p[1].value}({listToStr(p[2].objects[idx])}))'
+        code = f'({p[1].value}({listToStr(p[2].objects[idx],thisEnv)}))'
         p[0].objects[idx].append(code)
         p[0].beforeObjects[idx].extend(p[2].beforeObjects[idx])
         p[0].afterObjects[idx].extend(p[2].afterObjects[idx])
@@ -2227,7 +2179,7 @@ def p_arith_expr_binOp(p):
     print(lhsLists)
     print(p[1].objects,p[3].objects)
     for idx in range(exprLen):
-        code = f'({listToStr(p[1].objects[idx])} {p[2].value} {listToStr(p[3].objects[idx])})'
+        code = f'({listToStr(p[1].objects[idx],thisEnv)} {p[2].value} {listToStr(p[3].objects[idx],thisEnv)})'
         p[0].objects[idx].append(code)
         p[0].beforeObjects[idx].extend(p[1].beforeObjects[idx]+p[3].beforeObjects[idx])
         p[0].afterObjects[idx].extend(p[1].afterObjects[idx]+p[3].afterObjects[idx])
@@ -2336,7 +2288,7 @@ def p_bool_expr(p):
         exprLen = len(p[2].objects)
         p[0].init_objects(exprLen)
         for idx in range(exprLen):
-            code = f"!{listToStr(p[2].objects[idx])}"
+            code = f"!{listToStr(p[2].objects[idx],thisEnv)}"
             p[0].objects[idx].append(code)
             p[0].beforeObjects[idx].extend(p[2].beforeObjects[idx])
             p[0].afterObjects[idx].extend(p[2].afterObjects[idx])
@@ -2368,7 +2320,7 @@ def p_bool_expr_bin(p):
     exprLen = len(p[1].objects)
     p[0].init_objects(exprLen)
     for idx in range(exprLen):
-        code = f"{listToStr(p[1].objects[idx])} {p[2].value} {listToStr(p[3].objects[idx])}"
+        code = f"{listToStr(p[1].objects[idx],thisEnv)} {p[2].value} {listToStr(p[3].objects[idx],thisEnv)}"
         p[0].objects[idx].append(code)
         p[0].beforeObjects[idx].extend(p[1].beforeObjects[idx] + p[3].beforeObjects[idx])
         p[0].afterObjects[idx].extend(p[1].afterObjects[idx] + p[3].afterObjects[idx])
@@ -2498,13 +2450,49 @@ def get_parse(strs,output_dir):
 if __name__ == '__main__':
     parser = yacc(debug=1)
     strs = '''
-type enum_case=enum{TT,FF,XX};
-node test1(in1,in2,in3,in5:bool;in4:enum_case) returns(out1,out2,out3,out4,out5:bool)
+const D_Vdt : float64  =0.5 ;
+ const D_Vdt1 : float64  =0.15 ;
+ const D_Vit1 : float64  =3 ;
+ const D_Vit2 : float64  =7 ;
+ const D_Vit3 : float64  =2 ;
+ const D_Vpt : float64  =2 ;
+ const k : float64  =1 ;
+ const kd : float64  =5 ;
+ const ki1 : float64  =3 ;
+ const ki2 : float64  =0.01 ;
+ const ki3 : float64  =1.5 ;
+ const kp : float64  =1 ;
+ const Ts : float64  =0.02 ;
+node errtovi0 ( err : float64 last = 0 ;
+Num0 : float64 last = 0 ;
+vi0 : float64 last = 0 ;
+vi10 : float64 last = 0 ) returns ( vi : float64 last = 0 ;
+temp4 : float64 last = 0 ;
+Num : float64 default = 0 last = 0 ;
+vi1 : float64 last = 0 ) var _L1 : float64 ;
+_L2 : float64 ;
+_L3 : float64 ;
 let
-	out1,out2=(case in4 of | TT:(in1,in2) | FF:(in3,in2) | XX:(in1,in3));
-	out5,out3,out4= if in5 then ((in1,in3),in2) else (in1,(in3,in2));
+_L1 = err ;
+ _L2 = D_Vit1 ;
+ _L3 = _L1 - _L2 ;
+ temp4 = _L3 ;
+ activate IfBlock1 if temp4 <= 0 then let
+Num = Num0 + 0.02 ;
+vi = vi10 - Ts * Ts * Num * Num * ki2 ;
 tel
-
+ else if temp4 > D_Vit2 then let
+Num = 0 ;
+vi = vi0 + Ts * ki1 ;
+vi1 = vi ;
+tel
+ else let
+Num = 0 ;
+vi = vi0 + Ts * ki3 * temp4 ;
+vi1 = vi ;
+tel
+  returns .. ;
+ tel
 '''
 
     string_tokens = get_tokens(strs)
