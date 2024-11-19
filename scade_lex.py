@@ -31,7 +31,7 @@ class lex_value:
         self.objects=[[] for _ in range(length)]
  
     def __repr__(self) -> str:
-        strs = str(self.strs) + ' ' + str(self.value) 
+        strs = str(self.strs) + ' ' + str(self.type) + ' ' + str(self.value)
         return strs
 
 reserved = {
