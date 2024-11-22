@@ -1,0 +1,25 @@
+type private imported t is numeric;
+type as= bool;
+type private tys=uint8;
+type p='Y;
+type public z=t::a::v::s;
+type sda=signed<<1>>;
+type jjj=unsigned<<123>>;
+package test
+    type private PPPPP = bool;
+    package test2
+        type public suss = 'Y;
+    end;
+    function private func<<t,n,m>>() returns () where 't,'n,'m float specialize a::b;
+    node public Node<<m>>() returns ();
+end;
+type kkk={a:uint8,b:bool,c:'T,d:unsigned<<123>>,e:{f:uint8}};
+type private as=enum{a,b,c,d};
+const private a:uint8 =  3;
+const public imported b:bool;
+package sosp
+    type poppp = signed<<1234>>;
+end;
+sensor t,k,s:uint8;
+group private s=(uint8,float32);
+group public t=('S,signed<<2>>);p=(bool,bool);
