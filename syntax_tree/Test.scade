@@ -10,8 +10,8 @@ package test
     package test2
         type public suss = 'Y;
     end;
-    function private func<<t,n,m>>() returns () where 't,'n,'m float specialize a::b;
-    node public Node<<m>>() returns ();
+    function private func<<t,n,m>>(clock probe a:uint8) returns (b:float32) where 't,'n,'m float specialize a::b let tel;
+    node public Node<<m>>(probe a:uint8;clock c:signed<<23>>) returns () sig a,b,cd; let tel;
 end;
 type kkk={a:uint8,b:bool,c:'T,d:unsigned<<123>>,e:{f:uint8}};
 type private as=enum{a,b,c,d};
@@ -23,3 +23,13 @@ end;
 sensor t,k,s:uint8;
 group private s=(uint8,float32);
 group public t=('S,signed<<2>>);p=(bool,bool);
+function Today() returns()
+    sig
+        a,asf;
+    var
+        _L118 : bool;
+        _L120 : int32;
+        _L121 : int32;
+        _L122 : int32;
+    let
+    tel

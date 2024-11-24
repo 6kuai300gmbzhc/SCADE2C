@@ -130,8 +130,7 @@ def p_type_def(p):
     p[0]=SyntaxType(type="enum")
     p[0].enumList=p[3]
 
-# 返回lex_value,strs:Type_expr,type:为对应子类型type，value，若为基本类型则为type
-# 若为path_id，typevar则为id名字，signed，unsigned则为后面跟的数字
+# 返回SyntaxType
 def p_type_expr(p):
     '''Type_expr : BOOL
     | SIGNED LSHIFT INTEGERNUM RSHIFT
@@ -168,7 +167,9 @@ def p_type_expr(p):
         p[0].integerNum=int(p[3].value)
         return
     # 普通的情况
-    p[0]=SyntaxType(type=p[1].value)
+    p[0]=SyntaxType(type=p[1].strs)
+    if p[1].strs=="typevar" or p[1].strs=="path_id":
+        p[0].value=p[1].value
 
 
 def p_field_decl(p):
@@ -285,7 +286,7 @@ def p_pack_lv6id(p):
 
 
 #user_op_decl部分，这里是连接上下层scope的通道，注意修改作用域并添加符号表
-def p_user_op_decl(p):
+def p_user_op_decl(p):                                                      #default和last todo
     'User_op_decl : User_op_name User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
     #遍历结束，换回作用域
     global cur_scope
@@ -319,16 +320,29 @@ def p_size_decl(p):
         cur_scope.set_sizeDecl(p[2])
 def p_in_params(p):
     'In_Params : Params'
+    global cur_scope
+    cur_scope.inParams=p[1]
 def p_out_params(p):
     'Out_Params : Params'
+    global cur_scope
+    cur_scope.outParams=p[1]
 def p_params(p):
     'Params : LPARENTHESE Params_1 RPARENTHESE'
+    p[0]=p[2]#SyntaxVariableSymbol的列表
 def p_params_1(p):
     '''Params_1 : Var_decls Params_2
     | empty'''
+    p[0]=list()
+    if len(p)!=2:
+        p[0]+=p[1]
+        p[0]+=p[2]
 def p_params_2(p):
     '''Params_2 : SEMICOLON Var_decls Params_2
     | empty'''
+    p[0]=list()
+    if len(p)!=2:
+        p[0]+=p[2]
+        p[0]+=p[3]
 def p_user_op_decl_2(p):
     '''User_op_decl_2 : Where_decl
                         | empty'''
@@ -352,38 +366,110 @@ def p_user_op_decl_3(p):
                         | empty'''
 def p_spec_decl(p):
     '''Spec_decl : SPECIALIZE Path_id'''
-    cur_scope.speceDecl=p[2].value#更新spec
+    cur_scope.specDecl=p[2].value#更新spec
 #这里差不多就是data_def，只不过这里必须要有let tel部分，并且可以就只写一个冒号，基本上就是完全一样
 def p_opt_body(p):
-    '''Opt_body : SEMICOLON'''
-    #todo 后面再具体实现
-    # | Equation SEMICOLON
-    # | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL SEMICOLON
-    # | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL'''
+    '''Opt_body : SEMICOLON
+    | Before_opt_body Equation SEMICOLON After_opt_body
+    | Before_opt_body Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL SEMICOLON After_opt_body
+    | Before_opt_body Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL After_opt_body'''
+#在进入optbody前切换作用域
+def p_before_opt_body(p):
+    '''Before_opt_body : empty'''
+    global cur_scope
+    cur_scope.optBody=SyntaxDataDefScope(type="data_def",name=cur_scope.name+"*opt_body",prevscope=cur_scope,visibility="public")
+    cur_scope=cur_scope.optBody
+#遍历后结束作用域
+def p_after_opt_body(p):
+    '''After_opt_body : empty'''
+    global cur_scope
+    cur_scope=cur_scope.prevScope
+def p_signal_block_zero_or_one(p):
+    '''Signal_block_zero_or_one : Signal_block
+    | empty'''
+def p_signal_block(p):
+    'Signal_block : SIG Id_one_or_more_with_comma SEMICOLON'
+    global cur_scope
+    cur_scope.set_signalSymbolList(p[2])
+def p_local_block_zero_or_one(p):
+    '''Local_block_zero_or_one : Local_block
+    | empty'''
+def p_local_block(p):
+    '''Local_block : VAR Local_block_1
+    | empty'''
+def p_local_block_1(p):
+    '''Local_block_1 : Var_decls SEMICOLON Local_block_1
+    | empty'''
+    if len(p)==2:return
+    global cur_scope
+    cur_scope.add_localSymbols(p[1])
+def p_equation_zero_or_more_with_semicolon(p):
+    '''Equation_zero_or_more_with_semicolon : Equation SEMICOLON Equation_zero_or_more_with_semicolon
+    | empty'''
+def p_equation(p):
+    '''Equation : RETURNS'''
+    #todo
 
-#变量声明 todo 下一步就是他
+
+
+#变量声明 todo 缺少default和last描述，等expr
+#返回一个SyntaxVariableSymbol的列表，不更新到符号表之中
 def p_var_decls(p):
     'Var_decls : Var_id Var_decls_1 COLON Type_expr Var_decls_2 Var_decls_3 Var_decls_4'
-def p_var_id(p):
-    'Var_id : Var_id_1 Var_id_2 LV6ID'
-def p_var_id_1(p):
-    '''Var_id_1 : CLOCK
-    | empty'''
-def p_var_id_2(p):
-    '''Var_id_2 : PROBE
-    | empty'''
+    var_id_list=list()
+    var_id_list.append(p[1])
+    var_id_list+=p[2]
+    for var_id in var_id_list:
+        var_id.syntaxType=p[4]
+        if p[5]:
+            var_id.whenExpr=p[5]
+    p[0]=var_id_list
 def p_var_decls_1(p):
     '''Var_decls_1 : COMMA Var_id Var_decls_1
     | empty'''
+    p[0]=list()
+    if len(p)!=2:
+        p[0].append(p[2])
+        p[0]+=p[3]
+def p_var_id(p):
+    'Var_id : Var_id_1 Var_id_2 LV6ID'
+    p[0]=SyntaxVariableSymbol(name=p[3].value,isClock=p[1].strs=="clock",isProbe=p[2].strs=="probe")
+def p_var_id_1(p):
+    '''Var_id_1 : CLOCK
+    | empty'''
+    p[0]=p[1]
+def p_var_id_2(p):
+    '''Var_id_2 : PROBE
+    | empty'''
+    p[0]=p[1]
 def p_var_decls_2(p):
     '''Var_decls_2 : When_decl
                     | empty'''
+    if isinstance(p[1],SyntaxClockExpr):
+        p[0]=p[1]
+    else: p[0]=None
 def p_when_decl(p):
     '''When_decl : WHEN Clock_expr'''
+    p[0]=p[2]
+#返回SyntaxClockExpr
 def p_clock_expr(p):
     '''Clock_expr : LV6ID
     | NOT LV6ID
     | LPARENTHESE LV6ID MATCH Pattern RPARENTHESE'''
+    if len(p)==2:
+        ID=p[1].value
+        type="ID"
+    elif len(p)==3:
+        ID=p[2].value
+        type="notID"
+    else:
+        ID=p[2].value
+        type="pattern"
+    p[0]=SyntaxClockExpr(ID=ID,type=type)
+    if len(p)==6:
+        p[0].pattern=p[4]
+    
+#返回SyntaxPattern
 def p_pattern(p):
     '''Pattern : Path_id
     | CHARACTER
@@ -391,12 +477,22 @@ def p_pattern(p):
     | Pattern_1 TYPED_INTEGER
     | Bool_atom
     | UNDERLINE'''
+    p[0]=dict()
+    if len(p)==3:
+        type=p[2].strs
+        value=p[1].value+p[2].value
+    else:
+        value=p[1].value
+        type=p[1].value
+    p[0]=SyntaxPattern(type=type,value=value)
 def p_pattern_1(p):
     '''Pattern_1 : MINUS
     | empty'''
+    p[0]=p[1]
 def p_bool_atom(p):
     '''Bool_atom : TRUE
     | FALSE'''
+    p[0]=p[1]
 def p_var_decls_3(p):
     '''Var_decls_3 : Default_decl
     | empty'''
@@ -459,7 +555,8 @@ def p_interface_status(p):
 def p_visibility_zero_or_one(p):
     '''Visibility_zero_or_one : Visibility
     | empty'''
-    p[0] = p[1]
+    if not isinstance(p[1],lex_value):p[0] = p[1]
+    else: p[0]=None
 
 
 def p_external(p):
@@ -477,7 +574,7 @@ def p_visibility(p):
 
 def p_empty(p):
     'empty :'
-    pass
+    p[0] = lex_value('Empty',"")
 
 
 def get_parse(input_path: str, root_operator: str):
