@@ -1,5 +1,6 @@
 type private imported t is numeric;
 type as= bool;
+type list= bool^a*b;
 type private tys=uint8;
 type p='Y;
 type public z=t::a::v::s;
@@ -27,9 +28,13 @@ function Today() returns()
     sig
         a,asf;
     var
-        _L118 : bool;
-        _L120 : int32;
-        _L121 : int32;
-        _L122 : int32;
+        _L118 : bool when a;
+        _L120 : int32 default = 1;
+        _L121 : int32 last = 1;
+        _L122 : int32 default = 1 last = 2;
     let
+        a,_,c,_ = b;
+        t = 'T;
+        f = last 'B;
+        f = true;
     tel

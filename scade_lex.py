@@ -358,10 +358,10 @@ def t_PREFIXOP(t):
     return t
 
 def t_FLOATNUM(t):
-    r'((\d+\.\d*)|(\.\d+))([eE][+-]?\d+)?(_f32|_f64)?'
+    r'(?<!\.)((\d+\.\d*)|(\d*\.\d+))([eE][+-]?\d+)?(_f32|_f64)?(?!\.)'
     suffix_pattern=re.compile(r'(_f32|_f64)$')
     if suffix_pattern.search(t.value):
-        t.type=reserved.get(t.value.split("_")[-1],"TYPED_FLOAT")
+         t.type=reserved.get(t.value.split("_")[-1],"TYPED_FLOAT")
     else:
         t.value=lex_value('floatnum',float(t.value))
     return t
