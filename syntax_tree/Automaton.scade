@@ -1,0 +1,29 @@
+function AUTOMATON() returns()
+    let
+        automaton SM1
+        initial state State1
+        unless
+            if #1 not Alarm restart NoAlarm;
+        let
+            vw = last ' vw ;
+            Return = false ;
+            a = last ' a ;
+        tel
+        until if 19 times edge do
+        let
+        tel
+        restart State2 ;
+
+        state State2
+        let
+            vw = vw0 ;
+            Return = true ;
+            a = last ' a + 1 ;
+        tel
+        until if true do
+        let
+        tel
+        restart State1 ;
+        synchro restart State1;
+    returns .. ;
+    tel

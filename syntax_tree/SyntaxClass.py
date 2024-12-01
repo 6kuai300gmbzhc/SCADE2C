@@ -352,7 +352,7 @@ class SyntaxScope:
     """作用域父类，记录当前作用域下的符号表和scade语句"""
 
     type: str
-    '''为data_def,function,node,package,if_block,match_block,automaton'''
+    '''为data_def,function,node,package,if_block,match_block,automaton,automaton_state'''
     name: str
     '''名字'''
     prevScope: SyntaxScope
@@ -365,6 +365,8 @@ class SyntaxScope:
     '''该作用域中的scade语句'''
     visibility: str = "public"
     '''可见性，默认为public'''
+    anonymousScopeCount:int = 1
+    '''匿名scope计数器，给匿名的block生成名字'''
     def __init__(self,type,name,prevScope,visibility):
         self.type=type
         self.name=name
@@ -379,6 +381,18 @@ class SyntaxScope:
         if scopeName in self.childScopeTable.keys():
             return self.childScopeTable[scopeName]
         else:return None
+    def childScope2str(self, depth=0):
+        s=""
+        s+="    "*depth+"\033[32mchildScope:\033[0m\n"
+        for _,scope in self.childScopeTable.items():
+            s+=scope.scope2str(depth=depth + 1)
+        return s
+    def generate_name_for_subScope(self):
+        s=self.name
+        s+="^subScope^"
+        s+=str(self.anonymousScopeCount)
+        self.anonymousScopeCount+=1
+        return s
 class SyntaxIfBlock:
     conditionExpr:SyntaxExpr
     '''条件语句'''
@@ -390,6 +404,19 @@ class SyntaxIfBlock:
         self.conditionExpr=expr
         self.thenBlock=thenBlock
         self.elseBlock=elseBlock
+    def __repr__(self):
+        return self.block2str(0)
+    def block2str(self,depth=0):
+        s=""
+        s+="    "*depth+"if "+str(self.conditionExpr)+"\n"
+        s+="    "*depth+"then "
+        if isinstance(self.thenBlock,SyntaxIfBlock):s+="\n"+self.thenBlock.block2str(depth+1)
+        else: s+= self.thenBlock
+        s+="\n"
+        s+="    "*depth+"else "
+        if isinstance(self.elseBlock,SyntaxIfBlock):s+="\n"+self.elseBlock.block2str(depth+1)
+        else: s+= str(self.elseBlock)
+        return s
 class SyntaxMatchBlock:
     switchExpr:SyntaxExpr
     '''用于switch的语句'''
@@ -398,6 +425,17 @@ class SyntaxMatchBlock:
     def __init__(self,expr:SyntaxExpr,matchList:list):
         self.switchExpr=expr
         self.matchList=matchList
+    def __repr__(self):
+        return self.block2str(0)
+    def block2str(self,depth=0):
+        depth+=1
+        s=""
+        s += "    " * depth
+        s+="switch "+str(self.switchExpr)+"\n"
+        for match in self.matchList:
+            s+="    "*depth+str(match[0])+" : "+str(match[1])+"\n"
+        s=s[:-1]
+        return s
 class SyntaxClockedScope(SyntaxScope):
     type: str
     '''为if_block或者match_block'''
@@ -415,9 +453,23 @@ class SyntaxClockedScope(SyntaxScope):
     '''可见性，默认为public'''
     block: SyntaxIfBlock or SyntaxMatchBlock
     '''组合的block，根据type决定具体类型'''
+
     def __init__(self, type, name, prevscope,visibility):
         super().__init__(type,name,prevscope,visibility)
-class SyntaxDataDefScope(SyntaxScope):
+    def __repr__(self):
+        return self.scope2str(0)
+    def scope2str(self,depth):
+        s="    "*depth
+        s+="\033[31m"+self.type+" as "
+        s+=self.name
+        s += "\033[0m"
+        s+="\n"
+        s+=self.block.block2str(depth=depth+1)+"\n"
+        s+=self.childScope2str(depth=depth)
+        return s
+
+
+class SyntaxDataDefScope(SyntaxScope):#在data_def下，只有状态机和clocked_block直接作为他的子作用域了
     """data_def对应scope，用于user_op，control_block中的scope
     包含signal和local声明部分
     """
@@ -431,7 +483,7 @@ class SyntaxDataDefScope(SyntaxScope):
     '''子作用域'''
     symbolTable: dict
     '''符号表'''
-    equations: list[SyntaxEquation]
+    equations: list
     '''该作用域中的scade语句'''
     visibility: str = "public"
     '''可见性，默认为public'''
@@ -440,8 +492,7 @@ class SyntaxDataDefScope(SyntaxScope):
     '''存放signal类型，保存signal的ID集合,signal的ID没有‘，只有ID本身的部分'''
     localSymbolTable: dict
     '''存放局部变量，变量名字->SyntaxVariableSymbol'''
-    anonymousScopeCount:int = 1
-    '''匿名scope计数器，给匿名的block生成名字'''
+
     def __init__(self, type, name, prevscope,visibility):
         super().__init__(type,name,prevscope,visibility)
         self.signalSymbolSet=set()
@@ -451,7 +502,7 @@ class SyntaxDataDefScope(SyntaxScope):
     def add_localSymbols(self,localSymbolList:list):
         for symbol in localSymbolList:
             self.localSymbolTable[symbol.name]=symbol
-    def dataDef2str(self,depth=0):
+    def scope2str(self, depth=0):
         s="    "*depth
         s+="\033[31m"+self.type+" as "
         prev_list=list()
@@ -466,6 +517,7 @@ class SyntaxDataDefScope(SyntaxScope):
         s+="\n"
         s+=self.signalSymbolSet2str(depth=depth)
         s+=self.localSymbolTable2str(depth=depth)
+        s+=self.childScope2str(depth=depth)
         s+=self.equations2str(depth=depth)
         return s
     def signalSymbolSet2str(self,depth=0):
@@ -490,26 +542,20 @@ class SyntaxDataDefScope(SyntaxScope):
         for equation in self.equations:
             s+=equation.equation2str(depth=depth+1)+"\n"
         return s
+
     def add_equation(self,equation:SyntaxEquation):
         #todo 在这里给equation插入排序
         self.equations.append(equation)
-    def add_clockedBlock(self):
-        pass
-    def add_automaton(self):
-        pass
-    def generate_name_for_subScope(self):
-        s=self.name
-        s+="^subScope^"
-        s+=str(self.anonymousScopeCount)
-        self.anonymousScopeCount+=1
-        return s
+
+
+
 
 class SyntaxArrow:
     pass
 class SyntaxArrow:
-    '''记录了一条状态机的转移指令,包括了cations，fork'''
-    action:SyntaxDataDefScope=None
-    '''一个action就是一个作用域'''
+    '''记录了一条状态机的转移指令,包括了actions，fork'''
+    action:str=None
+    '''一个action就是一个作用域,这里记录了该作用域的ID'''
     type:str
     '''记录此arrow状态
     为restart，resume，if
@@ -528,19 +574,36 @@ class SyntaxArrow:
             self.elseExpr=elseExpr
         else:
             self.target=target
-    def set_action(self,action:SyntaxDataDefScope):
+    def set_action(self,action:str):
         self.action=action
+    def __repr__(self):
+        return self.arrow2str(0)
+    def arrow2str(self,depth=0):
+        s=""
+        if self.action:
+            s+="action:"
+            s+=self.action+" "
+        if self.type!="if":
+            s+=self.type+" "+self.target
+        else:
+            for Ifexpr in self.ifExprList:
+                s+="if "+str(Ifexpr[0])+" "+Ifexpr[1].arrow2str(depth=depth+1)
+            if self.elseExpr:
+                s+=self.elseExpr.arrow2str(depth=depth+1)
+        return s
+
 class SyntaxState(SyntaxDataDefScope):
     '''状态机的状态类'''
     isInitial: bool =False
     isFinal: bool =False
-
+    type: str
+    '''automaton_state'''
     unlessTransitions: list
     '''强转移列表,保存了存有（SyntaxExpr，SyntaxArrow）的列表'''
     untilTransitions: list
     '''弱转移列表,保存了存有（SyntaxExpr，SyntaxArrow）的列表'''
-    synchroArrow:SyntaxArrow
-    '''同步转移'''
+    synchroArrow:SyntaxArrow=None
+    '''同步转移，可为None'''
     def __init__(self, type, name, prevscope,visibility):
         super().__init__(type,name,prevscope,visibility)
         self.untilTransitions=list()
@@ -552,6 +615,28 @@ class SyntaxState(SyntaxDataDefScope):
         self.unlessTransitions=unlessTransitions
     def set_untilTransitions(self,untilTransitions:list):
         self.untilTransitions=untilTransitions
+    def __repr__(self):
+        return self.state2str(0)
+    def state2str(self,depth=0):
+        s="    "*depth+"\033[32m"
+        if self.isInitial: s+="init "
+        if self.isFinal: s+="final "
+        s+="state "+self.name+"\033[30m"+"\n"
+        for unlessTrans in self.unlessTransitions:
+            s+="    "*(depth+1)+"\033[35m"
+            s+="unless if "+str(unlessTrans[0])+" then "
+            s+=unlessTrans[1].arrow2str(depth=depth+2)
+            s+="\033[30m\n"
+        for untilTrans in self.untilTransitions:
+            s+="    "*(depth+1)+"\033[35m"
+            s+="until if "+str(untilTrans[0])+" then "
+            s+=untilTrans[1].arrow2str(depth=depth+2)
+            s+="\033[30m\n"
+        if self.synchroArrow:
+            s+="    "*(depth+1)+"\033[35msynchro "
+            s+=self.synchroArrow.arrow2str(depth=depth+1)
+            s += "\033[30m\n"
+        return s
 
 
 class SyntaxAutomaton(SyntaxScope):
@@ -567,7 +652,18 @@ class SyntaxAutomaton(SyntaxScope):
 
     def add_state(self, state: SyntaxState):
         self.stateTable[state.name]=state
-
+    def __repr__(self):
+        return self.scope2str(0)
+    def scope2str(self,depth=0):
+        s="    "*depth
+        s+="\033[31m"+self.type+" as "
+        s+=self.name
+        s += "\033[0m"
+        s+="\n"
+        for name,state in self.stateTable.items():
+            s+=state.state2str(depth=depth+1)
+        s+=self.childScope2str(depth=depth)
+        return s
 
 class SyntaxUserOp(SyntaxDataDefScope):
     """记录func或者node，既作为symbol，也作为一种scope存在"""
@@ -646,6 +742,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         s+=self.signalSymbolSet2str(depth=depth+1)
         s+=self.localSymbolTable2str(depth=depth+1)
         s+=self.equations2str(depth=depth+1)
+        s+=self.childScope2str(depth=depth+1)
         return s
     def __repr__(self):
         return self.userOp2str()

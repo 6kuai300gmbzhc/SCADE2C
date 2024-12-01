@@ -1,0 +1,16 @@
+function MAtCHBLOCK() returns()
+    let
+        activate when a match
+        | b :
+            sig
+                a,b,c,d;
+            var
+                t:bool;
+                m:int32;
+            let
+                a=t-m;
+            tel
+        | c : b=c;
+        | d : c=d;
+        returns ..;
+    tel
