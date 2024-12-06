@@ -33,7 +33,7 @@ function exprs() returns()
         ZX = (a with .T =1);
         A0 = p[1 .. 2];
         A1 = a(b,c);
-        A2 = (a<<1>>)(b);
+        A2 = (a<<1,2,3>>)(b);
         A3 = $=$(b);
         A4 = ($mod$<<3>>)(c);
         A5 = (make p)(d);
@@ -50,4 +50,5 @@ function exprs() returns()
         emit ('s1,'s2) if A14;
         guarantee t : 1;
         assume b : 1;
+        TTT = a+b+c+d*e*F;
     tel

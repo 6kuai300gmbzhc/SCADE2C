@@ -1,4 +1,8 @@
 function AUTOMATON() returns()
+    var
+        vw:int32;
+        a:int32 default=1;
+        Return:int32;
     let
         automaton SM1
         initial state State1

@@ -1,0 +1,25 @@
+function MAtCHBLOCK() returns()
+    var
+        t1:int32 default=3;
+        t2:int32;
+    let
+        activate when a match
+        | b :
+            var
+                t:bool;
+                m:int32;
+            let
+                t1=t-m;
+                t2=m;
+            tel
+        | c :
+            let
+                t1=4;
+                t2=5;
+            tel
+        | d :
+            let
+                t2=6;
+            tel
+        returns ..;
+    tel
