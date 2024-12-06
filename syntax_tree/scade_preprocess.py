@@ -318,6 +318,7 @@ def p_user_op_decl(p):
     'User_op_decl : User_op_name User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
     # 遍历结束，换回作用域
     global cur_scope
+    cur_scope.topologySort()
     cur_scope = cur_scope.prevScope
 
 
@@ -481,19 +482,20 @@ def p_equation(p):  # 把return 挪到control_block里面了方便声明作用�
     cur_scope.add_equation(p[1])
 
 
+
 # 在这里添加到对应scope中
 def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
-    p[0] = SyntaxEquation(type="simple_equation", lhs=p[1])
-    p[0].expr = p[3]
+    p[0] = SyntaxEquation(type="simple_equation", lhs=p[1],lineno=p.lineno(2))
+    p[0].set_expr(p[3])
 
 
 def p_assert(p):
     '''Assert : ASSUME LV6ID COLON Expr
             | GUARANTEE LV6ID COLON Expr'''
-    p[0] = SyntaxEquation(type=p[1].value, lhs=list())
+    p[0] = SyntaxEquation(type=p[1].value, lhs=list(),lineno=p.lineno(1))
     p[0].assertID = p[2].value
-    p[0].expr = p[4]
+    p[0].set_expr(p[4])
 
 
 def p_emission(p):
@@ -512,8 +514,8 @@ def p_emission_body(p):
         lhs.append(p[3].value)
         lhs += p[4]
         expr = p[6]
-    p[0] = SyntaxEquation(type="emission", lhs=lhs)
-    p[0].expr = expr
+    p[0] = SyntaxEquation(type="emission", lhs=lhs,lineno=p.lineno(1))
+    if expr is not None:p[0].set_expr(expr)
 
 
 def p_emission_body_1(p):
@@ -540,7 +542,7 @@ def p_lhs(p):
     | Lhs_id Lhs_1'''
     p[0] = list()
     if p[1].value != "(":
-        p[0].append(p[1])
+        p[0].append(p[1].value)
         p[0] += p[2]
 
 
@@ -549,7 +551,7 @@ def p_lhs_1(p):
     | empty'''
     p[0] = list()
     if len(p) != 2:
-        p[0].append(p[2])
+        p[0].append(p[2].value)
         p[0] += p[3]
 
 
@@ -566,8 +568,19 @@ def p_lhs_id(p):
 def p_control_block(p):
     '''Control_block : Clocked_block Return
      | State_machine Return'''
-    p[0] = SyntaxEquation(type="control_block", lhs=p[2])
+    global cur_scope
+    lhs=cur_scope.get_childScope(p[1]).get_return_symbolTable()
+    #检查ruturn的变量是否符合要求，即显示返回的变量里面有没有lhs以外的东西
+    for symbol_name in p[2]:
+        if symbol_name=="..":#遇到这个说明完成了..只会在最后面
+            break
+        if symbol_name not in lhs.keys():
+            #没有就报错
+            raise UnknownIdentifierException(symbol_name)
+    p[0] = SyntaxEquation(type="control_block", lhs=lhs.keys(),lineno=p.lineno(1))
     p[0].controlBlockID = p[1]
+
+
 
 
 def p_id_zero_or_one(p):
@@ -582,6 +595,7 @@ def p_id_zero_or_one(p):
 def p_state_machine(p):  # 返回此状态机的名字
     '''State_machine : State_machine_decl State_machine_1 State_machine_end'''
     p[0] = p[1]
+    p.set_lineno(0, p.lineno(1))
 
 
 def p_state_machine_decl(p):  # 切换作用域
@@ -595,7 +609,7 @@ def p_state_machine_decl(p):  # 切换作用域
     scope = SyntaxAutomaton(type="automaton", name=name, prevscope=cur_scope, visibility="public")
     cur_scope.add_childScope(scope)
     cur_scope = scope
-
+    p.set_lineno(0, p.lineno(1))
 
 def p_state_machine_end(p):  # 切换回来
     '''State_machine_end : empty'''
@@ -661,6 +675,7 @@ def p_state_decl_4(p):  # 在这里恢复作用域到automaton
     '''State_decl_4 : UNTIL State_decl_6 State_decl_7
                     | empty '''
     global cur_scope
+    cur_scope.topologySort()
     if len(p) != 2:
         if p[2] and len(p[2]) > 0: cur_scope.set_untilTransitions(p[2])
         if p[3]: cur_scope.set_synchroArrow(p[3])
@@ -733,6 +748,7 @@ def p_actions(p):
     scope.add_equation(p[4])
     for equation in p[5]:
         scope.add_equation(equation)
+    scope.topologySort()
     p[0] = scope.name
     # 不切换作用域，直接新建一个作用域塞到当前作用域里就可以了
 
@@ -821,6 +837,7 @@ def p_clocked_block(p):
     '''Clocked_block : ACTIVATE Id_zero_or_one Before_match_block Match_block After_clocked_block
      | ACTIVATE Id_zero_or_one Before_if_block If_block After_clocked_block'''
     p[0] = p[3]
+    p.set_lineno(0, p.lineno(1))
 
 
 def p_before_match_block(p):  # 切换作用域
@@ -905,7 +922,11 @@ def p_returns_var(p):
     '''Returns_var : Returns_var_1 Returns_var_2'''
     p[0] = list()
     p[0] += p[1]
-    p[0].append(p[2])
+    if p[2] in p[1]:
+        # 重复定义，报错
+        raise MultipleFlowDefinitionExceoption(p[2])
+    else:
+        p[0].append(p[2])
 
 
 def p_returns_var_1(p):
@@ -914,7 +935,10 @@ def p_returns_var_1(p):
     p[0] = list()
     if len(p) != 2:
         p[0] += p[1]
-        p[0].append(p[2].value)
+        if p[2].value in p[1]:
+            #重复定义，报错
+            raise MultipleFlowDefinitionExceoption(p[2].value)
+        else:p[0].append(p[2].value)
 
 
 def p_returns_var_2(p):
@@ -944,6 +968,7 @@ def p_beforeDataDef(p):
 def p_afterDataDef(p):
     '''AfterDataDef : empty'''
     global cur_scope
+    cur_scope.topologySort()
     cur_scope = cur_scope.prevScope
 
 
@@ -1178,7 +1203,7 @@ def p_struct_expr(p):
     if len(p) == 4:
         p[0] = SyntaxExpr(type="Struct_expr", subtype="get")
         p[0].add_object(p[1])
-        p[0].add_object(p[2].value)
+        p[0].add_object(p[3].value)
     else:
         p[0] = SyntaxExpr(type="Struct_expr", subtype="construct")
         labels = list()
@@ -1334,6 +1359,7 @@ def p_operator(p):
                 p[0] = SyntaxOperator(subtype="Path_id")
             else:
                 p[0] = SyntaxOperator(subtype="PREFIXOP")
+            p[0].add_object(p[2])
             p[0].add_object(p[4])
     elif length == 8:
         p[0] = SyntaxOperator(subtype="iterator")

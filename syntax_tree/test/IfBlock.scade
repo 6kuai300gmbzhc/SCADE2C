@@ -1,11 +1,11 @@
-function IFBLOCK() returns()
+function IFBLOCK() returns(LocalCruiseSpeed:int32 default=3)
     let
       activate IfBlock1 if Set
       then var
         _L2 : tSpeed;
       let
         _L2= Speed;
-        LocalCruiseSpeed= _L2;
+
       tel
       else if QuickAccel
       then var
