@@ -1,7 +1,6 @@
 from syntax_tree.Exceptions import *
 from collections import defaultdict, deque
 
-
 class SyntaxOperator:
     '''在Expr中的Apply_expr中的调用头部分，可以嵌套自己'''
     subtype: str
@@ -190,6 +189,9 @@ class SyntaxType:
 
 class SyntaxType:
     """记录type类型"""
+    name: str
+    '''type_block ，用于重命名之后的str，type表示其真实类型'''
+
     type: str
     '''类型，int8，枚举类型等'''
 
@@ -207,10 +209,13 @@ class SyntaxType:
 
     listType: SyntaxType = None
     '''类型为list时有效，存储了数组的类型'''
+
     listExpr: SyntaxExpr = None
     '''类型为list时有效，存储了数组的长度表达式
     必须在编译时可知，并且是严格大于0
     '''
+
+    basic_type = ['bool','int8','int16','int32','int64','uint8','uint16','uint32','uint64','float32','float64','char']
 
     def __init__(self, type: str) -> None:
         self.type = type
@@ -239,6 +244,8 @@ class SyntaxType:
             s += "listSizeExpr:" + str(self.listExpr)
         return s
 
+    def change_name(self):
+        return f'kcg_{self.type}' if self.type in self.basic_type else self.type
 
 class SyntaxTypeSymbol:
     """人为定义的类型变量，输入到符号表里面"""
@@ -405,6 +412,10 @@ class SyntaxVariableSymbol:
     '''是不是clock'''
     isProbe: bool
     '''是不是probe'''
+    isOutput: bool
+    '''是不是output，用于代码生成时输出变量需要转化为outC，不能遍历outParams(init,tmp)'''
+    isInput: bool
+    '''是不是input，用于代码生成时输出变量需要转化为inC'''
     syntaxType: SyntaxType
     '''组合的类型类别,一直有效'''
     whenExpr: SyntaxClockExpr = None
@@ -418,6 +429,8 @@ class SyntaxVariableSymbol:
         self.name = name
         self.isClock = isClock
         self.isProbe = isProbe
+        self.isOutput = False
+        self.isInput = False
 
     def __repr__(self):
         s = ""
@@ -640,7 +653,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         self.equations.append(input_equation)
         #更新返回列表
         for lhs in input_equation.lhs:
-            if "'" not in lhs and not self.get_localVariable(lhs):
+            if "'" not in lhs and not self.get_localVariable(lhs) and lhs != "_":
                 symbol=self.get_localVariable_InThisAndPreEnv(lhs)
                 if not symbol:raise UnknownIdentifierException(lhs)
                 self.returnSymbolsTable[lhs]=symbol
@@ -694,6 +707,8 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 in_degree[neighbor] -= 1
                 if in_degree[neighbor] == 0:
                     queue.append(neighbor)
+        print(topo_order,len(topo_order))
+        print(self.equations,len(self.equations))
         if len(topo_order) != len(self.equations): raise EquationDependentException(self.name + "存在循环引用")
         self.equations = topo_order
 
@@ -938,8 +953,10 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''输入的size参数，其中每个值都是const'''
     inParams: list  # 存SyntaxVariableSymbol
     '''输入参数，是一个变量声明列表'''
-    outParams: list  # 存SyntaxVariableSymbol
+    outParams: list # 存SyntaxVariableSymbol
     '''输出参数，是一个变量声明列表'''
+    tmpParams: list # 存SyntaxVariableSymbol
+    '''中间参数，是一个变量声明列表'''
     numericKind: str = None
     '''如果是模板方法则填入对应类型，不是则为None'''
     whereDecl: list = None
@@ -951,6 +968,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         super().__init__(type, name, prevscope, visibility)
         self.inParams = list()
         self.outParams = list()
+        self.tmpParams = list()
         self.whereDecl = list()
         self.sizeDecl = list()
 
@@ -964,6 +982,9 @@ class SyntaxUserOp(SyntaxDataDefScope):
                     return symbol
             for symbol in self.outParams:
                 if name==symbol.name:
+                    return symbol
+            for symbol in self.tmpParams:
+                if name == symbol.name:
                     return symbol
             return None
         else:
@@ -1014,6 +1035,18 @@ class SyntaxUserOp(SyntaxDataDefScope):
         s += self.equations2str(depth=depth + 1)
         s += self.childScope2str(depth=depth + 1)
         return s
+
+    def var_change_name(self,name):
+        symbol = self.get_localVariable(name)
+        if symbol != None:
+            if symbol.isOutput:
+                return f"outC->{symbol.name}"
+            elif symbol.isInput:
+                return f"inC->{symbol.name}"
+            else:
+                return symbol.name
+        else:
+            raise ValueError(f"var_change_name error , name:{name}")
 
     def __repr__(self):
         return self.userOp2str()
@@ -1087,7 +1120,10 @@ class SyntaxPackageScope(SyntaxScope):
             s += symbol.userOp2str(depth=depth + 1)
         s += "    " * depth + "\033[32mchildScope:\033[0m\n"
         for _, scope in self.childScopeTable.items():
-            s += scope.package2str(depth=depth + 1)
+            if scope.type == 'package':
+                s += scope.package2str(depth=depth + 1)
+            else:
+                s += scope.userOp2str(depth=depth + 1)
         return s
 
     def __repr__(self):

@@ -174,12 +174,5 @@ typedef signed char kcg_int8;
 #define kcg_assign_array kcg_assign
 #endif /* kcg_assign_array */
 
-/* truthtables::TruthTableValues/ */
-typedef enum kcg_tag_TruthTableValues_truthtables {
-  T_truthtables,
-  F_truthtables,
-  X_truthtables
-} TruthTableValues_truthtables;
-#endif /* _KCG_TYPES_H_ */
 
 

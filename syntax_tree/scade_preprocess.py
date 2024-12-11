@@ -1,8 +1,8 @@
 from ply.yacc import yacc
 import re
 import argparse
-from scade_lex import *
-from SyntaxClass import *
+from syntax_tree.scade_lex import *
+from syntax_tree.SyntaxClass import *
 import os
 
 scade_lexer = scade_lex()
@@ -332,6 +332,7 @@ def p_user_op_name(p):
         visibility = "public"
     user_op_scope = SyntaxUserOp(type=p[1]["Op_kind"], name=p[3].value, prevscope=cur_scope, visibility=visibility)
     cur_scope.add_userOp(user_op_scope)
+    cur_scope.add_childScope(user_op_scope)
     cur_scope = user_op_scope
 
 
@@ -364,12 +365,16 @@ def p_in_params(p):
     'In_Params : Params'
     global cur_scope
     cur_scope.inParams = p[1]
+    for para in cur_scope.inParams:
+        para.isInput = True
 
 
 def p_out_params(p):
     'Out_Params : Params'
     global cur_scope
     cur_scope.outParams = p[1]
+    for para in cur_scope.outParams:
+        para.isOutput = True
 
 
 def p_params(p):
@@ -1020,7 +1025,10 @@ def p_atom(p):
     | CHARACTER
     | TYPED_INTEGER
     | TYPED_FLOAT'''
-    p[0] = SyntaxExpr(type="Atom", subtype="Atom")
+    if p[1].strs == 'true' or p[1].strs == 'false':
+        p[0] = SyntaxExpr(type="Atom", subtype="bool_atom")
+    else:
+        p[0] = SyntaxExpr(type="Atom", subtype=p[1].strs)
     p[0].add_object(p[1].value)
 
 
