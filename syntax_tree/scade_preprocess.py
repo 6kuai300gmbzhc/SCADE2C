@@ -47,7 +47,6 @@ data_def包含equation包含control_block包含状态机/clocked_block包含deta
 
 def p_program(p):
     'Program : Decls_zero_or_more'
-    reOrderScope(root_scope)
     print("======符号表======")
     print(root_scope)
 

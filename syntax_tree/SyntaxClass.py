@@ -65,6 +65,7 @@ class SyntaxExpr:
 
     def add_object(self, object):
         self.objects.append(object)
+        if self.type=="Tempo_expr" and (self.subType=="PRE" or self.subType=="FBY"):return#这两个都是引用过去的变量，没有因果关系
         if isinstance(object, list):
             for expr in object:
                 if isinstance(expr, list):
@@ -503,9 +504,10 @@ class SyntaxScope:
         s += str(self.anonymousScopeCount)
         self.anonymousScopeCount += 1
         return s
-    def get_childScope(self,name):
-        if name in self.childScopeTable:return self.childScopeTable[name]
-        return None
+    def get_global_name(self):
+        if self.prevScope is None:return self.name
+        else:return self.prevScope.get_global_name()+"::"+self.name
+
 
 class SyntaxIfBlock:
     conditionExpr: SyntaxExpr
@@ -603,7 +605,11 @@ class SyntaxClockedScope(SyntaxScope):
                 if name in child_return_table.keys():continue#有了就不管了
                 equation=SyntaxEquation(type="simple_equation", lhs=[name],lineno=-1)
                 if not symbol.defaultExpr:#没有默认表达式就报错
-                    raise InitializationErrorException(name)
+                    if symbol.lastExpr:
+                        equation.set_expr(symbol.lastExpr)
+                        print(equation)
+                        childScope.add_equation(equation)
+                    else:raise InitializationErrorException(name)
                 else:
                     equation.set_expr(symbol.defaultExpr)
                     print(equation)
@@ -653,7 +659,8 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         self.equations.append(input_equation)
         #更新返回列表
         for lhs in input_equation.lhs:
-            if "'" not in lhs and not self.get_localVariable(lhs) and lhs != "_":
+            if lhs=="_": return
+            if "'" not in lhs and not self.get_localVariable(lhs):
                 symbol=self.get_localVariable_InThisAndPreEnv(lhs)
                 if not symbol:raise UnknownIdentifierException(lhs)
                 self.returnSymbolsTable[lhs]=symbol
@@ -684,7 +691,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             for equation in nodes:
                 if is_dependent(input_equation, equation):  # 输入句子依赖这个句子
                     edges.append([equation, input_equation])
-
         # Step 1: 构建图的邻接表和入度字典
         graph = defaultdict(list)
         in_degree = {node: 0 for node in nodes}
@@ -707,9 +713,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 in_degree[neighbor] -= 1
                 if in_degree[neighbor] == 0:
                     queue.append(neighbor)
-        print(topo_order,len(topo_order))
-        print(self.equations,len(self.equations))
-        if len(topo_order) != len(self.equations): raise EquationDependentException(self.name + "存在循环引用")
+        if len(topo_order) != len(self.equations): raise EquationDependentException(self.get_global_name() + "存在循环引用")
         self.equations = topo_order
 
     def set_signalSymbolList(self, signalSymbolList: list):
@@ -1120,10 +1124,7 @@ class SyntaxPackageScope(SyntaxScope):
             s += symbol.userOp2str(depth=depth + 1)
         s += "    " * depth + "\033[32mchildScope:\033[0m\n"
         for _, scope in self.childScopeTable.items():
-            if scope.type == 'package':
-                s += scope.package2str(depth=depth + 1)
-            else:
-                s += scope.userOp2str(depth=depth + 1)
+            if scope.type=="package":s += scope.package2str(depth=depth + 1)
         return s
 
     def __repr__(self):
@@ -1143,8 +1144,6 @@ class SyntaxPackageScope(SyntaxScope):
 
     def add_userOp(self, userOp: SyntaxUserOp) -> None:
         self.userOpTable[userOp.name] = userOp
+        self.childScopeTable[userOp.name]=userOp
 
 
-def reOrderScope(scope: SyntaxScope) -> None:
-    print("REORDER BEGIN")
-    pass
