@@ -349,7 +349,8 @@ def exprToNum(objects):
 def defToString(defList):
     content = ""
     for elem in defList:
-        content += objectsToString(elem, thisEnv)
+        # content += objectsToString(elem, thisEnv)
+        content += "".join(elem)
     return content
 
 
@@ -1020,6 +1021,7 @@ def p_strong_transition(p):
     '''Strong_transition : IF Expr Strong_target'''
     print("Strong_transition: ", p[1], p[2].objects, p[3])
     p[0] = lex_value("Strong_transition")
+    print("p[2].objects=",p[2].objects)
     p[2].value = defToString(p[2].objects)
 
     p[0].value += "if(" + p[2].value + ")"
@@ -2450,49 +2452,25 @@ def get_parse(strs,output_dir):
 if __name__ == '__main__':
     parser = yacc(debug=1)
     strs = '''
-const D_Vdt : float64  =0.5 ;
- const D_Vdt1 : float64  =0.15 ;
- const D_Vit1 : float64  =3 ;
- const D_Vit2 : float64  =7 ;
- const D_Vit3 : float64  =2 ;
- const D_Vpt : float64  =2 ;
- const k : float64  =1 ;
- const kd : float64  =5 ;
- const ki1 : float64  =3 ;
- const ki2 : float64  =0.01 ;
- const ki3 : float64  =1.5 ;
- const kp : float64  =1 ;
- const Ts : float64  =0.02 ;
-node errtovi0 ( err : float64 last = 0 ;
-Num0 : float64 last = 0 ;
-vi0 : float64 last = 0 ;
-vi10 : float64 last = 0 ) returns ( vi : float64 last = 0 ;
-temp4 : float64 last = 0 ;
-Num : float64 default = 0 last = 0 ;
-vi1 : float64 last = 0 ) var _L1 : float64 ;
-_L2 : float64 ;
-_L3 : float64 ;
+node AUTOMATON(Alarm:bool) returns(r3:int32)
 let
-_L1 = err ;
- _L2 = D_Vit1 ;
- _L3 = _L1 - _L2 ;
- temp4 = _L3 ;
- activate IfBlock1 if temp4 <= 0 then let
-Num = Num0 + 0.02 ;
-vi = vi10 - Ts * Ts * Num * Num * ki2 ;
+    automaton
+        initial state State1
+        unless if Alarm restart State2;
+        let
+            r3=3;
+        tel
+
+        state State2
+        let
+            r3=1;
+        tel
+        until if Alarm do
+        let
+        tel
+        restart State1;
+        returns..;
 tel
- else if temp4 > D_Vit2 then let
-Num = 0 ;
-vi = vi0 + Ts * ki1 ;
-vi1 = vi ;
-tel
- else let
-Num = 0 ;
-vi = vi0 + Ts * ki3 * temp4 ;
-vi1 = vi ;
-tel
-  returns .. ;
- tel
 '''
 
     string_tokens = get_tokens(strs)

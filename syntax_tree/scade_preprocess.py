@@ -331,7 +331,6 @@ def p_user_op_name(p):
         visibility = "public"
     user_op_scope = SyntaxUserOp(type=p[1]["Op_kind"], name=p[3].value, prevscope=cur_scope, visibility=visibility)
     cur_scope.add_userOp(user_op_scope)
-    cur_scope.add_childScope(user_op_scope)
     cur_scope = user_op_scope
 
 
@@ -1185,7 +1184,7 @@ def p_case_expr(p):
 
 def p_bool_expr(p):
     '''Bool_expr : NOT Expr
-    | HASHTAG LPARENTHESE List RPARENTHESE'''
+    | HASHTAG LPARENTHESE Hashtag_List RPARENTHESE'''
     if len(p) == 3:
         p[0] = SyntaxExpr(type="Bool_expr", subtype="NOT")
         p[0].add_object(p[2])
@@ -1193,6 +1192,26 @@ def p_bool_expr(p):
         p[0] = SyntaxExpr(type="Bool_expr", subtype="HASHTAG")
         p[0].add_object(p[3])
 
+def p_hashtag_list(p):
+    '''Hashtag_List : Hashtag_List_1
+    | empty'''
+    p[0] = list()
+    if isinstance(p[1],list):
+        p[0] += p[1]
+
+def p_hashtag_list_1(p):
+    '''Hashtag_List_1 : Expr Hashtag_List_2'''
+    p[0] = list()
+    p[0].append(p[1])
+    p[0] += p[2]
+
+def p_hashtag_list_2(p):
+    '''Hashtag_List_2 : COMMA Expr Hashtag_List_2
+    | empty'''
+    p[0] = list()
+    if len(p) != 2:
+        p[0].append(p[2])
+        p[0] += p[3]
 
 def p_bool_expr_bin(p):
     '''Bool_expr : Expr AND Expr

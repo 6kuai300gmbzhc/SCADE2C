@@ -56,6 +56,8 @@ class SyntaxExpr:
     '''引用到的右值集合，用来给equations排序,只有变量没有函数，因为排序不需要函数
     只有局部变量和signal
     '''
+    exprType: str
+    '''expr的真实数据类型，如uint8,uint32,uint64'''
 
     def __init__(self, type: str, subtype: str):
         self.type = type
@@ -504,8 +506,9 @@ class SyntaxScope:
         s += str(self.anonymousScopeCount)
         self.anonymousScopeCount += 1
         return s
+    
     def get_global_name(self):
-        if self.prevScope is None:return self.name
+        if self.prevScope is None or self.prevScope.name == "*global": return self.name
         else:return self.prevScope.get_global_name()+"::"+self.name
 
 
@@ -1144,6 +1147,10 @@ class SyntaxPackageScope(SyntaxScope):
 
     def add_userOp(self, userOp: SyntaxUserOp) -> None:
         self.userOpTable[userOp.name] = userOp
-        self.childScopeTable[userOp.name]=userOp
+        # self.childScopeTable[userOp.name]=userOp
+    
+    def var_change_name(self,name):
+        #generate_id_expr_path_id函数中syntaxUserOp可能为UserOp，此时需要添加inC，outC，可能是package，为了防止package情况下，没有var_change_name。
+        return name
 
 

@@ -5,7 +5,7 @@
 
 #define KCG_MAPW_CPY
 
-//#include "./user_macros.h"
+#include "./user_macros.h"
 
 #ifndef kcg_char
 #define kcg_char kcg_char
