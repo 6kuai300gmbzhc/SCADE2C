@@ -1,33 +1,94 @@
-function AUTOMATON() returns()
+package AUTOMATON
+node AUTOMATON(Alarm:bool;t:int32) returns(Return:bool;r2:int32;r3:int32 last=4)
     var
-        vw:int32;
-        a:int32 default=1;
-        Return:int32;
+        vw:int32 last=3;
+        a:int32 default=1 last=2;
     let
         automaton SM1
         initial state State1
         unless
-            if #1 not Alarm restart NoAlarm;
+            if not Alarm
+			if t>3 restart State2
+			elsif t=3 resume State2
+			else restart State2
+			end;
+			if Alarm resume State2;
         let
-            vw = last ' vw ;
+		    vw = last 'vw ;
             Return = false ;
-            a = last ' a ;
+            a = last 'a ;
+			r2=0;
         tel
-        until if 19 times edge do
-        let
-        tel
-        restart State2 ;
+        until
+		if Alarm if t>3 restart State2 end;
 
         state State2
         let
-            vw = vw0 ;
+            vw = 3 ;
             Return = true ;
-            a = last ' a + 1 ;
+			automaton SM2
+			initial state State1
+			unless if Alarm resume State2;
+			let
+				r2=3;
+			tel
+			until if not Alarm restart State3;
+
+			state State2
+			var
+				tmp:int32;
+			let
+				tmp=3;
+				r2=tmp+3;
+			tel
+			until if not Alarm do
+			let
+			tel
+			resume State1;
+
+			state State3
+			let
+				r2=12;
+			tel
+			until if Alarm do restart State2;
+			returns ..;
         tel
-        until if true do
+		until if Alarm do
         let
         tel
         restart State1 ;
-        synchro restart State1;
     returns .. ;
+    automaton SM2
+	    initial state State1
+	    unless if Alarm resume State2;
+		let
+			r3=3;
+		tel
+		until if not Alarm restart State3;
+
+		state State2
+		let
+			activate ifblock
+			if Alarm then
+			let
+			r3=last 'r3;
+			tel
+			else
+			let
+			r3=2;
+			tel
+			returns ..;
+		tel
+		until if not Alarm do
+		let
+		tel
+		resume State1;
+		state State3
+		unless if Alarm restart State2;
+		let
+			r3=12;
+		tel
+		until if Alarm do restart State2;
+		returns ..;
     tel
+end;

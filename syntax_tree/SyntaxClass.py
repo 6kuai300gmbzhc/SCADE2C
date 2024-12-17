@@ -791,10 +791,15 @@ class SyntaxArrow:
     '''
     target: str
     '''type为restart，resume有效，记录了对应的ID名字'''
+    targetIndex: int=0
+    '''type为restart，resume有效，记录了这个转移的序号，每个state单独排序
+    只有强转移有这个序号，其他的就是0
+    '''
     ifExprList: list
     '''type为if时有效，保存了存有(SyntaxExpr,SyntaxArrow)的列表，对应语法的if和elsif部分'''
     elseExpr: SyntaxArrow = None
     '''type为if时可能有效，不一定会有else语句，若不为None则存储了else对应的语句'''
+
 
     def __init__(self, type: str, target: str = None, ifExpr: list = None, elseExpr: SyntaxArrow = None):
         self.type = type
@@ -807,6 +812,30 @@ class SyntaxArrow:
     def set_action(self, action: str):
         self.action = action
 
+    def get_target_names(self)->list[str]:
+        """递归的从arrow里面找目标转移状态"""
+        if self.type!="if":
+            return [self.target]
+        out=list()
+        for expr in self.ifExprList:
+            out+=expr[1].get_target_names()
+        if self.elseExpr:
+            out+=(self.elseExpr.get_target_names())
+        return out
+    def set_index(self,index:int)->int:
+        """给这个arrow和他包含的arrow都设置targetIndex，返回下一个arrow的index序号"""
+        if self.type!="if":
+            '''递归终点'''
+            self.targetIndex=index
+            return index+1
+        else:
+            for ifList in self.ifExprList:
+                arrow=ifList[1]
+                index=arrow.set_index(index)
+            if self.elseExpr:
+                index=self.elseExpr.set_index(index)
+            return index
+
     def __repr__(self):
         return self.arrow2str(0)
 
@@ -816,12 +845,13 @@ class SyntaxArrow:
             s += "action:"
             s += self.action + " "
         if self.type != "if":
-            s += self.type + " " + self.target
+            s += str(self.targetIndex)+" "+self.type + " " + self.target
         else:
+            s+='\n'
             for Ifexpr in self.ifExprList:
-                s += "if " + str(Ifexpr[0]) + " " + Ifexpr[1].arrow2str(depth=depth + 1)
+                s += "    "*depth+"if " + str(Ifexpr[0]) + " " + Ifexpr[1].arrow2str(depth=depth + 1)+"\n"
             if self.elseExpr:
-                s += self.elseExpr.arrow2str(depth=depth + 1)
+                s += "    "*depth+"else "+self.elseExpr.arrow2str(depth=depth + 1)
         return s
 
 
@@ -831,6 +861,7 @@ class SyntaxState(SyntaxDataDefScope):
     isFinal: bool = False
     type: str
     '''automaton_state'''
+    name:str
     unlessTransitions: list
     '''强转移列表,保存了存有（SyntaxExpr，SyntaxArrow）的列表'''
     untilTransitions: list
@@ -847,11 +878,28 @@ class SyntaxState(SyntaxDataDefScope):
         self.synchroArrow = synchroArrow
 
     def set_unlessTransitions(self, unlessTransitions: list):
+        index=1
+        for transition in unlessTransitions:
+            arrow=transition[1]
+            index=arrow.set_index(index)
         self.unlessTransitions = unlessTransitions
 
     def set_untilTransitions(self, untilTransitions: list):
         self.untilTransitions = untilTransitions
 
+    def get_transfer_target_names(self)->list[str]:
+        """获取这个状态可能抵达的其他状态的名字，先强后弱最后同步的顺序"""
+        out=list()
+        for unless in self.unlessTransitions:
+            out+=unless[1].get_target_names()
+        return out
+    def get_enum_name(self)->str:
+        """获取这个状态在代码生成中的枚举类型名字"""
+        s="SSM_st_"
+        global_names=self.get_global_name().split("::")
+        global_name="_".join(global_names[1:])
+        s+=global_name
+        return s
     def __repr__(self):
         return self.state2str(0)
 
@@ -892,13 +940,23 @@ class SyntaxAutomaton(SyntaxScope):
     stateTable: dict
     '''保存状态机的状态字典，状态名字->SyntaxState'''
 
+    transferCount: int
+    '''记录了这个状态机转移的总数'''
+
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
         self.stateTable = dict()
 
     def add_state(self, state: SyntaxState):
         self.stateTable[state.name] = state
-
+    def get_init_state(self)->SyntaxState:
+        init_state=None
+        for name,state in self.stateTable.items():
+            if state.isInitial:
+                if init_state is None:init_state=state
+                else:raise ManyInitialStateException(self.name+"有大于1个初始状态了")
+        if init_state is None: raise NoInitialStateException(self.name+"没有初始状态")
+        else:return init_state
     def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
         return self.prevScope.get_localVariable_InThisAndPreEnv(name)
     def get_return_symbolTable(self):

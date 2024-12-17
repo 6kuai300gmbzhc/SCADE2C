@@ -811,7 +811,7 @@ def p_fork_1(p):
 def p_fork_2(p):
     '''Fork_2 : Else_fork
     | empty'''
-    if p[1].strs == "Empty":
+    if isinstance(p[1],lex_value):
         p[0] = None
     else:
         p[0] = p[1]
@@ -1682,6 +1682,8 @@ def p_empty(p):
     'empty :'
     p[0] = lex_value('Empty', "")
 
+def p_error(p):
+    print("error",p)
 
 def get_parse(input_path: str, root_operator: str):
     parser = yacc(debug=1, start="Program")

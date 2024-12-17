@@ -1,6 +1,7 @@
 from syntax_tree.SyntaxClass import *
 from syntax_tree.scade_preprocess import *
 
+import automaton_generate as automaton_generate
 class GenerateCode:
     def __init__(self,mainNode):
         self.mainNode = mainNode
@@ -224,12 +225,35 @@ def SyntaxUserOp_generate(syntaxUserOp):
         elif elem.type == "emission":
             pass
         elif elem.type == "control_block":
-            pass 
-    print("SyntaxUserOp_generate\n",userOp_code)
+            control_block=syntaxUserOp.get_childScope(elem.controlBlockID)
+            if control_block.type=="automaton":
+                print("BODY:")
+                print(automaton_generate.generate_body(control_block))
+                print("TYPE:")
+                print(automaton_generate.generate_type(control_block))
+                print("HEAD:")
+                print(automaton_generate.generate_head(control_block))
+                print("INIT:")
+                print(automaton_generate.generate_init(control_block))
+                for name,state in control_block.childScopeTable.items():
+                    for name,scope in state.childScopeTable.items():
+                        if scope.type=="automaton":
+
+                            print("BODY:")
+                            print(automaton_generate.generate_body(scope))
+                            print("TYPE:")
+                            print(automaton_generate.generate_type(scope))
+                            print("HEAD:")
+                            print(automaton_generate.generate_head(scope))
+                            print("INIT:")
+                            print(automaton_generate.generate_init(scope))
+    #print("SyntaxUserOp_generate\n",userOp_code)
 
 def scade_generate(root_operator):
-    for k,v in root_scope.userOpTable.items():
-        SyntaxUserOp_generate(v)
+    for name,user_op in root_scope.childScopeTable.items():
+        SyntaxUserOp_generate(user_op)
+        for name1,v in user_op.userOpTable.items():
+            SyntaxUserOp_generate(v)
 
 def scade_parse(input_path:str,root_operator:str):
     parser = yacc(debug=1, start="Program")
@@ -257,7 +281,7 @@ def scade_parse(input_path:str,root_operator:str):
 
 if __name__ == "__main__":
     argParser = argparse.ArgumentParser()
-    argParser.add_argument('-i', '--input_path', required=True, type=str)
-    argParser.add_argument('-r', '--root_operator', required=True, type=str)
+    argParser.add_argument('-i', '--input', required=True, type=str)
+    argParser.add_argument('-r', '--root', required=True, type=str)
     args = argParser.parse_args()
-    scade_parse(args.input_path, args.root_operator)
+    scade_parse(args.input, args.root)
