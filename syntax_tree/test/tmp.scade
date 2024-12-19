@@ -53,3 +53,43 @@ let
 	out1=in1->pre(out3);
 	out2=in2->pre(out4);
 tel
+
+type Color=enum{Blue,Red,Yellow};
+node enum_test(in1,in2,in3:int64;in4:Color) returns(out1:int64)
+let
+	out1=(case in4 of | Blue:in1 | Red:in2 | Yellow:in3);
+tel
+
+/*
+void enum_test(inC_enum_test *inC, outC_enum_test *outC)
+{
+  switch (inC->in4) {
+    case Blue :
+      outC->out1 = inC->in1;
+      break;
+    case Red :
+      outC->out1 = inC->in2;
+      break;
+    case Yellow :
+      outC->out1 = inC->in3;
+      break;
+    default :
+      break;
+  }
+}
+*/
+
+/*
+out1=(case in4 of | Blue:in1 | Red:in2 | _:in3);
+  switch (inC->in4) {
+    case Blue :
+      outC->out1 = inC->in1;
+      break;
+    case Red :
+      outC->out1 = inC->in2;
+      break;
+    default :
+      outC->out1 = inC->in3;
+      break;
+  }
+*/

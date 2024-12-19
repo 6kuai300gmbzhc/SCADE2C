@@ -1,0 +1,8 @@
+node list_test1(in1,in2,in3:int64) returns(out1,out2,out3,out4,out5:int64)
+let
+	out3=in1-in2;
+	out4=in3+in2;
+	out5=in3;
+	out1=in1->pre(out3);
+	out2=in2->pre(out4);
+tel
