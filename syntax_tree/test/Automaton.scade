@@ -1,63 +1,5 @@
-package AUTOMATON
-node AUTOMATON(Alarm:bool;t:int32) returns(Return:bool;r2:int32;r3:int32 last=4)
-    var
-        vw:int32 last=3;
-        a:int32 default=1 last=2;
+node AUTOMATON(Alarm:bool) returns(r3:int32)
     let
-        automaton SM1
-        initial state State1
-        unless
-            if not Alarm
-			if t>3 restart State2
-			elsif t=3 resume State2
-			else restart State2
-			end;
-			if Alarm resume State2;
-        let
-		    vw = last 'vw ;
-            Return = false ;
-            a = last 'a ;
-			r2=0;
-        tel
-        until
-		if Alarm if t>3 restart State2 end;
-
-        state State2
-        let
-            vw = 3 ;
-            Return = true ;
-			automaton SM2
-			initial state State1
-			unless if Alarm resume State2;
-			let
-				r2=3;
-			tel
-			until if not Alarm restart State3;
-
-			state State2
-			var
-				tmp:int32;
-			let
-				tmp=3;
-				r2=tmp+3;
-			tel
-			until if not Alarm do
-			let
-			tel
-			resume State1;
-
-			state State3
-			let
-				r2=12;
-			tel
-			until if Alarm do restart State2;
-			returns ..;
-        tel
-		until if Alarm do
-        let
-        tel
-        restart State1 ;
-    returns .. ;
     automaton SM2
 	    initial state State1
 	    unless if Alarm resume State2;
@@ -68,16 +10,7 @@ node AUTOMATON(Alarm:bool;t:int32) returns(Return:bool;r2:int32;r3:int32 last=4)
 
 		state State2
 		let
-			activate ifblock
-			if Alarm then
-			let
-			r3=last 'r3;
-			tel
-			else
-			let
-			r3=2;
-			tel
-			returns ..;
+		    r3=0;
 		tel
 		until if not Alarm do
 		let

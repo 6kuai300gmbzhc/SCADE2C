@@ -682,6 +682,26 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         else:
             return self.prevScope.get_localVariable_InThisAndPreEnv(name)
 
+    def generate_tmp_name(self)->str:
+        '''生成一个没有被用过的变量名，用来代码生成'''
+        count=1
+        name=f"tmp_{str(count)}"
+        while self.get_localVariable_InThisAndPreEnv(name) is not None:
+            count+=1
+            name=f"tmp_{str(count)}"
+        return name
+
+    def var_change_name(self, name):
+        symbol = self.get_localVariable_InThisAndPreEnv(name)
+        if symbol != None:
+            if symbol.isOutput:
+                return f"outC->{symbol.name}"
+            elif symbol.isInput:
+                return f"inC->{symbol.name}"
+            else:
+                return symbol.name
+        else:
+            raise ValueError(f"var_change_name error , name:{name}")
     def get_return_symbolTable(self):
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
         return self.returnSymbolsTable
@@ -815,15 +835,15 @@ class SyntaxArrow:
     def set_action(self, action: str):
         self.action = action
 
-    def get_target_names(self)->list[str]:
+    def get_strong_transfer_arrows(self)->list[SyntaxArrow]:
         """递归的从arrow里面找目标转移状态"""
         if self.type!="if":
-            return [self.target]
+            return [self]
         out=list()
         for expr in self.ifExprList:
-            out+=expr[1].get_target_names()
+            out+=expr[1].get_strong_transfer_arrows()
         if self.elseExpr:
-            out+=(self.elseExpr.get_target_names())
+            out+=(self.elseExpr.get_strong_transfer_arrows())
         return out
     def set_index(self,index:int)->int:
         """给这个arrow和他包含的arrow都设置targetIndex，返回下一个arrow的index序号"""
@@ -890,11 +910,11 @@ class SyntaxState(SyntaxDataDefScope):
     def set_untilTransitions(self, untilTransitions: list):
         self.untilTransitions = untilTransitions
 
-    def get_transfer_target_names(self)->list[str]:
-        """获取这个状态可能抵达的其他状态的名字，先强后弱最后同步的顺序"""
+    def get_strong_transfer_arrows(self)->list[SyntaxArrow]:
+        """获取这个状态可能抵达的其他状态的arrow，只有强转移"""
         out=list()
         for unless in self.unlessTransitions:
-            out+=unless[1].get_target_names()
+            out+=unless[1].get_strong_transfer_arrows()
         return out
     def get_enum_name(self)->str:
         """获取这个状态在代码生成中的枚举类型名字"""

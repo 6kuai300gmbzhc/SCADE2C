@@ -318,8 +318,33 @@ def generate_userOp_emission(syntaxEquation,syntaxUserOp):
     return ""
 
 @register_userOp_handler("control_block")
-def generate_userOp_control_block(syntaxEquation,syntaxUserOp):
-    return ""
+def generate_userOp_control_block(syntaxEquation:SyntaxEquation,syntaxUserOp:SyntaxUserOp):
+    control_block_ID=syntaxEquation.controlBlockID
+    control_block=syntaxUserOp.get_childScope(control_block_ID)
+    if control_block is None:raise UnknownIdentifierException(f"control_block {control_block_ID} 没有找到")
+
+    if control_block.type=="automaton":
+        print("BODY:")
+        print(automaton_generate.generate_body(control_block))
+        print("TYPE:")
+        print(automaton_generate.generate_type(control_block))
+        print("HEAD:")
+        print(automaton_generate.generate_head(control_block))
+        print("INIT:")
+        print(automaton_generate.generate_init(control_block))
+        for name, state in control_block.childScopeTable.items():
+            for name, scope in state.childScopeTable.items():
+                if scope.type == "automaton":
+                    print("BODY:")
+                    print(automaton_generate.generate_body(scope))
+                    print("TYPE:")
+                    print(automaton_generate.generate_type(scope))
+                    print("HEAD:")
+                    print(automaton_generate.generate_head(scope))
+                    print("INIT:")
+                    print(automaton_generate.generate_init(scope))
+        return ""
+    else: return ""
 
 def SyntaxUserOp_generate(syntaxUserOp):
     code = ""
@@ -374,7 +399,7 @@ class GenerateCode:
         # if not os.path.isdir(self.outputDir):
         #     os.makedirs(self.outputDir)
         mainNode = self.mainNode.split("::")
-        self.outputDir = f"{outputDir}/{mainNode[-1]}" if len(mainNode) == 1 else f"{outputDir}/{mainNode[-1]}_{"_".join(mainNode[:-1])}"
+        self.outputDir = f"{outputDir}/{mainNode[-1]}" if len(mainNode) == 1 else f"{outputDir}/{mainNode[-1]}_{'_'.join(mainNode[:-1])}"
         # os.makedirs(f"{self.outputDir}/src")
         # os.makedirs(f"{self.outputDir}/include")
 
@@ -384,7 +409,7 @@ class GenerateCode:
         #include "kcg_consts.h"
         '''
         h_content = ''''
-        #ifndef _KCG_CONSTS_H_\n
+        #ifndef _KCG_CONSTS_H_\n  
         #define _KCG_CONSTS_H_\n
         #include "kcg_types.h"\n
         '''
