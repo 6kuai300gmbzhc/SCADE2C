@@ -5,7 +5,7 @@ from functools import wraps
 #暂时使用，当把每个expr的type都设置了，就可以不使用了
 lhs_type = ""
 
-import automaton_generate as automaton_generate
+import syntax_tree.automaton_generate as automaton_generate
 class GenerateCode:
     def __init__(self,mainNode):
         self.mainNode = mainNode
@@ -47,16 +47,21 @@ def register_tempo_expr_hander(type_):
 def generate_tempo_expr_arrow(syntax_tempo_expr_objects,syntaxUserOp,genEqu):
     init_var=syntaxUserOp.set_init_var()
     code_ = f"({syntaxUserOp.var_change_name(init_var.name)} ? ({SyntaxExpr_generate(syntax_tempo_expr_objects[0],syntaxUserOp,genEqu)}) : ({SyntaxExpr_generate(syntax_tempo_expr_objects[1],syntaxUserOp,genEqu)}))"
+    print("arrow set_init_var",len(syntaxUserOp.tmpParams),syntaxUserOp.name)
+    # print("arrow set_init_var",syntaxUserOp.tmpParams)
+    for elem in syntaxUserOp.tmpParams:
+        print("===",elem.name)
     return code_
 
 @register_tempo_expr_hander("PRE")
 def generate_tempo_expr_pre(syntax_tempo_expr_objects,syntaxUserOp,genEqu):
     tmp_var_name = syntaxUserOp.generate_name_for_tmp()
     tmp_var = SyntaxVariableSymbol(tmp_var_name,False,False)
+    tmp_var.syntaxType=SyntaxType(lhs_type)
     tmp_var.isOutput = True
     tmp_var.postExpr = syntax_tempo_expr_objects[0]
     syntaxUserOp.add_tmpSymbol(tmp_var)
-    return tmp_var_name
+    return syntaxUserOp.var_change_name(tmp_var_name)
 
 @register_tempo_expr_hander("FBY")
 def generate_tempo_expr_fby(syntax_tempo_expr_objects,syntaxUserOp,genEqu):
@@ -458,6 +463,8 @@ def SyntaxUserOp_generate(syntaxUserOp):
     print("=== UserOp ===\n")
     print(code)
     print("==========")
+    return code
+    
 
 generate_syntax_type_handlers = {}
 def register_syntax_type_handler(pattern):
@@ -684,6 +691,7 @@ class GenerateCode:
             code += f"{para.syntaxType.change_name()} {para.name};\n"
         for para in node.tmpParams:
             if para.isOutput == True:
+                print("para ",para.name)
                 code += f"{para.syntaxType.change_name()} {para.name};\n"
         code += f"}}outC_{global_name};\n"
         return code
@@ -719,8 +727,31 @@ class GenerateCode:
         print(head_content)
         print("=======================\n")
 
-    def generate_src_func_file(self,node):
-        return ""
+    def generate_src_func_file(self,node,body_content):
+        global_name = node.get_global_name()
+        post_content = ""
+        src_content = ""
+        src_content += f"void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC){{\n"
+        #localVariable + tmpVariable
+        for name,symbol in node.localSymbolTable.items():
+            src_content += f"{symbol.syntaxType.change_name()} {name};\n"
+        for paraSymbol in node.tmpParams:
+            if paraSymbol.isOutput == False:
+                src_content += f"{paraSymbol.syntaxType.change_name()} {paraSymbol.name};\n"
+            if paraSymbol.postExpr != None:
+                genEqu=GenEqu()
+                post_content += "".join(genEqu.preEquations)
+                post_content += f"{node.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr,node,genEqu)};\n"
+                post_content += "".join(genEqu.postEquations)
+        #body
+        src_content += body_content
+        #init,pre等的后处理语句
+        src_content += post_content
+        src_content += f"}}"
+        print("==== src_content ====\n")
+        print(src_content)
+        print("======================")
+        return src_content
 
     def generate_src_init(self,node):
         return ""
@@ -728,20 +759,22 @@ class GenerateCode:
     def generate_src_reset(self,node):
         return ""
 
-    def generate_src_file(self,node):
+    def generate_src_file(self,node,body_content):
         global_name = node.get_global_name()
         src_content = f'''
         #include "kcg_consts.h"
         #include "{global_name}.h"
         '''
-        src_content += self.generate_src_func_file(node)
+        src_content += self.generate_src_func_file(node,body_content)
         src_content += self.generate_src_init(node)
         src_content += self.generate_src_reset(node)
 
         return src_content
 
-    def generate_node_file(self):
-        pass
+    def generate_node_file(self,node):
+        body_content = SyntaxUserOp_generate(node)
+        self.generate_head_file(node)
+        self.generate_src_file(node,body_content)
 
 
 def scade_generate(root_operator):
@@ -773,10 +806,11 @@ def scade_parse(input_path:str,main_operator:str,output_path:str):
     # gen.generate_main_file()
     # gen.generate_types_file()
     for k,v in root_scope.userOpTable.items():
-        gen.generate_head_file(v)
-        gen.generate_src_file(v)
+        gen.generate_node_file(v)
+        # gen.generate_head_file(v)
+        # gen.generate_src_file(v)
 
-    scade_generate(main_operator)
+    # scade_generate(main_operator)
 
 
 if __name__ == "__main__":

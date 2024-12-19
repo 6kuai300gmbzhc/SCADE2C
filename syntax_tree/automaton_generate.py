@@ -1,5 +1,5 @@
 import scade_generate as scade_generate
-from SyntaxClass import *
+from syntax_tree.SyntaxClass import *
 
 
 def get_automaton_state_type_name(automaton: SyntaxAutomaton) -> str:

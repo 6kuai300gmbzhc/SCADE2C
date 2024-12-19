@@ -249,7 +249,7 @@ class SyntaxType:
         return s
 
     def change_name(self):
-        return f'kcg_{self.type}' if self.type in self.basic_type else self.type
+        return f'kcg_{self.type}' if self.type in self.basic_type else self.value
 
 class SyntaxTypeSymbol:
     """人为定义的类型变量，输入到符号表里面"""
@@ -516,9 +516,7 @@ class SyntaxScope:
         s += str(self.anonymousScopeCount)
         self.anonymousScopeCount += 1
         return s
-    
-
-    
+        
     def get_global_name(self):
         if self.prevScope is None or self.prevScope.name == "*global": return self.name
         else:return self.prevScope.get_global_name()+"_"+self.name
@@ -1105,6 +1103,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def get_localVariable_InThisAndPreEnv(self, name: str)->SyntaxVariableSymbol or None:
         '''递归的找局部变量，包括输入输出参数'''
         return self.get_localVariable(name)#上层不可能有变量了
+    
     def userOp2str(self, depth=0):
         s = "    " * depth
         s += "\033[31muserOpScope as " + self.type + " "
