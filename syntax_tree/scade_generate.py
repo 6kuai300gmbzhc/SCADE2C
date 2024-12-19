@@ -425,28 +425,24 @@ def generate_userOp_control_block(syntaxEquation:SyntaxEquation,syntaxUserOp:Syn
     control_block=syntaxUserOp.get_childScope(control_block_ID)
     if control_block is None:raise UnknownIdentifierException(f"control_block {control_block_ID} 没有找到")
     print("this is control_block",syntaxEquation.controlBlockID)
-    print(type(syntaxUserOp.childScopeTable[syntaxEquation.controlBlockID]))
-    print(syntaxUserOp.childScopeTable[syntaxEquation.controlBlockID].childScopeTable)
     if control_block.type=="automaton":
-        print("BODY:")
-        print(automaton_generate.generate_body(control_block))
-        print("TYPE:")
-        print(automaton_generate.generate_type(control_block))
-        print("HEAD:")
-        print(automaton_generate.generate_head(control_block))
-        print("INIT:")
-        print(automaton_generate.generate_init(control_block))
-        for name, state in control_block.childScopeTable.items():
-            for name, scope in state.childScopeTable.items():
-                if scope.type == "automaton":
-                    print("BODY:")
-                    print(automaton_generate.generate_body(scope))
-                    print("TYPE:")
-                    print(automaton_generate.generate_type(scope))
-                    print("HEAD:")
-                    print(automaton_generate.generate_head(scope))
-                    print("INIT:")
-                    print(automaton_generate.generate_init(scope))
+        return automaton_generate.generate_body(control_block)
+        # print("TYPE:")
+        # print(automaton_generate.generate_type(control_block))
+        # print("HEAD:")
+        # print(automaton_generate.generate_head(control_block))
+        # print("INIT:")
+        # print(automaton_generate.generate_init(control_block))
+        # for name, state in control_block.childScopeTable.items():
+        #     for name, scope in state.childScopeTable.items():
+        #         if scope.type == "automaton":
+        #             print(automaton_generate.generate_body(scope))
+                    # print("TYPE:")
+                    # print(automaton_generate.generate_type(scope))
+                    # print("HEAD:")
+                    # print(automaton_generate.generate_head(scope))
+                    # print("INIT:")
+                    # print(automaton_generate.generate_init(scope))
         return ""
     else: return ""
 

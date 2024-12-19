@@ -13,8 +13,10 @@ def get_automaton_transfer_type_name(automaton: SyntaxAutomaton) -> str:
 
 
 def get_automaton_full_name(automaton: SyntaxAutomaton) -> str:
-    """把global去了然后把：：换成_"""
-    return '_'.join(automaton.get_global_name().split('::')[1:])
+    """把global去了然后把：：换成_
+    某个地方已经把global去掉了
+    """
+    return '_'.join(automaton.get_global_name().split('::'))
 
 
 def get_state_nxt(automaton: SyntaxAutomaton) -> str:
@@ -77,7 +79,7 @@ def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton
             sub_expr = arrow.ifExprList[i][0]
             sub_arrow = arrow.ifExprList[i][1]
 
-            tmp_name = from_state.generate_tmp_name()
+            tmp_name = from_state.generate_name_for_tmp()
             tmp_symbol = SyntaxVariableSymbol(name=tmp_name, isProbe=False, isClock=False)
             tmp_symbol.syntaxType = SyntaxType(type="bool")
             from_state.add_localSymbols([tmp_symbol])
@@ -126,7 +128,7 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
             sub_expr = arrow.ifExprList[i][0]
             sub_arrow = arrow.ifExprList[i][1]
 
-            tmp_name = from_state.generate_tmp_name()
+            tmp_name = from_state.generate_name_for_tmp()
             tmp_symbol = SyntaxVariableSymbol(name=tmp_name, isProbe=False, isClock=False)
             tmp_symbol.syntaxType = SyntaxType(type="bool")
             from_state.add_localSymbols([tmp_symbol])

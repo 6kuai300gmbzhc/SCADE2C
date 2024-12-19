@@ -517,12 +517,7 @@ class SyntaxScope:
         self.anonymousScopeCount += 1
         return s
     
-    def generate_name_for_tmp(self):
-        s = self.name
-        s += "^tmp^"
-        s += str(self.annoymousTmpCount)
-        self.annoymousTmpCount += 1
-        return s
+
     
     def get_global_name(self):
         if self.prevScope is None or self.prevScope.name == "*global": return self.name
@@ -713,7 +708,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         else:
             return self.prevScope.get_localVariable_InThisAndPreEnv(name)
 
-    def generate_tmp_name(self)->str:
+    def generate_name_for_tmp(self):
         '''生成一个没有被用过的变量名，用来代码生成'''
         count=1
         name=f"tmp_{str(count)}"
@@ -721,6 +716,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             count+=1
             name=f"tmp_{str(count)}"
         return name
+
 
     def var_change_name(self, name):
         symbol = self.get_localVariable_InThisAndPreEnv(name)
