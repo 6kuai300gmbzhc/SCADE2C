@@ -156,7 +156,6 @@ def p_type_expr(p):
     | Typevar
     | LBPARENTHESE Field_decl Type_expr_1 RBPARENTHESE
     | Type_expr EXPONENT Expr'''
-
     if p[1].value == "{":
         p[0] = SyntaxType(type="field_decl")
         p[0].fields = dict()

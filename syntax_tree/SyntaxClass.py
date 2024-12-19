@@ -197,6 +197,7 @@ class SyntaxType:
 
     type: str
     '''类型，int8，枚举类型等'''
+    '''field_decl,list,signed,unsigned,typevar,path_id,enum'''
 
     sizeExpr: int = None
     '''类型为signed，unsigned时有效，存储了对应整数值'''
@@ -427,6 +428,8 @@ class SyntaxVariableSymbol:
     '''对应default的值，可以为none'''
     lastExpr: SyntaxExpr = None
     '''对应last的值，可以为none'''
+    postExpr: SyntaxExpr = None
+    '''pre和init使用，init最好在程序的最后设置为false，pre在程序最后添加上该周期的值'''
 
     def __init__(self, name: str, isClock: bool, isProbe: bool):
         self.name = name
@@ -475,6 +478,11 @@ class SyntaxScope:
     '''可见性，默认为public'''
     anonymousScopeCount: int = 1
     '''匿名scope计数器，给匿名的block生成名字'''
+    annoymousTmpCount: int = 0
+    '''创建中间变量使用的init''' 
+    initVar: SyntaxVariableSymbol
+    '''时态算子使用的init,每个作用域只有一个init'''
+    tmpParams: list
 
     def __init__(self, type, name, prevScope, visibility):
         self.type = type
@@ -483,6 +491,8 @@ class SyntaxScope:
         self.visibility = visibility
         self.childScopeTable = dict()
         self.equations = list()
+        self.initVar = None
+        self.tmpParams = list()
 
     def add_childScope(self, childScope: SyntaxScope) -> None:
         self.childScopeTable[childScope.name] = childScope
@@ -507,9 +517,30 @@ class SyntaxScope:
         self.anonymousScopeCount += 1
         return s
     
+    def generate_name_for_tmp(self):
+        s = self.name
+        s += "^tmp^"
+        s += str(self.annoymousTmpCount)
+        self.annoymousTmpCount += 1
+        return s
+    
     def get_global_name(self):
         if self.prevScope is None or self.prevScope.name == "*global": return self.name
-        else:return self.prevScope.get_global_name()+"::"+self.name
+        else:return self.prevScope.get_global_name()+"_"+self.name
+    
+    def set_init_var(self):
+        if self.initVar == None:
+            self.initVar = SyntaxVariableSymbol(f"{self.name}_init",False,False)
+            self.initVar.isOutput=True
+            self.initVar.syntaxType=SyntaxType("bool")
+            postExpr = SyntaxExpr(type="Atom",subtype="bool_atom")
+            postExpr.add_object("true")
+            self.initVar.postExpr=postExpr
+            self.add_tmpSymbol(self.initVar)
+        return self.initVar
+    
+    def add_tmpSymbol(self,tmpSymbol):
+        self.tmpParams.append(tmpSymbol)
 
 
 class SyntaxIfBlock:
@@ -962,8 +993,8 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''输入参数，是一个变量声明列表'''
     outParams: list # 存SyntaxVariableSymbol
     '''输出参数，是一个变量声明列表'''
-    tmpParams: list # 存SyntaxVariableSymbol
-    '''中间参数，是一个变量声明列表'''
+    # tmpParams: list # 存SyntaxVariableSymbol
+    # '''中间参数，是一个变量声明列表'''
     numericKind: str = None
     '''如果是模板方法则填入对应类型，不是则为None'''
     whereDecl: list = None
@@ -975,7 +1006,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         super().__init__(type, name, prevscope, visibility)
         self.inParams = list()
         self.outParams = list()
-        self.tmpParams = list()
+        # self.tmpParams = list()
         self.whereDecl = list()
         self.sizeDecl = list()
 

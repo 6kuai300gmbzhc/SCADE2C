@@ -1,5 +1,9 @@
 from syntax_tree.SyntaxClass import *
 from syntax_tree.scade_preprocess import *
+from functools import wraps
+
+#暂时使用，当把每个expr的type都设置了，就可以不使用了
+lhs_type = ""
 
 class GenEqu:
     expr: str
@@ -27,6 +31,83 @@ class GenEqu:
         code += self.expr
         code += "\n ==== \n"
         return code
+
+generate_tempo_expr_handlers = {}
+def register_tempo_expr_hander(type_):
+    def decorator(func):
+        generate_tempo_expr_handlers[type_]=func
+        return func
+    return decorator
+
+@register_tempo_expr_hander("ARROW")
+def generate_tempo_expr_arrow(syntax_tempo_expr_objects,syntaxUserOp,genEqu):
+    init_var=syntaxUserOp.set_init_var()
+    code_ = f"({syntaxUserOp.var_change_name(init_var.name)} ? ({SyntaxExpr_generate(syntax_tempo_expr_objects[0],syntaxUserOp,genEqu)}) : ({SyntaxExpr_generate(syntax_tempo_expr_objects[1],syntaxUserOp,genEqu)}))"
+    return code_
+
+@register_tempo_expr_hander("PRE")
+def generate_tempo_expr_pre(syntax_tempo_expr_objects,syntaxUserOp,genEqu):
+    tmp_var_name = syntaxUserOp.generate_name_for_tmp()
+    tmp_var = SyntaxVariableSymbol(tmp_var_name,False,False)
+    tmp_var.isOutput = True
+    tmp_var.postExpr = syntax_tempo_expr_objects[0]
+    syntaxUserOp.add_tmpSymbol(tmp_var)
+    return tmp_var_name
+
+@register_tempo_expr_hander("FBY")
+def generate_tempo_expr_fby(syntax_tempo_expr_objects,syntaxUserOp,genEqu):
+    tmp_idx_var = syntaxUserOp.generate_name_for_tmp()
+    tmp_arr_var = syntaxUserOp.generate_name_for_tmp()
+    tmp_var = syntaxUserOp.generate_name_for_tmp()
+    idxVar = SyntaxVariableSymbol(tmp_idx_var,False,False)
+    idxVar.isOutput=True
+    idxVar.syntaxType=SyntaxType("path_id")
+    idxVar.syntaxType.value="kcg_size"
+
+    arrVar = SyntaxVariableSymbol(tmp_arr_var,False,False)
+    arrVar.isOutput=True
+    arrSyntaxType=SyntaxType("list")
+    arrSyntaxType.listExpr=syntax_tempo_expr_objects[1]
+    arrSyntaxType.listType=SyntaxType(lhs_type)
+    arrVar.syntaxType=arrSyntaxType
+
+    tmpVar = SyntaxVariableSymbol(tmp_var,False,False)
+    tmpVar.syntaxType=SyntaxType(lhs_type)
+
+    initVar = syntaxUserOp.set_init_var()
+    preCode = f'''
+    if({syntaxUserOp.var_change_name(initVar.name)}){{\n
+    for(int idx=0;idx<{SyntaxExpr_generate(syntax_tempo_expr_objects[1],syntaxUserOp,genEqu)};idx++){{\n
+        {syntaxUserOp.var_change_name(tmp_arr_var)}[idx] = {SyntaxExpr_generate(syntax_tempo_expr_objects[2],syntaxUserOp,genEqu)};\n
+        }}\n
+        {syntaxUserOp.var_change_name(tmp_idx_var)} = 0;\n
+    }}\n
+    {tmp_var} = {syntaxUserOp.var_change_name(tmp_arr_var)}[{syntaxUserOp.var_change_name(tmp_idx_var)}];\n    
+'''
+    postCode = f'''
+    {syntaxUserOp.var_change_name(tmp_arr_var)}[{syntaxUserOp.var_change_name(tmp_idx_var)}]={SyntaxExpr_generate(syntax_tempo_expr_objects[0],syntaxUserOp,genEqu)};\n
+    {syntaxUserOp.var_change_name(tmp_idx_var)}=({syntaxUserOp.var_change_name(tmp_idx_var)}+1)%({SyntaxExpr_generate(syntax_tempo_expr_objects[1],syntaxUserOp,genEqu)});\n
+    '''
+    syntaxUserOp.add_tmpSymbol(idxVar)
+    syntaxUserOp.add_tmpSymbol(arrVar)
+    syntaxUserOp.add_tmpSymbol(tmpVar)
+
+    genEqu.add_preEquations(preCode)
+    genEqu.add_postEquations(postCode)
+    return tmp_var
+
+
+@register_tempo_expr_hander("TIMES")
+def generate_tempo_expr_times(syntax_tempo_expr_objects,syntaxUserOp,genEqu):
+    pass
+
+@register_tempo_expr_hander("WHEN")
+def generate_tempo_expr_when(syntax_tempo_expr_objects,syntaxUserOp,genEqu):
+    pass
+
+@register_tempo_expr_hander("MERGE")
+def generate_tempo_expr_merge(syntax_tempo_expr_objects,syntaxUserOp,genEqu):
+    pass
         
 generate_switch_expr_handlers = {}
 def register_switch_expr_handler(type_):
@@ -41,7 +122,21 @@ def generate_switch_expr_if(syntax_switch_expr_objects,syntaxUserOp,genEqu):
 
 @register_switch_expr_handler("CASE")
 def generate_switch_expr_case(syntax_switch_expr_objects,syntaxUserOp,genEqu):
-    return ""
+    tmp_var_name=syntaxUserOp.generate_name_for_tmp()
+    tmp_var_symbol=SyntaxVariableSymbol(tmp_var_name,False,False)
+    tmp_var_symbol.syntaxType=SyntaxType(lhs_type)
+    syntaxUserOp.add_tmpSymbol(tmp_var_symbol)
+    pre_equations = f"switch({SyntaxExpr_generate(syntax_switch_expr_objects[0],syntaxUserOp,genEqu)}){{\n"
+    for elem in syntax_switch_expr_objects[1]:
+        syntaxPattern=elem[0]
+        syntaxExpr=elem[1]
+        if syntaxPattern.type != '_':
+            pre_equations += f"case {syntaxPattern.value}:\n {tmp_var_name} = {SyntaxExpr_generate(syntaxExpr,syntaxUserOp,genEqu)};\nbreak;\n"
+        else:
+            pre_equations += f"default:\n {tmp_var_name} = {SyntaxExpr_generate(syntaxExpr,syntaxUserOp,genEqu)};\nbreak;\n"
+    pre_equations += "}\n"
+    genEqu.preEquations.append(pre_equations)
+    return tmp_var_name
 
 generate_bool_expr_handlers = {}
 def register_bool_expr_handler(type_):
@@ -215,7 +310,12 @@ def generate_Atom_expr(syntaxExpr,syntaxUserOp,genEqu):
 
 @register_expr_handler('Tempo_expr')
 def generate_Tempo_expr(syntaxExpr,syntaxUserOp,genEqu):
-    return ""
+    subtype_ = syntaxExpr.subType
+    generate_tempo_expr_handler = generate_tempo_expr_handlers.get(subtype_)
+    if generate_tempo_expr_handler:
+        return generate_tempo_expr_handler(syntaxExpr.objects,syntaxUserOp,genEqu)
+    else:
+        raise ValueError(f"generate_Tempo_expr , subtype:{subtype_}")
 
 @register_expr_handler('Arith_expr')
 def generate_Arith_expr(syntaxExpr,syntaxUserOp,genEqu):
@@ -293,6 +393,8 @@ def register_userOp_handler(type_):
 @register_userOp_handler("simple_equation")
 def generate_userOp_simple_equation(syntaxEquation,syntaxUserOp):
     #out1=in1;若out1是数组或结构体，则需要使用memcpy，不能使用=。若右边是函数调用，且返回多个值，也不能直接使用=
+    global lhs_type
+    lhs_type = syntaxUserOp.get_localVariable(syntaxEquation.lhs[0]).syntaxType.type
     genEqu = GenEqu()
     genEqu.expr = SyntaxExpr_generate(syntaxEquation.expr,syntaxUserOp,genEqu)
     code = ""
@@ -315,6 +417,9 @@ def generate_userOp_emission(syntaxEquation,syntaxUserOp):
 
 @register_userOp_handler("control_block")
 def generate_userOp_control_block(syntaxEquation,syntaxUserOp):
+    print("this is control_block",syntaxEquation.controlBlockID)
+    print(type(syntaxUserOp.childScopeTable[syntaxEquation.controlBlockID]))
+    print(syntaxUserOp.childScopeTable[syntaxEquation.controlBlockID].childScopeTable)
     return ""
 
 def SyntaxUserOp_generate(syntaxUserOp):
@@ -329,6 +434,109 @@ def SyntaxUserOp_generate(syntaxUserOp):
     print("=== UserOp ===\n")
     print(code)
     print("==========")
+
+generate_syntax_type_handlers = {}
+def register_syntax_type_handler(pattern):
+    def decorator(func):
+        generate_syntax_type_handlers[re.compile(pattern)]=func
+        return func
+    return decorator
+
+@register_syntax_type_handler(r"^signed")
+def generate_syntax_type_signed(typeSymbol,rootPackage):
+    genEqu=GenEqu()
+    size=SyntaxExpr_generate(typeSymbol.syntaxType.sizeExpr,rootPackage,genEqu)
+    global_name = rootPackage.get_global_name()
+    var_name = typeSymbol.name if len(global_name)==0 else f"{typeSymbol.name}_{global_name}"
+    code = f"typedef kcg_int{size} {var_name};\n"
+    print("=== signed ===\n")
+    print(code)
+    return code
+
+@register_syntax_type_handler(r"^unsigned")
+def generate_syntax_type_unsigned(typeSymbol,rootPackage):
+    genEqu=GenEqu()
+    size=SyntaxExpr_generate(typeSymbol.syntaxType.sizeExpr,rootPackage,genEqu)
+    global_name = rootPackage.get_global_name()
+    var_name = typeSymbol.name if len(global_name)==0 else f"{typeSymbol.name}_{global_name}"
+    code = f"typedef kcg_uint{size} {var_name};\n"
+    print("=== unsigned ===\n")
+    print(code)
+    return code
+
+@register_syntax_type_handler(r"^path_id")
+def generate_syntax_type_path_id(typeSymbol,rootPackage):
+    print("this is path_id",typeSymbol.syntaxType.value)
+    return ""
+
+@register_syntax_type_handler(r"^typevar")
+def generate_syntax_type_typevar(typeSymbol,rootPackage):
+    print("this is typevar",typeSymbol.syntaxType.value)
+    return ""
+
+@register_syntax_type_handler(r"^enum")
+def generate_syntax_type_enum(typeSymbol,rootPackage):
+    global_name = rootPackage.get_global_name()
+    var_name = typeSymbol.name if len(global_name)==0 else f"{typeSymbol.name}_{global_name}"
+    code = f"typedef enum {var_name} {{\n"
+    for idx,enum_elem in enumerate(typeSymbol.syntaxType.enumList):
+        if idx!=0:
+            code +=",\n"
+        code += f"{enum_elem}" if len(global_name)==0 else f"{enum_elem}_{global_name}"
+    code += f"\n}} {var_name};\n"
+    print("=== enum ===")
+    print(code)
+    return code
+
+@register_syntax_type_handler(r"^field_decl")
+def generate_syntax_type_field_decl(typeSymbol,rootPackage):
+    global_name = rootPackage.get_global_name()
+    var_name = typeSymbol.name if len(global_name)==0 else f"{typeSymbol.name}_{global_name}"
+    precode = ""
+    code = f"typedef struct {var_name} {{\n"
+    for k,v in typeSymbol.syntaxType.fields.items():
+        if v.type in v.basic_type:
+            code += f"kcg_{v.type} {k};\n"
+        else:
+            tmpTypeSymbol = SyntaxTypeSymbol(f"tmp_struct_{k}","public")
+            tmpTypeSymbol.syntaxType=v
+            precode = generate_type_symbol(tmpTypeSymbol,rootPackage)
+            tmpName = f"tmp_struct_{k}" if len(global_name)==0 else f"tmp_struct_{k}_{global_name}"
+            code += f"{tmpName} {k};\n"
+    code += f"\n}} {var_name};\n"
+    code = precode + code
+    return code
+
+def generate_syntax_type_list_recursive(syntaxType,rootPackage,symbolName):
+    if syntaxType.type not in syntaxType.basic_type :
+        type_,code_=generate_syntax_type_list_recursive(syntaxType.listType,rootPackage,symbolName)
+        genEqu=GenEqu()
+        size_=SyntaxExpr_generate(syntaxType.listExpr,rootPackage,genEqu)
+        name_ = f"{symbolName}_array_{size_}"
+        code_ += f"typedef {type_} {name_}[{size_}];\n"
+        return name_,code_
+    else:
+        code_ = f"kcg_{syntaxType.type}"
+        return code_,""
+
+@register_syntax_type_handler(r"^list")
+def generate_syntax_type_list(typeSymbol,rootPackage):
+    print("this is list ",typeSymbol.name,type(typeSymbol.syntaxType.listExpr),type(typeSymbol.syntaxType.listType),typeSymbol.syntaxType.listType)
+    type_,code_ = generate_syntax_type_list_recursive(typeSymbol.syntaxType,rootPackage,typeSymbol.name)
+    code_ += f"typedef {type_} {typeSymbol.name};\n"
+    print("==== code_\n")
+    print(code_)
+    return code_
+
+@register_syntax_type_handler(r"(bool|char|int\d+|uint\d+|float\d+)")
+def generate_syntax_type_other(typeSymbol,rootPackage):
+    global_name = rootPackage.get_global_name()
+    var_name = typeSymbol.name if len(global_name)==0 else f"{typeSymbol.name}_{global_name}"
+    code = f"typedef {typeSymbol.syntaxType.change_name()} {var_name};\n"
+    print("=== other ===")
+    print(code)
+    return code
+
 
 def write_file_from_src_to_target(src,target):
     with open(src,'r') as src_file:
@@ -347,7 +555,7 @@ def generate_const_equation(rootPackage):
         h,c = generate_const_equation(packageScope)
         h_content += h
         c_content += c
-    global_name = "_".join(rootPackage.get_global_name().split("::"))
+    global_name = rootPackage.get_global_name()
     for name,constSymbol in rootPackage.constSymbolTable.items():
         symbol_name = name if len(global_name)==0 else f"{name}_{global_name}"
         symbol_type = constSymbol.syntaxType.change_name()
@@ -362,6 +570,20 @@ def generate_const_equation(rootPackage):
             h_content += f"extern const {symbol_type} {symbol_name};\n"
             c_content += f"const {symbol_type} {symbol_name}={SyntaxExpr_generate(constSymbol.valueExpr,rootPackage,symbol_type)};\n"
     return h_content,c_content
+
+def generate_type_symbol(typeSymbol,rootPackage):
+    type_ = typeSymbol.syntaxType.type
+    for regex,func in generate_syntax_type_handlers.items():
+        if regex.match(type_):
+            return func(typeSymbol,rootPackage)
+
+def generate_type_block(rootPackage):
+    h_content = ""
+    for _,packageScope in rootPackage.childScopeTable.items():
+        h_content += generate_type_block(packageScope)
+    for _,typeSymbol in rootPackage.typeSymbolTable.items():
+        h_content += generate_type_symbol(typeSymbol,rootPackage)
+    return h_content
 
 class GenerateCode:
     def __init__(self,rootNode,mainNode,outputDir):
@@ -405,6 +627,7 @@ class GenerateCode:
         # write_file_from_src_to_target(src_file,target_file)
 
         #中间还需要写和types相关的内容
+        generate_type_block(self.rootNode)
 
         content = "#endif"
         # write_file(target_file,content,"a")
@@ -421,9 +644,81 @@ class GenerateCode:
         path_dict={"../template/macro_libmathext32.h":f"{self.outputDir}/include/macro_libmathext32.h","../template/macro_libmathext64.h":f"{self.outputDir}/include/macro_libmathext64.h"}
         for k,v in path_dict.items():
             write_file_from_src_to_target(k,v)
+
+    def generate_head_inC(self,node):
+        global_name = node.get_global_name()
+        code="typedef struct{\n"
+        for para in node.inParams:
+            code += f"{para.syntaxType.change_name()} {para.name};\n"
+        code += f"}}inC_{global_name};\n"
+        return code
     
-    def generate_main_file(self):
+    def generate_head_outC(self,node):
+        global_name = node.get_global_name()
+        code = "typedef struct{\n"
+        for para in node.outParams:
+            code += f"{para.syntaxType.change_name()} {para.name};\n"
+        for para in node.tmpParams:
+            if para.isOutput == True:
+                code += f"{para.syntaxType.change_name()} {para.name};\n"
+        code += f"}}outC_{global_name};\n"
+        return code
+
+    def generate_head_func(self,node):
+        global_name = node.get_global_name()
+        code = f'''
+        extern void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC);\n'''
+        return code
+
+    def generate_head_other_func(self,node):
+        global_name = node.get_global_name()
+        code = f'''
+        extern void {global_name}_reset(outC_{global_name} *outC);\n
+        extern void {global_name}_init(outC_{global_name} *outC);\n
+        '''
+        return code
+    
+    def generate_head_file(self,node):
+        global_name = node.get_global_name()
+        head_content=f'''
+        #ifndef _{global_name}_H_ \n
+        #define _{global_name}_H_ \n
+        #include"kcg_types.h"
+        '''
+        head_content += self.generate_head_inC(node)
+        head_content += self.generate_head_outC(node)
+        head_content += self.generate_head_func(node)
+        head_content += self.generate_head_other_func(node)
+
+        head_content += f"#endif"
+        print("==== head_content ====\n")
+        print(head_content)
+        print("=======================\n")
+
+    def generate_src_func_file(self,node):
+        return ""
+    
+    def generate_src_init(self,node):
+        return ""
+    
+    def generate_src_reset(self,node):
+        return ""
+    
+    def generate_src_file(self,node):
+        global_name = node.get_global_name()
+        src_content = f'''
+        #include "kcg_consts.h"
+        #include "{global_name}.h"
+        '''
+        src_content += self.generate_src_func_file(node)
+        src_content += self.generate_src_init(node)
+        src_content += self.generate_src_reset(node)
+
+        return src_content
+
+    def generate_node_file(self):
         pass
+    
 
 def scade_generate(root_operator):
     for k,v in root_scope.userOpTable.items():
@@ -452,6 +747,10 @@ def scade_parse(input_path:str,main_operator:str,output_path:str):
     gen = GenerateCode(root_scope,main_operator,output_path)
     # gen.generate_const_file()
     # gen.generate_main_file()
+    # gen.generate_types_file()
+    for k,v in root_scope.userOpTable.items():
+        gen.generate_head_file(v)
+        gen.generate_src_file(v)
     
     scade_generate(main_operator)
 
