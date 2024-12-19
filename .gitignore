@@ -2,7 +2,7 @@
 __pycache__/*
 .DS_Store
 grammar_file/*
-.vscode
+*/.vscode/*
 output/*
 parser.out
 parsetab.py
@@ -11,3 +11,4 @@ test_*.dot
 log.txt
 stage1_*.scade
 stage2_*.scade
+*/.idea/*
