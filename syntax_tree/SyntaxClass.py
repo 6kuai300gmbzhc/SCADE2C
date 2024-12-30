@@ -1,6 +1,7 @@
 from syntax_tree.Exceptions import *
 from collections import defaultdict, deque
 
+
 class SyntaxOperator:
     '''在Expr中的Apply_expr中的调用头部分，可以嵌套自己'''
     subtype: str
@@ -67,7 +68,7 @@ class SyntaxExpr:
 
     def add_object(self, object):
         self.objects.append(object)
-        if self.type=="Tempo_expr" and (self.subType=="PRE" or self.subType=="FBY"):return#这两个都是引用过去的变量，没有因果关系
+        if self.type == "Tempo_expr" and (self.subType == "PRE" or self.subType == "FBY"): return  # 这两个都是引用过去的变量，没有因果关系
         if isinstance(object, list):
             for expr in object:
                 if isinstance(expr, list):
@@ -161,7 +162,7 @@ class SyntaxEquation:
             s += self.type + " " + self.assertID + " : " + str(self.expr)
             return s
         if self.type == "emission": s += "emit "
-        s+=" lhs:"
+        s += " lhs:"
         s += "("
         if len(self.lhs) > 0:
             for symbol in self.lhs:
@@ -219,7 +220,8 @@ class SyntaxType:
     必须在编译时可知，并且是严格大于0
     '''
 
-    basic_type = ['bool','int8','int16','int32','int64','uint8','uint16','uint32','uint64','float32','float64','char']
+    basic_type = ['bool', 'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64', 'float32',
+                  'float64', 'char']
 
     def __init__(self, type: str) -> None:
         self.type = type
@@ -250,6 +252,7 @@ class SyntaxType:
 
     def change_name(self):
         return f'kcg_{self.type}' if self.type in self.basic_type else self.value
+
 
 class SyntaxTypeSymbol:
     """人为定义的类型变量，输入到符号表里面"""
@@ -479,7 +482,7 @@ class SyntaxScope:
     anonymousScopeCount: int = 1
     '''匿名scope计数器，给匿名的block生成名字'''
     annoymousTmpCount: int = 0
-    '''创建中间变量使用的init''' 
+    '''创建中间变量使用的init'''
     initVar: SyntaxVariableSymbol
     '''时态算子使用的init,每个作用域只有一个init'''
     tmpParams: list
@@ -512,27 +515,29 @@ class SyntaxScope:
 
     def generate_name_for_subScope(self):
         s = self.name
-        s += "^subScope^"
+        s += "_subScope_"
         s += str(self.anonymousScopeCount)
         self.anonymousScopeCount += 1
         return s
-        
+
     def get_global_name(self):
-        if self.prevScope is None or self.prevScope.name == "*global": return self.name
-        else:return self.prevScope.get_global_name()+"_"+self.name
-    
+        if self.prevScope is None or self.prevScope.name == "*global":
+            return self.name
+        else:
+            return self.prevScope.get_global_name() + "_" + self.name
+
     def set_init_var(self):
         if self.initVar == None:
-            self.initVar = SyntaxVariableSymbol(f"{self.name}_init",False,False)
-            self.initVar.isOutput=True
-            self.initVar.syntaxType=SyntaxType("bool")
-            postExpr = SyntaxExpr(type="Atom",subtype="bool_atom")
+            self.initVar = SyntaxVariableSymbol(f"{self.name}_init", False, False)
+            self.initVar.isOutput = True
+            self.initVar.syntaxType = SyntaxType("bool")
+            postExpr = SyntaxExpr(type="Atom", subtype="bool_atom")
             postExpr.add_object("true")
-            self.initVar.postExpr=postExpr
+            self.initVar.postExpr = postExpr
             self.add_tmpSymbol(self.initVar)
         return self.initVar
-    
-    def add_tmpSymbol(self,tmpSymbol):
+
+    def add_tmpSymbol(self, tmpSymbol):
         self.tmpParams.append(tmpSymbol)
 
 
@@ -615,33 +620,36 @@ class SyntaxClockedScope(SyntaxScope):
 
     def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
         return self.prevScope.get_localVariable_InThisAndPreEnv(name)
+
     def get_return_symbolTable(self):
         '''汇聚子block的返回值集合，合并起来
         如果有某个子状态没有返回语句，还要把默认值给他加上，很无语
         '''
-        output=dict()
-        for _,childScope in self.childScopeTable.items():
-            child_return_table=childScope.get_return_symbolTable()
-            for name,symbol in child_return_table.items():
+        output = dict()
+        for _, childScope in self.childScopeTable.items():
+            child_return_table = childScope.get_return_symbolTable()
+            for name, symbol in child_return_table.items():
                 if name not in output.keys():
-                    output[name]=symbol
-        for _,childScope in self.childScopeTable.items():
-            #再来一遍，这次把缺少的默认表达式补上去
-            child_return_table=childScope.get_return_symbolTable()
-            for name,symbol in output.items():
-                if name in child_return_table.keys():continue#有了就不管了
-                equation=SyntaxEquation(type="simple_equation", lhs=[name],lineno=-1)
-                if not symbol.defaultExpr:#没有默认表达式就报错
+                    output[name] = symbol
+        for _, childScope in self.childScopeTable.items():
+            # 再来一遍，这次把缺少的默认表达式补上去
+            child_return_table = childScope.get_return_symbolTable()
+            for name, symbol in output.items():
+                if name in child_return_table.keys(): continue  # 有了就不管了
+                equation = SyntaxEquation(type="simple_equation", lhs=[name], lineno=-1)
+                if not symbol.defaultExpr:  # 没有默认表达式就报错
                     if symbol.lastExpr:
                         equation.set_expr(symbol.lastExpr)
                         print(equation)
                         childScope.add_equation(equation)
-                    else:raise InitializationErrorException(name)
+                    else:
+                        raise InitializationErrorException(name)
                 else:
                     equation.set_expr(symbol.defaultExpr)
                     print(equation)
                     childScope.add_equation(equation)
         return output
+
     def scope2str(self, depth):
         s = "    " * depth
         s += "\033[31m" + self.type + " as "
@@ -676,21 +684,29 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     '''存放局部变量，变量名字->SyntaxVariableSymbol'''
     returnSymbolsTable: dict
     '''存放了当前作用域修改的，外部作用域的变量，变量名字->SyntaxVariableSymbol'''
+
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
         self.signalSymbolSet = set()
         self.localSymbolTable = dict()
-        self.returnSymbolsTable=dict()
+        self.returnSymbolsTable = dict()
+
     def add_equation(self, input_equation: SyntaxEquation):
         # 直接放进去，遍历完所有语句之后再进行排序
         self.equations.append(input_equation)
-        #更新返回列表
+        # 更新返回列表
         for lhs in input_equation.lhs:
-            if lhs=="_": return
-            if "'" not in lhs and not self.get_localVariable(lhs):
-                symbol=self.get_localVariable_InThisAndPreEnv(lhs)
-                if not symbol:raise UnknownIdentifierException(lhs)
-                self.returnSymbolsTable[lhs]=symbol
+            if lhs == "_": return
+
+            if input_equation.type == "emission":
+                # 信号部分单独处理一下,找不到就报错
+                if not self.have_signal_InThisAndPreEnv(lhs):
+                    raise UnknownIdentifierException(lhs + " in " + str(input_equation))
+            elif "'" not in lhs and not self.get_localVariable(lhs):
+                # 当前作用域找不到这个变量，但是上面的作用域找到了，说明是一个要返回的变量
+                symbol = self.get_localVariable_InThisAndPreEnv(lhs)
+                if not symbol: raise UnknownIdentifierException(input_equation.type+" "+lhs + " in " + str(input_equation))
+                self.returnSymbolsTable[lhs] = symbol
 
     def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:
         '''在当前作用域找局部变量'''
@@ -699,22 +715,38 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         else:
             return self.localSymbolTable[name]
 
-    def get_localVariable_InThisAndPreEnv(self, name: str)->SyntaxVariableSymbol or None:
+    def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
         '''递归的找局部变量'''
         if name in self.localSymbolTable.keys():
             return self.localSymbolTable[name]
         else:
             return self.prevScope.get_localVariable_InThisAndPreEnv(name)
 
+    def have_signal_InThisAndPreEnv(self, name: str) -> bool:
+        '''递归的校验有没有这个signal'''
+        if self.type == "function" or self.type == "node":
+            # 上层不可能有signal了，不再往上层寻找
+            return name in self.signalSymbolSet
+        # 上层还能接着找
+        if name in self.signalSymbolSet:
+            return True
+        else:
+            if self.prevScope.type == "automaton" or \
+                    self.prevScope.type == "if_block" or \
+                    self.prevScope.type == "match_block":
+                # 上层是automaton或者control_block就跳过这一层
+                return self.prevScope.prevScope.have_signal_InThisAndPreEnv(name)
+            return self.prevScope.have_signal_InThisAndPreEnv(name)
+
     def generate_name_for_tmp(self):
         '''生成一个没有被用过的变量名，用来代码生成'''
-        count=1
-        name=f"tmp_{str(count)}"
-        while self.get_localVariable_InThisAndPreEnv(name) is not None:
-            count+=1
-            name=f"tmp_{str(count)}"
-        return name
+        count = 1
 
+        name = f"{'_'.join(self.get_global_name().split('::'))}tmp_{str(count)}"
+        while self.get_localVariable_InThisAndPreEnv(name) is not None:
+            count += 1
+            name = f"{'_'.join(self.get_global_name().split('::'))}tmp_{str(count)}"
+        return name
 
     def var_change_name(self, name):
         symbol = self.get_localVariable_InThisAndPreEnv(name)
@@ -727,6 +759,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 return symbol.name
         else:
             raise ValueError(f"var_change_name error , name:{name}")
+
     def get_return_symbolTable(self):
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
         return self.returnSymbolsTable
@@ -839,7 +872,7 @@ class SyntaxArrow:
     '''
     target: str
     '''type为restart，resume有效，记录了对应的ID名字'''
-    targetIndex: int=0
+    targetIndex: int = 0
     '''type为restart，resume有效，记录了这个转移的序号，每个state单独排序
     只有强转移有这个序号，其他的就是0
     '''
@@ -847,7 +880,6 @@ class SyntaxArrow:
     '''type为if时有效，保存了存有(SyntaxExpr,SyntaxArrow)的列表，对应语法的if和elsif部分'''
     elseExpr: SyntaxArrow = None
     '''type为if时可能有效，不一定会有else语句，若不为None则存储了else对应的语句'''
-
 
     def __init__(self, type: str, target: str = None, ifExpr: list = None, elseExpr: SyntaxArrow = None):
         self.type = type
@@ -860,28 +892,29 @@ class SyntaxArrow:
     def set_action(self, action: str):
         self.action = action
 
-    def get_strong_transfer_arrows(self)->list[SyntaxArrow]:
+    def get_strong_transfer_arrows(self) -> list[SyntaxArrow]:
         """递归的从arrow里面找目标转移状态"""
-        if self.type!="if":
+        if self.type != "if":
             return [self]
-        out=list()
+        out = list()
         for expr in self.ifExprList:
-            out+=expr[1].get_strong_transfer_arrows()
+            out += expr[1].get_strong_transfer_arrows()
         if self.elseExpr:
-            out+=(self.elseExpr.get_strong_transfer_arrows())
+            out += (self.elseExpr.get_strong_transfer_arrows())
         return out
-    def set_index(self,index:int)->int:
+
+    def set_index(self, index: int) -> int:
         """给这个arrow和他包含的arrow都设置targetIndex，返回下一个arrow的index序号"""
-        if self.type!="if":
+        if self.type != "if":
             '''递归终点'''
-            self.targetIndex=index
-            return index+1
+            self.targetIndex = index
+            return index + 1
         else:
             for ifList in self.ifExprList:
-                arrow=ifList[1]
-                index=arrow.set_index(index)
+                arrow = ifList[1]
+                index = arrow.set_index(index)
             if self.elseExpr:
-                index=self.elseExpr.set_index(index)
+                index = self.elseExpr.set_index(index)
             return index
 
     def __repr__(self):
@@ -893,13 +926,13 @@ class SyntaxArrow:
             s += "action:"
             s += self.action + " "
         if self.type != "if":
-            s += str(self.targetIndex)+" "+self.type + " " + self.target
+            s += str(self.targetIndex) + " " + self.type + " " + self.target
         else:
-            s+='\n'
+            s += '\n'
             for Ifexpr in self.ifExprList:
-                s += "    "*depth+"if " + str(Ifexpr[0]) + " " + Ifexpr[1].arrow2str(depth=depth + 1)+"\n"
+                s += "    " * depth + "if " + str(Ifexpr[0]) + " " + Ifexpr[1].arrow2str(depth=depth + 1) + "\n"
             if self.elseExpr:
-                s += "    "*depth+"else "+self.elseExpr.arrow2str(depth=depth + 1)
+                s += "    " * depth + "else " + self.elseExpr.arrow2str(depth=depth + 1)
         return s
 
 
@@ -909,7 +942,7 @@ class SyntaxState(SyntaxDataDefScope):
     isFinal: bool = False
     type: str
     '''automaton_state'''
-    name:str
+    name: str
     unlessTransitions: list
     '''强转移列表,保存了存有（SyntaxExpr，SyntaxArrow）的列表'''
     untilTransitions: list
@@ -926,28 +959,30 @@ class SyntaxState(SyntaxDataDefScope):
         self.synchroArrow = synchroArrow
 
     def set_unlessTransitions(self, unlessTransitions: list):
-        index=1
+        index = 1
         for transition in unlessTransitions:
-            arrow=transition[1]
-            index=arrow.set_index(index)
+            arrow = transition[1]
+            index = arrow.set_index(index)
         self.unlessTransitions = unlessTransitions
 
     def set_untilTransitions(self, untilTransitions: list):
         self.untilTransitions = untilTransitions
 
-    def get_strong_transfer_arrows(self)->list[SyntaxArrow]:
+    def get_strong_transfer_arrows(self) -> list[SyntaxArrow]:
         """获取这个状态可能抵达的其他状态的arrow，只有强转移"""
-        out=list()
+        out = list()
         for unless in self.unlessTransitions:
-            out+=unless[1].get_strong_transfer_arrows()
+            out += unless[1].get_strong_transfer_arrows()
         return out
-    def get_enum_name(self)->str:
+
+    def get_enum_name(self) -> str:
         """获取这个状态在代码生成中的枚举类型名字"""
-        s="SSM_st_"
-        global_names=self.get_global_name().split("::")
-        global_name="_".join(global_names[1:])
-        s+=global_name
+        s = "SSM_st_"
+        global_names = self.get_global_name().split("::")
+        global_name = "_".join(global_names[1:])
+        s += global_name
         return s
+
     def __repr__(self):
         return self.state2str(0)
 
@@ -997,38 +1032,46 @@ class SyntaxAutomaton(SyntaxScope):
 
     def add_state(self, state: SyntaxState):
         self.stateTable[state.name] = state
-    def get_init_state(self)->SyntaxState:
-        init_state=None
-        for name,state in self.stateTable.items():
+
+    def get_init_state(self) -> SyntaxState:
+        init_state = None
+        for name, state in self.stateTable.items():
             if state.isInitial:
-                if init_state is None:init_state=state
-                else:raise ManyInitialStateException(self.name+"有大于1个初始状态了")
-        if init_state is None: raise NoInitialStateException(self.name+"没有初始状态")
-        else:return init_state
+                if init_state is None:
+                    init_state = state
+                else:
+                    raise ManyInitialStateException(self.name + "有大于1个初始状态了")
+        if init_state is None:
+            raise NoInitialStateException(self.name + "没有初始状态")
+        else:
+            return init_state
+
     def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
         return self.prevScope.get_localVariable_InThisAndPreEnv(name)
+
     def get_return_symbolTable(self):
         '''汇聚子block的返回值集合，合并起来
         如果有某个子状态没有返回语句，还要把默认值给他加上，很无语
         '''
-        output=dict()
-        for _,childScope in self.childScopeTable.items():
-            child_return_table=childScope.get_return_symbolTable()
-            for name,symbol in child_return_table.items():
+        output = dict()
+        for _, childScope in self.childScopeTable.items():
+            child_return_table = childScope.get_return_symbolTable()
+            for name, symbol in child_return_table.items():
                 if name not in output.keys():
-                    output[name]=symbol
-        for _,childScope in self.childScopeTable.items():
-            #再来一遍，这次把缺少的默认表达式补上去
-            child_return_table=childScope.get_return_symbolTable()
-            for name,symbol in output.items():
-                if name in child_return_table.keys():continue#有了就不管了
-                equation=SyntaxEquation(type="simple_equation", lhs=[name],lineno=-1)
-                if not symbol.defaultExpr:#没有默认表达式就报错
+                    output[name] = symbol
+        for _, childScope in self.childScopeTable.items():
+            # 再来一遍，这次把缺少的默认表达式补上去
+            child_return_table = childScope.get_return_symbolTable()
+            for name, symbol in output.items():
+                if name in child_return_table.keys(): continue  # 有了就不管了
+                equation = SyntaxEquation(type="simple_equation", lhs=[name], lineno=-1)
+                if not symbol.defaultExpr:  # 没有默认表达式就报错
                     raise InitializationErrorException(name)
                 else:
                     equation.set_expr(symbol.defaultExpr)
                     childScope.add_equation(equation)
         return output
+
     def __repr__(self):
         return self.scope2str(0)
 
@@ -1063,7 +1106,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''输入的size参数，其中每个值都是const'''
     inParams: list  # 存SyntaxVariableSymbol
     '''输入参数，是一个变量声明列表'''
-    outParams: list # 存SyntaxVariableSymbol
+    outParams: list  # 存SyntaxVariableSymbol
     '''输出参数，是一个变量声明列表'''
     # tmpParams: list # 存SyntaxVariableSymbol
     # '''中间参数，是一个变量声明列表'''
@@ -1084,14 +1127,15 @@ class SyntaxUserOp(SyntaxDataDefScope):
 
     def set_sizeDecl(self, sizeDecl: list):
         self.sizeDecl = sizeDecl
+
     def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:
         '''在当前作用域找局部变量，包括输入输出参数'''
         if name not in self.localSymbolTable.keys():
             for symbol in self.inParams:
-                if name==symbol.name:
+                if name == symbol.name:
                     return symbol
             for symbol in self.outParams:
-                if name==symbol.name:
+                if name == symbol.name:
                     return symbol
             for symbol in self.tmpParams:
                 if name == symbol.name:
@@ -1100,10 +1144,10 @@ class SyntaxUserOp(SyntaxDataDefScope):
         else:
             return self.localSymbolTable[name]
 
-    def get_localVariable_InThisAndPreEnv(self, name: str)->SyntaxVariableSymbol or None:
+    def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
         '''递归的找局部变量，包括输入输出参数'''
-        return self.get_localVariable(name)#上层不可能有变量了
-    
+        return self.get_localVariable(name)  # 上层不可能有变量了
+
     def userOp2str(self, depth=0):
         s = "    " * depth
         s += "\033[31muserOpScope as " + self.type + " "
@@ -1147,7 +1191,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         s += self.childScope2str(depth=depth + 1)
         return s
 
-    def var_change_name(self,name):
+    def var_change_name(self, name):
         symbol = self.get_localVariable(name)
         if symbol != None:
             if symbol.isOutput:
@@ -1231,7 +1275,7 @@ class SyntaxPackageScope(SyntaxScope):
             s += symbol.userOp2str(depth=depth + 1)
         s += "    " * depth + "\033[32mchildScope:\033[0m\n"
         for _, scope in self.childScopeTable.items():
-            if scope.type=="package":s += scope.package2str(depth=depth + 1)
+            if scope.type == "package": s += scope.package2str(depth=depth + 1)
         return s
 
     def __repr__(self):
@@ -1252,9 +1296,7 @@ class SyntaxPackageScope(SyntaxScope):
     def add_userOp(self, userOp: SyntaxUserOp) -> None:
         self.userOpTable[userOp.name] = userOp
         # self.childScopeTable[userOp.name]=userOp
-    
-    def var_change_name(self,name):
-        #generate_id_expr_path_id函数中syntaxUserOp可能为UserOp，此时需要添加inC，outC，可能是package，为了防止package情况下，没有var_change_name。
+
+    def var_change_name(self, name):
+        # generate_id_expr_path_id函数中syntaxUserOp可能为UserOp，此时需要添加inC，outC，可能是package，为了防止package情况下，没有var_change_name。
         return name
-
-

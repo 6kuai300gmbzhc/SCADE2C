@@ -20,7 +20,7 @@ def get_automaton_full_name(automaton: SyntaxAutomaton) -> str:
 
 
 def get_state_nxt(automaton: SyntaxAutomaton) -> str:
-    """状态枚举类型声明的变量名，就是outc里面的变量名字,即这个周期处于激活态的状态"""
+    """状态枚举类型声明的变量名，就是outC里面的变量名字,即这个周期处于激活态的状态"""
     return f"{get_automaton_full_name(automaton)}_state_nxt"
 
 
@@ -109,7 +109,7 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
     if arrow.type != "if":
         # 这里停止递归
         target_state = automaton.get_childScope(arrow.target)
-        code += f"{'   ' * depth}outc->{get_state_nxt(automaton)} = {get_state_enum_name(target_state)};\n"
+        code += f"{'   ' * depth}outC->{get_state_nxt(automaton)} = {get_state_enum_name(target_state)};\n"
         #以后还会用到他们的
         # if arrow.type=="resume":
         #     code+=f"{'   ' * depth}{get_reset_act(automaton)} = false;\n"
@@ -183,7 +183,7 @@ def generate_state_weak_transitions(automaton: SyntaxAutomaton, state: SyntaxSta
     code = ""
     #这里要处理一下由强转移来的情况，加一层判断
     code+=f"{'   ' * (depth)}if ({get_fired_strong(automaton)} != {get_no_trans(automaton)}){{\n" \
-          f"{'   ' * (depth+1)}outc->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n" \
+          f"{'   ' * (depth+1)}outC->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n" \
           f"{'   ' * (depth)}}}\n" \
           f"{'   ' * (depth)}else{{\n"#这样把下面的代码给接上
 
@@ -193,10 +193,10 @@ def generate_state_weak_transitions(automaton: SyntaxAutomaton, state: SyntaxSta
         # else的情况要手动添加
         code += generate_arrow_weak(tmp_arrow, state, automaton, depth+1)
         code += f"{'   ' * (depth+1)}else{{\n"
-        code += f"{'   ' * (depth + 2)}outc->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n"
+        code += f"{'   ' * (depth + 2)}outC->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n"
         code += f"{'   ' * (depth+1)}}}\n"
     else:
-        code += f"{'   ' * (depth+1)}outc->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n"
+        code += f"{'   ' * (depth+1)}outC->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n"
 
     code+=f"{'   ' * (depth)}}}\n"
 
@@ -221,19 +221,19 @@ def generate_body(automaton: SyntaxAutomaton, depth: int = 1) -> str:
     #临时的变量声明
 
     # 生成状态和转移枚举部分，然后开始强迁移部分的代码生成
-    switch_state = f"switch (outc->{get_state_nxt(automaton)}){{\n"  # 状态枚举，做强转移，处理reset_nxt（如果有）
+    switch_state = f"switch (outC->{get_state_nxt(automaton)}){{\n"  # 状态枚举，做强转移，处理reset_nxt（如果有）
     for state_name, state in automaton.stateTable.items():
         switch_state += f"{'   ' * depth}case {get_state_enum_name(state)}:\n"
         switch_state += generate_state_strong_transitions(automaton, state, depth + 1)
         switch_state += f"{'   ' * (depth + 1)}break;\n"
     switch_state += "   default:break;\n}\n"
 
-
     # 行动枚举，执行当前状态下的代码，然后做弱转移
-    switch_act = f"switch (outc->{get_state_act(automaton)}){{\n"
+    switch_act = f"switch ({get_state_act(automaton)}){{\n"
     for state_name, state in automaton.stateTable.items():
         switch_act += f"{'   ' * depth}case {get_state_enum_name(state)}:\n"
 
+        #这里添加代码
         switch_act += generate_state_weak_transitions(automaton, state, depth + 1)
         switch_act += f"{'   ' * (depth + 1)}break;\n"
     switch_act += "   default:break;\n}\n"
@@ -247,14 +247,14 @@ def generate_init(automaton: SyntaxAutomaton) -> str:
     """生成对应的init函数
     只有第一层的状态机有它的init函数，嵌套的情况则不一样
     """
-    return f"outc->{get_automaton_state_type_name(automaton)} = {get_state_enum_name(automaton.get_init_state())};"
+    return f"outC->{get_state_nxt(automaton)} = {get_state_enum_name(automaton.get_init_state())};"
 
 
 def generate_reset(automaton: SyntaxAutomaton) -> str:
     """生成对应的reset函数
     只有第一层的状态机有它的rest函数，嵌套的情况则不一样
     """
-    return f"outc->{get_automaton_state_type_name(automaton)} = {get_state_enum_name(automaton.get_init_state())};"
+    return f"outC->{get_state_nxt(automaton)} = {get_state_enum_name(automaton.get_init_state())};"
 
 
 def generate_head(automaton: SyntaxAutomaton) -> str:
@@ -277,9 +277,9 @@ def generate_type(automaton: SyntaxAutomaton) -> str:
         for arrow in arrow_list:
             transfer_enum += f"   {get_trans(state, arrow, automaton)},\n"
             transfer_count += 1
-    transfer_enum = transfer_enum[:-2] + "\n} " + get_automaton_transfer_type_name(automaton) + "\n"
+    transfer_enum = transfer_enum[:-2] + "\n} " + get_automaton_transfer_type_name(automaton) + ";\n"
     state_enum = f"typedef enum kcg_tag_SSM_ST_{automaton_name} {{\n"
     for name, state in automaton.stateTable.items():
         state_enum += f"   {get_state_enum_name(state)},\n"
-    state_enum = state_enum[:-2] + "\n}  " + get_automaton_state_type_name(automaton) + "\n"
+    state_enum = state_enum[:-2] + "\n}  " + get_automaton_state_type_name(automaton) + ";\n"
     return transfer_enum + state_enum
