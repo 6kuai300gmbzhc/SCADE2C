@@ -253,6 +253,13 @@ class SyntaxType:
     def change_name(self):
         return f'kcg_{self.type}' if self.type in self.basic_type else self.value
 
+    def generate_init_expr(self):
+        '''生成这个类型变量的初始值，给init函数准备的'''
+        if self.type in self.basic_type:
+            return f"kcg_lit_{self.type}(0)"
+        else:
+            return ""  # 我也不知道应该生成什么，相信后人的智慧
+
 
 class SyntaxTypeSymbol:
     """人为定义的类型变量，输入到符号表里面"""
@@ -705,7 +712,8 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             elif "'" not in lhs and not self.get_localVariable(lhs):
                 # 当前作用域找不到这个变量，但是上面的作用域找到了，说明是一个要返回的变量
                 symbol = self.get_localVariable_InThisAndPreEnv(lhs)
-                if not symbol: raise UnknownIdentifierException(input_equation.type+" "+lhs + " in " + str(input_equation))
+                if not symbol: raise UnknownIdentifierException(
+                    input_equation.type + " " + lhs + " in " + str(input_equation))
                 self.returnSymbolsTable[lhs] = symbol
 
     def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:

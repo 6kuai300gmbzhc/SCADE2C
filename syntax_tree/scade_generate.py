@@ -6,9 +6,8 @@ from functools import wraps
 lhs_type = ""
 
 import syntax_tree.automaton_generate as automaton_generate
-class GenerateCode:
-    def __init__(self,mainNode):
-        self.mainNode = mainNode
+global code_generator
+#一个全局的GenerateCode类，用来随时加代码进去
 class GenEqu:
     expr: str
     preEquations: list
@@ -281,7 +280,8 @@ def generate_id_expr_path_id(syntax_id_expr_objects,syntaxUserOp,genEqu):
 
 @register_id_expr_handler("singlequoteLv6id")
 def generate_id_expr_single_quote_lv6id(syntax_id_expr_objects,syntaxUserOp,genEqu):
-    return ""
+    #把signal的第一个字符也就是'去掉
+    return syntax_id_expr_objects[0][1:]
 
 @register_id_expr_handler("lastSinglequoteLv6id")
 def generate_id_expr_last_single_quote_lv6id(syntax_id_expr_objects,syntaxUserOp,genEqu):
@@ -435,24 +435,14 @@ def generate_userOp_control_block(syntaxEquation:SyntaxEquation,syntaxUserOp:Syn
     print("this is control_block",syntaxEquation.controlBlockID)
     if control_block.type=="automaton":
 
-        print("TYPE:")
-        print(automaton_generate.generate_type(control_block))
+        code_generator.add_code_to_types_file(automaton_generate.generate_type(control_block))
         print("HEAD:")
         print(automaton_generate.generate_head(control_block))
         print("INIT:")
         print(automaton_generate.generate_init(control_block))
-        # for name, state in control_block.childScopeTable.items():
-        #     for name, scope in state.childScopeTable.items():
-        #         if scope.type == "automaton":
-        #             print(automaton_generate.generate_body(scope))
-                    # print("TYPE:")
-                    # print(automaton_generate.generate_type(scope))
-                    # print("HEAD:")
-                    # print(automaton_generate.generate_head(scope))
-                    # print("INIT:")
-                    # print(automaton_generate.generate_init(scope))
+
         return automaton_generate.generate_body(control_block)
-    else: return ""
+    else: return ""#这里是if和elseblock的部分
 
 def SyntaxUserOp_generate(syntaxUserOp):
     code = ""
@@ -623,23 +613,18 @@ class GenerateCode:
     def __init__(self,rootNode,mainNode,outputDir):
         self.rootNode=rootNode
         self.mainNode = mainNode
-        # if not os.path.isdir(self.outputDir):
-        #     os.makedirs(self.outputDir)
+        self.outputDir=outputDir
+        if not os.path.isdir(self.outputDir):
+            os.makedirs(self.outputDir)
         mainNode = self.mainNode.split("::")
         self.outputDir = f"{outputDir}/{mainNode[-1]}" if len(mainNode) == 1 else f"{outputDir}/{mainNode[-1]}_{'_'.join(mainNode[:-1])}"
-        # os.makedirs(f"{self.outputDir}/src")
-        # os.makedirs(f"{self.outputDir}/include")
+        if not os.path.exists(f"{self.outputDir}/src"):os.makedirs(f"{self.outputDir}/src")
+        if not os.path.exists(f"{self.outputDir}/include"): os.makedirs(f"{self.outputDir}/include")
 
     def generate_const_file(self):
         #只要写了const_block无论是否使用都会使用,从root_node开始深度遍历
-        c_content = '''
-        #include "kcg_consts.h"
-        '''
-        h_content = ''''
-        #ifndef _KCG_CONSTS_H_\n  
-        #define _KCG_CONSTS_H_\n
-        #include "kcg_types.h"\n
-        '''
+        c_content = '''#include "kcg_consts.h"'''
+        h_content = '''#ifndef _KCG_CONSTS_H_\n#define _KCG_CONSTS_H_\n#include "kcg_types.h"\n'''
 
         h,c = generate_const_equation(self.rootNode)
         h_content += h
@@ -650,13 +635,16 @@ class GenerateCode:
         # print("==== c_content ====\n",c_content)
         # write_file(f"{self.outputDir}/include/kcg_consts.h",h_content,"w")
         # write_file(f"{self.outputDir}/src/kcg_consts.c",c_content,"w")
-
+        with open("%s/include/kcg_consts.h"%(self.outputDir),'w') as f:
+            f.write(h_content)
+        with open("%s/src/kcg_consts.c"%(self.outputDir),'w') as f:
+            f.write(c_content)
 
     def generate_sensor_file(self):
         pass
 
     def generate_types_file(self):
-        src_file = "../template/kcg_types.h"
+        src_file = "./template/kcg_types.h"
         target_file = f"{self.outputDir}/include/kcg_types.h"
         # write_file_from_src_to_target(src_file,target_file)
 
@@ -664,7 +652,16 @@ class GenerateCode:
         generate_type_block(self.rootNode)
 
         content = "#endif"
-        # write_file(target_file,content,"a")
+        with open(target_file, 'w') as target:
+            with open(src_file,'r') as src:
+                target.write(src.read())
+
+    def add_code_to_types_file(self,code:str):
+        target_file=f"{self.outputDir}/include/kcg_types.h"
+        with open(target_file,"a") as target:
+            target.write(code)
+
+    # write_file(target_file,content,"a")
 
     def generate_assign_file(self):
         src_file = "../template/kcg_assign.h"
@@ -675,7 +672,8 @@ class GenerateCode:
         pass
 
     def generate_macro_libmathext_file(self):
-        path_dict={"../template/macro_libmathext32.h":f"{self.outputDir}/include/macro_libmathext32.h","../template/macro_libmathext64.h":f"{self.outputDir}/include/macro_libmathext64.h"}
+        path_dict={"../template/macro_libmathext32.h":f"{self.outputDir}/include/macro_libmathext32.h",
+                   "../template/macro_libmathext64.h":f"{self.outputDir}/include/macro_libmathext64.h"}
         for k,v in path_dict.items():
             write_file_from_src_to_target(k,v)
 
@@ -696,39 +694,39 @@ class GenerateCode:
             if para.isOutput == True:
                 print("para ",para.name)
                 code += f"{para.syntaxType.change_name()} {para.name};\n"
+        for name,child_scope in node.childScopeTable.items():
+            if child_scope.type=="automaton":
+                code+=automaton_generate.generate_head(child_scope)
         code += f"}}outC_{global_name};\n"
         return code
 
     def generate_head_func(self,node):
         global_name = node.get_global_name()
-        code = f'''
-        extern void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC);\n'''
+        code = f'''extern void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC);\n'''
         return code
 
     def generate_head_other_func(self,node):
         global_name = node.get_global_name()
-        code = f'''
-        extern void {global_name}_reset(outC_{global_name} *outC);\n
-        extern void {global_name}_init(outC_{global_name} *outC);\n
-        '''
+        code = f"extern void {global_name}_reset(outC_{global_name} *outC);\n" \
+               f"extern void {global_name}_init(outC_{global_name} *outC);\n"
         return code
 
     def generate_head_file(self,node):
         global_name = node.get_global_name()
-        head_content=f'''
-        #ifndef _{global_name}_H_ \n
-        #define _{global_name}_H_ \n
-        #include"kcg_types.h"
-        '''
+        head_content=f'#ifndef _{global_name}_H_\n#define _{global_name}_H_\n#include"kcg_types.h"\n'
         head_content += self.generate_head_inC(node)
         head_content += self.generate_head_outC(node)
         head_content += self.generate_head_func(node)
         head_content += self.generate_head_other_func(node)
 
         head_content += f"#endif"
-        print("==== head_content ====\n")
-        print(head_content)
-        print("=======================\n")
+        # print("==== head_content ====\n")
+        # print(head_content)
+        # print("=======================\n")
+        target_file = f"{self.outputDir}/include/{global_name}.h"
+        with open(target_file,"w") as target:
+            target.write(head_content)
+
 
     def generate_src_func_file(self,node,body_content):
         global_name = node.get_global_name()
@@ -752,29 +750,46 @@ class GenerateCode:
         src_content += body_content
         #init,pre等的后处理语句
         src_content += post_content
-        src_content += f"}}"
+        src_content += f"}}\n"
         print("==== src_content ====\n")
         print(src_content)
         print("======================")
         return src_content
 
     def generate_src_init(self,node):
-        return ""
+        global_name = node.get_global_name()
+        code = "#ifndef KCG_USER_DEFINED_INIT\n" \
+               f"void {global_name}_init(outC_{global_name} *outC)\n" \
+               "{\n"
+        #给每个outC里面的变量赋值，不包括状态机的部分
+        for para in node.outParams:
+            code += f"outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
+        for para in node.tmpParams:
+            if para.isOutput == True:
+                print("para ",para.name)
+                code += f"outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
+
+        #给状态机设置初始状态
+        for name, child_scope in node.childScopeTable.items():
+            if child_scope.type == "automaton":
+                code += automaton_generate.generate_init(child_scope)+"\n"
+        code+="}\n" \
+              "#endif\n"
+        return code
 
     def generate_src_reset(self,node):
         return ""
 
     def generate_src_file(self,node,body_content):
         global_name = node.get_global_name()
-        src_content = f'''
-        #include "kcg_consts.h"
-        #include "{global_name}.h"
-        '''
+        src_content = f'''#include "kcg_consts.h"\n#include "{global_name}.h"\n'''
         src_content += self.generate_src_func_file(node,body_content)
         src_content += self.generate_src_init(node)
         src_content += self.generate_src_reset(node)
 
-        return src_content
+        target_file = f"{self.outputDir}/src/{global_name}.c"
+        with open(target_file, "w") as target:
+            target.write(src_content)
 
     def generate_node_file(self,node):
         body_content = SyntaxUserOp_generate(node)
@@ -807,15 +822,18 @@ def scade_parse(input_path:str,main_operator:str,output_path:str):
     nodes = parser.parse(strs, lexer=scade_lexer)
 
     gen = GenerateCode(root_scope,main_operator,output_path)
-    # gen.generate_const_file()
+    gen.generate_const_file()
     # gen.generate_main_file()
-    # gen.generate_types_file()
+    gen.generate_types_file()
+    global code_generator
+    code_generator=gen
     for k,v in root_scope.userOpTable.items():
         gen.generate_node_file(v)
         # gen.generate_head_file(v)
         # gen.generate_src_file(v)
 
     # scade_generate(main_operator)
+    gen.add_code_to_types_file("#endif\n")  # 结束
 
 
 if __name__ == "__main__":

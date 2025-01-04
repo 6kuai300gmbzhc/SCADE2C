@@ -63,9 +63,9 @@ def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton
         code += f"{'   ' * depth}{get_state_act(automaton)} = {get_state_enum_name(target_state)};\n"
         code += f"{'   ' * depth}{get_fired_strong(automaton)} = {get_trans(from_state, arrow, automaton)};\n"
         if arrow.type=="resume":
-            code+=f"{'   ' * depth}{get_reset_act(automaton)} = false;\n"
+            code+=f"{'   ' * depth}{get_reset_act(automaton)} = kcg_false;\n"
         else:
-            code += f"{'   ' * depth}{get_reset_act(automaton)} = true;\n"
+            code += f"{'   ' * depth}{get_reset_act(automaton)} = kcg_true;\n"
         return code
     else:
         # 这里开始递归
@@ -165,12 +165,12 @@ def generate_state_strong_transitions(automaton: SyntaxAutomaton, state: SyntaxS
         code += f"{'   ' * (depth)}else{{\n"
         code += f"{'   ' * (depth + 1)}{get_state_act(automaton)} = {get_state_enum_name(state)};\n" \
                 f"{'   ' * (depth + 1)}{get_fired_strong(automaton)} = {get_no_trans(automaton)};\n"
-        code += f"{'   ' * (depth + 1)}{get_reset_act(automaton)} = false;\n"
+        code += f"{'   ' * (depth + 1)}{get_reset_act(automaton)} = kcg_false;\n"
         code += f"{'   ' * (depth)}}}\n"
     else:
         code += f"{'   ' * (depth)}{get_state_act(automaton)} = {get_state_enum_name(state)};\n" \
                 f"{'   ' * (depth)}{get_fired_strong(automaton)} = {get_no_trans(automaton)};\n"
-        code += f"{'   ' * (depth)}{get_reset_act(automaton)} = false;\n"
+        code += f"{'   ' * (depth)}{get_reset_act(automaton)} = kcg_false;\n"
 
     return code
 
