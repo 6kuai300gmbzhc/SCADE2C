@@ -528,7 +528,9 @@ class SyntaxScope:
         return s
 
     def get_global_name(self):
-        if self.prevScope is None or self.prevScope.name == "*global":
+        if self.prevScope is None:#是global
+            return "global"
+        elif self.prevScope.name == "*global":
             return self.name
         else:
             return self.prevScope.get_global_name() + "_" + self.name
@@ -766,7 +768,9 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             else:
                 return symbol.name
         else:
-            raise ValueError(f"var_change_name error , name:{name}")
+            return name
+            # raise ValueError(f"var_change_name error , name:{name}")
+            #todo 让其无条件通过，考虑到有枚举类型的情况
 
     def get_return_symbolTable(self):
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
@@ -1198,18 +1202,6 @@ class SyntaxUserOp(SyntaxDataDefScope):
         s += self.equations2str(depth=depth + 1)
         s += self.childScope2str(depth=depth + 1)
         return s
-
-    def var_change_name(self, name):
-        symbol = self.get_localVariable(name)
-        if symbol != None:
-            if symbol.isOutput:
-                return f"outC->{symbol.name}"
-            elif symbol.isInput:
-                return f"inC->{symbol.name}"
-            else:
-                return symbol.name
-        else:
-            raise ValueError(f"var_change_name error , name:{name}")
 
     def __repr__(self):
         return self.userOp2str()
