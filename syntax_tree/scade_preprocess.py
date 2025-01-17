@@ -571,6 +571,7 @@ def p_control_block(p):
     '''Control_block : Clocked_block Return
      | State_machine Return'''
     global cur_scope
+    cur_scope.hasInternalState_InThisAndPreEnv()
     lhs=cur_scope.get_childScope(p[1]).get_return_symbolTable()
     #检查ruturn的变量是否符合要求，即显示返回的变量里面有没有lhs以外的东西
     for symbol_name in p[2]:
@@ -625,17 +626,15 @@ def p_state_machine_1(p):
 
 
 def p_state_decl(p):  # 一个state就是一个子作用域，注意切换作用域
-    '''State_decl : Before_state_data_def State_data_def State_decl_4'''
+    '''State_decl : Before_state_data_def State_decl_3 State_data_def State_decl_4'''
 
 
 def p_before_state_data_def(p):  # 切换作用域
-    '''Before_state_data_def : State_decl_1 State_decl_2 STATE State_Lv6id State_decl_3'''
+    '''Before_state_data_def : State_decl_1 State_decl_2 STATE State_Lv6id'''
     global cur_scope
     state = SyntaxState(type="automaton_state", name=p[4].value, prevscope=cur_scope, visibility="public")
     state.isInitial = p[1] is not None
     state.isFinal = p[2] is not None
-    if p[5]:
-        state.set_unlessTransitions(p[5])
     cur_scope.add_childScope(state)
     cur_scope.add_state(state)
     cur_scope = state
@@ -669,8 +668,11 @@ def p_state_decl_3(p):
     | empty'''
     if len(p) != 2:
         p[0] = p[2]
+        global cur_scope
+        cur_scope.set_unlessTransitions(p[2])
     else:
         p[0] = None
+
 
 
 def p_state_decl_4(p):  # 在这里恢复作用域到automaton
@@ -1036,6 +1038,8 @@ def p_tempo_expr(p):
     | Expr TIMES Expr
     | Expr WHEN Clock_expr
     | MERGE LPARENTHESE Expr SEMICOLON List Tempo_expr_1 RPARENTHESE'''
+    global cur_scope
+    cur_scope.hasInternalState_InThisAndPreEnv()
     if len(p) == 3:
         p[0] = SyntaxExpr(type="Tempo_expr", subtype="PRE")
         p[0].add_object(p[2])

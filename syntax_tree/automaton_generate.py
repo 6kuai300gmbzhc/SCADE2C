@@ -234,11 +234,11 @@ def generate_body(automaton: SyntaxAutomaton, code_generator: scade_generate.Gen
 
 def generate_body_nest(automaton: SyntaxAutomaton, code_generator: scade_generate.GenerateCode, depth: int = 1, ) -> str:
     """
-     生成对应的函数体部分
-     先是强迁移unless部分
-     然后执行state内语句
-     然后弱迁移until
-     """
+    目前来看是将init的部分挪到这里来进行，然后在生成非嵌套的代码
+    state内加入，若reset_act则outcinit为true
+    然后对内存执行重置
+    然后让init为false
+    """
     return "\n"
 def generate_body_not_nest(automaton: SyntaxAutomaton, code_generator: scade_generate.GenerateCode, depth: int = 1, ) -> str:
     """
@@ -267,6 +267,14 @@ def generate_body_not_nest(automaton: SyntaxAutomaton, code_generator: scade_gen
     switch_act = f"switch ({get_state_act(automaton)}){{\n"
     for state_name, state in automaton.stateTable.items():
         switch_act += f"{'   ' * depth}case {get_state_enum_name(state)}:\n"
+        #如果此状态有内存，则加上一个重置操作,即如果rest_act，则设置init为true，然后重置操作，然后将init为false
+        switch_act += f"{'   ' * depth}if({get_reset_act(automaton)}){{\n" \
+                      f"{'   ' * (depth+1)} outC->init = kcg_true;\n" \
+                      f"{'   ' * depth}}}\n"
+        #这里接如果为init则进行的初始化操作
+
+        switch_act += f"{'   ' * depth} outC->init = kcg_false;\n"
+        #然后初始化结束
         switch_act += scade_generate.generate_data_def(state, code_generator, depth + 1)
         # 这里添加代码
         switch_act += generate_state_weak_transitions(automaton, state, code_generator, depth + 1)

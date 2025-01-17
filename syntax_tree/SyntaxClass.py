@@ -492,6 +492,10 @@ class SyntaxScope:
     '''创建中间变量使用的init'''
     initVar: SyntaxVariableSymbol
     '''时态算子使用的init,每个作用域只有一个init'''
+    hasInternalState: bool = False
+    '''该作用域内是否存在内存，例如control_block与一些时态算子等'''
+    initSymbolSet: set
+    '''其子作用域内的所有init变量集合,在userop范围内不能重名，userop以上为空集合'''
     tmpParams: list
 
     def __init__(self, type, name, prevScope, visibility):
@@ -503,6 +507,7 @@ class SyntaxScope:
         self.equations = list()
         self.initVar = None
         self.tmpParams = list()
+        self.initSymbolSet = set()
 
     def add_childScope(self, childScope: SyntaxScope) -> None:
         self.childScopeTable[childScope.name] = childScope
@@ -528,7 +533,7 @@ class SyntaxScope:
         return s
 
     def get_global_name(self):
-        if self.prevScope is None:#是global
+        if self.prevScope is None:  # 是global
             return "global"
         elif self.prevScope.name == "*global":
             return self.name
@@ -548,6 +553,12 @@ class SyntaxScope:
 
     def add_tmpSymbol(self, tmpSymbol):
         self.tmpParams.append(tmpSymbol)
+
+    def hasInternalState_InThisAndPreEnv(self):
+        '''迭代的设置这个与其上层的作用域，标记其为有内存'''
+        self.hasInternalState = True
+        if self.prevScope is not None:
+            self.prevScope.hasInternalState_InThisAndPreEnv()
 
 
 class SyntaxIfBlock:
@@ -693,6 +704,8 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     '''存放局部变量，变量名字->SyntaxVariableSymbol'''
     returnSymbolsTable: dict
     '''存放了当前作用域修改的，外部作用域的变量，变量名字->SyntaxVariableSymbol'''
+    initSymbol: str
+    '''这个作用域内专用的init变量，每个data_def拥有自己的init变量'''
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
@@ -770,11 +783,46 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         else:
             return name
             # raise ValueError(f"var_change_name error , name:{name}")
-            #todo 让其无条件通过，考虑到有枚举类型的情况
+            # todo 让其无条件通过，考虑到有枚举类型的情况
 
     def get_return_symbolTable(self):
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
         return self.returnSymbolsTable
+
+    def generate_init_name_and_check(self) -> str:
+        """生成一个用来初始化的名字，将该名字作为此作用域的initsymbol名字。并确保没重名的情况，最高到函数级别不重名即可"""
+        name = "init"
+        num = 1
+        op_scope = self
+        while op_scope.type != "function" and op_scope.type != "node":
+            op_scope = op_scope.prevScope
+            # 函数级别
+        init_name = name + str(num)
+        while not(self.get_localVariable_InThisAndPreEnv(init_name) is None and
+                  not self.have_signal_InThisAndPreEnv(init_name) and
+                  not init_name in op_scope.initSymbolSet):
+            num += 1
+            init_name = name + str(num)
+        # 保证最上层没有，然后逐层向上更新initSymbolSet，考虑到状态机嵌入的情况，不同的data_def都保存一份
+        cur_scope = self
+        while cur_scope.type != "function" and cur_scope.type != "node":
+            cur_scope = cur_scope.prevScope
+            cur_scope.initSymbolSet.add(init_name)
+        self.initSymbol = init_name
+        return init_name
+        # return一下吧，万一有用呢
+
+    def hasInternalState_InThisAndPreEnv(self):
+        """对data_def的情况，要重写逻辑
+        每个作用域都要有自己的init变量，在子作用域里的语句需要依赖此init变量来进行操作
+        在官方的scade代码生成里情况是这样的
+        在创建此作用域内的变量后，还需向上更新，让上层作用域持有其下所有子作用域的init变量列表，在init与reset函数内会用到
+        """
+        self.hasInternalState = True
+        # 添加init变量，更新变量列表
+        self.generate_init_name_and_check()
+        if self.prevScope is not None:
+            self.prevScope.hasInternalState_InThisAndPreEnv()
 
     def topologySort(self):
         edges = list()
@@ -827,6 +875,9 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         for prev_scope in reversed(prev_list):
             s += prev_scope + "::"
         s += self.name
+        if self.hasInternalState:
+            s += " initSymbol as "
+            s += self.initSymbol + " "
         s += "\033[0m"
         s += "\n"
         s += self.signalSymbolSet2str(depth=depth)
@@ -1078,7 +1129,7 @@ class SyntaxAutomaton(SyntaxScope):
                 if name in child_return_table.keys(): continue  # 有了就不管了
                 equation = SyntaxEquation(type="simple_equation", lhs=[name], lineno=-1)
                 if not symbol.defaultExpr:  # 没有默认表达式就报错
-                    raise InitializationErrorException(name)
+                    raise InitializationErrorException(childScope.get_global_name()+" : "+name)
                 else:
                     equation.set_expr(symbol.defaultExpr)
                     childScope.add_equation(equation)
