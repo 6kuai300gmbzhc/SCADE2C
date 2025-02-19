@@ -1,5 +1,6 @@
 from syntax_tree.Exceptions import *
 from collections import defaultdict, deque
+from graph import *
 
 
 class SyntaxOperator:
@@ -542,7 +543,7 @@ class SyntaxScope:
 
     def set_init_var(self):
         if self.initVar == None:
-            self.initVar = SyntaxVariableSymbol(f"{self.name}_init", False, False)
+            self.initVar = SyntaxVariableSymbol(f"{self.initSymbol}", False, False)
             self.initVar.isOutput = True
             self.initVar.syntaxType = SyntaxType("bool")
             postExpr = SyntaxExpr(type="Atom", subtype="bool_atom")
@@ -553,6 +554,11 @@ class SyntaxScope:
 
     def add_tmpSymbol(self, tmpSymbol):
         self.tmpParams.append(tmpSymbol)
+
+    def get_tmpSymbol(self,tmpSymbolName):
+        for symbol in self.tmpParams:
+            if symbol.name==tmpSymbolName:return symbol
+        return None
 
     def hasInternalState_InThisAndPreEnv(self):
         '''迭代的设置这个与其上层的作用域，标记其为有内存'''
@@ -648,9 +654,7 @@ class SyntaxClockedScope(SyntaxScope):
         output = dict()
         for _, childScope in self.childScopeTable.items():
             child_return_table = childScope.get_return_symbolTable()
-            for name, symbol in child_return_table.items():
-                if name not in output.keys():
-                    output[name] = symbol
+            output.update(child_return_table)
         for _, childScope in self.childScopeTable.items():
             # 再来一遍，这次把缺少的默认表达式补上去
             child_return_table = childScope.get_return_symbolTable()
@@ -660,13 +664,11 @@ class SyntaxClockedScope(SyntaxScope):
                 if not symbol.defaultExpr:  # 没有默认表达式就报错
                     if symbol.lastExpr:
                         equation.set_expr(symbol.lastExpr)
-                        print(equation)
                         childScope.add_equation(equation)
                     else:
                         raise InitializationErrorException(name)
                 else:
                     equation.set_expr(symbol.defaultExpr)
-                    print(equation)
                     childScope.add_equation(equation)
         return output
 
@@ -703,8 +705,8 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     localSymbolTable: dict
     '''存放局部变量，变量名字->SyntaxVariableSymbol'''
     returnSymbolsTable: dict
-    '''存放了当前作用域修改的，外部作用域的变量，变量名字->SyntaxVariableSymbol'''
-    initSymbol: str
+    '''存放了当前及下级作用域修改的，外部作用域的变量，变量名字->SyntaxVariableSymbol'''
+    initSymbol: str = ""
     '''这个作用域内专用的init变量，每个data_def拥有自己的init变量'''
 
     def __init__(self, type, name, prevscope, visibility):
@@ -761,14 +763,14 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 return self.prevScope.prevScope.have_signal_InThisAndPreEnv(name)
             return self.prevScope.have_signal_InThisAndPreEnv(name)
 
-    def generate_name_for_tmp(self):
+    def generate_name_for_tmp(self,postfix="tmp"):
         '''生成一个没有被用过的变量名，用来代码生成'''
         count = 1
 
-        name = f"{'_'.join(self.get_global_name().split('::'))}tmp_{str(count)}"
+        name = f"{self.get_global_name()}_{postfix}_{str(count)}"
         while self.get_localVariable_InThisAndPreEnv(name) is not None:
             count += 1
-            name = f"{'_'.join(self.get_global_name().split('::'))}tmp_{str(count)}"
+            name = f"{self.get_global_name()}_{postfix}_{str(count)}"
         return name
 
     def var_change_name(self, name):
@@ -798,9 +800,9 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             op_scope = op_scope.prevScope
             # 函数级别
         init_name = name + str(num)
-        while not(self.get_localVariable_InThisAndPreEnv(init_name) is None and
-                  not self.have_signal_InThisAndPreEnv(init_name) and
-                  not init_name in op_scope.initSymbolSet):
+        while not (self.get_localVariable_InThisAndPreEnv(init_name) is None and
+                   not self.have_signal_InThisAndPreEnv(init_name) and
+                   not init_name in op_scope.initSymbolSet):
             num += 1
             init_name = name + str(num)
         # 保证最上层没有，然后逐层向上更新initSymbolSet，考虑到状态机嵌入的情况，不同的data_def都保存一份
@@ -818,10 +820,12 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         在官方的scade代码生成里情况是这样的
         在创建此作用域内的变量后，还需向上更新，让上层作用域持有其下所有子作用域的init变量列表，在init与reset函数内会用到
         """
+        if self.hasInternalState: return
         self.hasInternalState = True
         # 添加init变量，更新变量列表
         self.generate_init_name_and_check()
-        if self.prevScope is not None:
+
+        if self.prevScope is not None and not self.prevScope.hasInternalState:
             self.prevScope.hasInternalState_InThisAndPreEnv()
 
     def topologySort(self):
@@ -955,15 +959,15 @@ class SyntaxArrow:
     def set_action(self, action: str):
         self.action = action
 
-    def get_strong_transfer_arrows(self) -> list[SyntaxArrow]:
+    def get_transfer_arrows(self) -> list[SyntaxArrow]:
         """递归的从arrow里面找目标转移状态"""
         if self.type != "if":
             return [self]
         out = list()
         for expr in self.ifExprList:
-            out += expr[1].get_strong_transfer_arrows()
+            out += expr[1].get_transfer_arrows()
         if self.elseExpr:
-            out += (self.elseExpr.get_strong_transfer_arrows())
+            out += (self.elseExpr.get_transfer_arrows())
         return out
 
     def set_index(self, index: int) -> int:
@@ -1023,28 +1027,32 @@ class SyntaxState(SyntaxDataDefScope):
 
     def set_unlessTransitions(self, unlessTransitions: list):
         index = 1
-        for transition in unlessTransitions:
-            arrow = transition[1]
-            index = arrow.set_index(index)
+        for trans in unlessTransitions:
+            arrows = trans[1].get_transfer_arrows()
+            for arrow in arrows:
+                # 状态的前一个作用域必定是automaton
+                self.prevScope.add_edge(self.name, arrow.target, arrow)
+                index = arrow.set_index(index)
         self.unlessTransitions = unlessTransitions
 
     def set_untilTransitions(self, untilTransitions: list):
         self.untilTransitions = untilTransitions
+        for trans in untilTransitions:
+            arrows = trans[1].get_transfer_arrows()
+            for arrow in arrows:
+                # 状态的前一个作用域必定是automaton
+                self.prevScope.add_edge(self.name, arrow.target, arrow)
 
     def get_strong_transfer_arrows(self) -> list[SyntaxArrow]:
         """获取这个状态可能抵达的其他状态的arrow，只有强转移"""
         out = list()
         for unless in self.unlessTransitions:
-            out += unless[1].get_strong_transfer_arrows()
+            out += unless[1].get_transfer_arrows()
         return out
 
     def get_enum_name(self) -> str:
         """获取这个状态在代码生成中的枚举类型名字"""
-        s = "SSM_st_"
-        global_names = self.get_global_name().split("::")
-        global_name = "_".join(global_names[1:])
-        s += global_name
-        return s
+        return f"SSM_st_{self.get_global_name()}"
 
     def __repr__(self):
         return self.state2str(0)
@@ -1085,16 +1093,23 @@ class SyntaxAutomaton(SyntaxScope):
     '''可见性，默认为public'''
     stateTable: dict
     '''保存状态机的状态字典，状态名字->SyntaxState'''
+    transferGraph: Graph
+    '''状态转移图，一个单向图,节点为状态名字，边为arrow'''
 
     transferCount: int
     '''记录了这个状态机转移的总数'''
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
+        self.transferGraph = Graph()
         self.stateTable = dict()
 
     def add_state(self, state: SyntaxState):
+        self.transferGraph.addVertex(state.name)
         self.stateTable[state.name] = state
+
+    def add_edge(self, from_name, to_name, arrow):
+        self.transferGraph.addEdge(from_name, to_name, arrow)
 
     def get_init_state(self) -> SyntaxState:
         init_state = None
@@ -1119,9 +1134,7 @@ class SyntaxAutomaton(SyntaxScope):
         output = dict()
         for _, childScope in self.childScopeTable.items():
             child_return_table = childScope.get_return_symbolTable()
-            for name, symbol in child_return_table.items():
-                if name not in output.keys():
-                    output[name] = symbol
+            output.update(child_return_table)
         for _, childScope in self.childScopeTable.items():
             # 再来一遍，这次把缺少的默认表达式补上去
             child_return_table = childScope.get_return_symbolTable()
@@ -1129,7 +1142,7 @@ class SyntaxAutomaton(SyntaxScope):
                 if name in child_return_table.keys(): continue  # 有了就不管了
                 equation = SyntaxEquation(type="simple_equation", lhs=[name], lineno=-1)
                 if not symbol.defaultExpr:  # 没有默认表达式就报错
-                    raise InitializationErrorException(childScope.get_global_name()+" : "+name)
+                    raise InitializationErrorException(childScope.get_global_name() + " : " + name)
                 else:
                     equation.set_expr(symbol.defaultExpr)
                     childScope.add_equation(equation)
@@ -1142,12 +1155,32 @@ class SyntaxAutomaton(SyntaxScope):
         s = "    " * depth
         s += "\033[31m" + self.type + " as "
         s += self.name
-        s += "\033[0m"
         s += "\n"
+        s += "    " * depth
+        s += "has transitions:\n"
+        s += "\033[0m"
+        s += self.graph2str(depth + 1)
+
         for name, state in self.stateTable.items():
             s += state.state2str(depth=depth + 1)
         s += self.childScope2str(depth=depth)
         return s
+
+    def graph2str(self, depth=0):
+        out = ""
+        for vertex in self.transferGraph:
+            out += f"\033[32m{'    ' * depth}{vertex.name}:\n\033[0m"
+            out += f"{'    ' * depth}TO:{len(vertex.get_to_vertexes())}\n\033[33m"
+            for to_vertex in vertex.get_to_vertexes():
+                connection = vertex.get_to_connection(to_vertex)
+                out += f"{'    ' * depth}{connection.type} {to_vertex.name}\n"
+
+            out += f"\033[0m{'    ' * depth}FROM:{len(vertex.get_from_vertexes())}\n\033[33m"
+            for from_vertex in vertex.get_from_vertexes():
+                connection = vertex.get_from_connection(from_vertex)
+                out += f"{'    ' * depth}{connection.type} {from_vertex.name}\n"
+            out += "\n"
+        return out + "\033[0m"
 
 
 class SyntaxUserOp(SyntaxDataDefScope):

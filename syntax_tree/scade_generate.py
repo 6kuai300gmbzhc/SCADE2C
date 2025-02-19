@@ -7,8 +7,206 @@ lhs_type = ""
 
 import syntax_tree.automaton_generate as automaton_generate
 
+
 class GenerateCode:
-    pass
+    def __init__(self, rootNode, mainNode, outputDir):
+        self.rootNode = rootNode
+        self.mainNode = mainNode
+        self.outputDir = outputDir
+        if not os.path.isdir(self.outputDir):
+            os.makedirs(self.outputDir)
+        mainNode = self.mainNode.split("::")
+        self.outputDir = f"{outputDir}/{mainNode[-1]}" if len(
+            mainNode) == 1 else f"{outputDir}/{mainNode[-1]}_{'_'.join(mainNode[:-1])}"
+        if not os.path.exists(f"{self.outputDir}/src"): os.makedirs(f"{self.outputDir}/src")
+        if not os.path.exists(f"{self.outputDir}/include"): os.makedirs(f"{self.outputDir}/include")
+
+    def generate_const_file(self):
+        # 只要写了const_block无论是否使用都会使用,从root_node开始深度遍历
+        c_content = '''#include "kcg_consts.h"'''
+        h_content = '''#ifndef _KCG_CONSTS_H_\n#define _KCG_CONSTS_H_\n#include "kcg_types.h"\n'''
+
+        h, c = generate_const_equation(self.rootNode)
+        h_content += h
+        c_content += c
+
+        h_content += '''#endif'''
+        # print("==== h_content ====\n",h_content)
+        # print("==== c_content ====\n",c_content)
+        # write_file(f"{self.outputDir}/include/kcg_consts.h",h_content,"w")
+        # write_file(f"{self.outputDir}/src/kcg_consts.c",c_content,"w")
+        with open("%s/include/kcg_consts.h" % (self.outputDir), 'w') as f:
+            f.write(h_content)
+        with open("%s/src/kcg_consts.c" % (self.outputDir), 'w') as f:
+            f.write(c_content)
+
+    def generate_sensor_file(self):
+        pass
+
+    def generate_types_file(self):
+        src_file = "./template/kcg_types.h"
+        target_file = f"{self.outputDir}/include/kcg_types.h"
+        # write_file_from_src_to_target(src_file,target_file)
+
+        # 中间还需要写和types相关的内容
+
+        content = "#endif"
+        with open(target_file, 'w') as target:
+            with open(src_file, 'r') as src:
+                target.write(src.read())
+            target.write(generate_type_block(self.rootNode))
+
+    def add_code_to_types_file(self, code: str):
+        target_file = f"{self.outputDir}/include/kcg_types.h"
+        with open(target_file, "a") as target:
+            target.write(code)
+
+    # write_file(target_file,content,"a")
+
+    def generate_assign_file(self):
+        src_file = "../template/kcg_assign.h"
+        target_file = f"{self.outputDir}/include/kcg_assign.h"
+        # write_file_from_src_to_target(src_file,target_file)
+
+    def generate_imported_types_file(self):
+        pass
+
+    def generate_macro_libmathext_file(self):
+        path_dict = {"../template/macro_libmathext32.h": f"{self.outputDir}/include/macro_libmathext32.h",
+                     "../template/macro_libmathext64.h": f"{self.outputDir}/include/macro_libmathext64.h"}
+        for k, v in path_dict.items():
+            write_file_from_src_to_target(k, v)
+
+    def generate_head_inC(self, node):
+        global_name = node.get_global_name()
+        code = "typedef struct{\n"
+        for para in node.inParams:
+            code += f"    {para.syntaxType.change_name()} {para.name};\n"
+        code += f"}}inC_{global_name};\n"
+        return code
+
+    def generate_head_outC(self, node):
+        global_name = node.get_global_name()
+        code = "typedef struct{\n"
+        # 这里要将node及其以下的所有子作用域的out情况都统计进来
+        # 所以写一个深度优先搜索吧
+        stack = deque()
+        stack.append(node)
+        # 只有最上层的状态机需要登记outC，其他不需要
+        #只有userOP有outParams，也就是最上层节点
+        for para in node.outParams:
+            code += f"    {para.syntaxType.change_name()} {para.name};\n"
+        for name, child_scope in node.childScopeTable.items():
+            if child_scope.type == "automaton":
+                code += automaton_generate.generate_head(child_scope)
+        while stack:
+            cur_node = stack.pop()
+            for name, child_scope in cur_node.childScopeTable.items():
+                stack.append(child_scope)
+            if cur_node.type=="automaton":continue
+
+            for para in cur_node.tmpParams:
+                if para.isOutput:
+                    print("para ", para.name)
+                    code += f"    {para.syntaxType.change_name()} {para.name};\n"
+
+        code += f"}}outC_{global_name};\n"
+        return code
+
+    def generate_head_func(self, node):
+        global_name = node.get_global_name()
+        code = f'''extern void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC);\n'''
+        return code
+
+    def generate_head_other_func(self, node):
+        global_name = node.get_global_name()
+        code = f"extern void {global_name}_reset(outC_{global_name} *outC);\n" \
+               f"extern void {global_name}_init(outC_{global_name} *outC);\n"
+        return code
+
+    def generate_head_file(self, node):
+        global_name = node.get_global_name()
+        head_content = f'#ifndef _{global_name}_H_\n#define _{global_name}_H_\n#include"kcg_types.h"\n'
+        head_content += self.generate_head_inC(node)
+        head_content += self.generate_head_outC(node)
+        head_content += self.generate_head_func(node)
+        head_content += self.generate_head_other_func(node)
+
+        head_content += f"#endif"
+        # print("==== head_content ====\n")
+        # print(head_content)
+        # print("=======================\n")
+        target_file = f"{self.outputDir}/include/{global_name}.h"
+        with open(target_file, "w") as target:
+            target.write(head_content)
+
+    def generate_src_func_file(self, node, body_content):
+        global_name = node.get_global_name()
+        post_content = ""
+        src_content = ""
+        src_content += f"void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC){{\n"
+        # localVariable + tmpVariable
+        for name, symbol in node.localSymbolTable.items():
+            src_content += f"{symbol.syntaxType.change_name()} {name};\n"
+        for signal in node.signalSymbolSet:
+            src_content += f"kcg_bool {signal};\n"
+        for paraSymbol in node.tmpParams:
+            if paraSymbol.isOutput == False:
+                src_content += f"{paraSymbol.syntaxType.change_name()} {paraSymbol.name};\n"
+            if paraSymbol.postExpr != None:
+                genEqu = GenEqu()
+                post_content += "".join(genEqu.preEquations)
+                post_content += f"{node.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, node, genEqu)};\n"
+                post_content += "".join(genEqu.postEquations)
+        # body
+        src_content += body_content
+        # init,pre等的后处理语句
+        src_content += post_content
+        src_content += f"}}\n"
+        print("==== src_content ====\n")
+        print(src_content)
+        print("======================")
+        return src_content
+
+    def generate_src_init(self, node):
+        global_name = node.get_global_name()
+        code = "#ifndef KCG_USER_DEFINED_INIT\n" \
+               f"void {global_name}_init(outC_{global_name} *outC)\n" \
+               "{\n"
+        # 给每个outC里面的变量赋值，不包括状态机的部分
+        for para in node.outParams:
+            code += f"    outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
+        for para in node.tmpParams:
+            if para.isOutput == True:
+                print("para ", para.name)
+                code += f"    outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
+
+        # 给状态机设置初始状态
+        for name, child_scope in node.childScopeTable.items():
+            if child_scope.type == "automaton":
+                code += automaton_generate.generate_init(child_scope) + "\n"
+        code += "}\n" \
+                "#endif\n"
+        return code
+
+    def generate_src_reset(self, node):
+        return ""
+
+    def generate_src_file(self, node, body_content):
+        global_name = node.get_global_name()
+        src_content = f'''#include "kcg_consts.h"\n#include "{global_name}.h"\n'''
+        src_content += self.generate_src_func_file(node, body_content)
+        src_content += self.generate_src_init(node)
+        src_content += self.generate_src_reset(node)
+
+        target_file = f"{self.outputDir}/src/{global_name}.c"
+        with open(target_file, "w") as target:
+            target.write(src_content)
+
+    def generate_node_file(self, node):
+        body_content = SyntaxUserOp_generate(node, self)
+        self.generate_src_file(node, body_content)
+        self.generate_head_file(node)
 
 
 class GenEqu:
@@ -18,10 +216,14 @@ class GenEqu:
     postEquations: list
     '''fby生成的C代码需要在该equation之后'''
 
-    def __init__(self):
+    depth: int
+    '''这个语句所需要的缩进，默认是0'''
+
+    def __init__(self, depth=0):
         self.expr = ""
         self.preEquations = []
         self.postEquations = []
+        self.depth = depth
 
     def add_preEquations(self, equations):
         self.preEquations.append(equations)
@@ -94,7 +296,7 @@ def generate_tempo_expr_fby(syntax_tempo_expr_objects, syntaxUserOp, genEqu):
 
     initVar = syntaxUserOp.set_init_var()
     preCode = f'''
-    if({syntaxUserOp.var_change_name(initVar.name)}){{\n
+    if(outC->{syntaxUserOp.var_change_name(initVar.name)}){{\n
     for(int idx=0;idx<{SyntaxExpr_generate(syntax_tempo_expr_objects[1], syntaxUserOp, genEqu)};idx++){{\n
         {syntaxUserOp.var_change_name(tmp_arr_var)}[idx] = {SyntaxExpr_generate(syntax_tempo_expr_objects[2], syntaxUserOp, genEqu)};\n
         }}\n
@@ -117,7 +319,39 @@ def generate_tempo_expr_fby(syntax_tempo_expr_objects, syntaxUserOp, genEqu):
 
 @register_tempo_expr_hander("TIMES")
 def generate_tempo_expr_times(syntax_tempo_expr_objects, syntaxUserOp, genEqu):
-    pass
+    counter_name = syntaxUserOp.generate_name_for_tmp(postfix="counter")
+    counter_symbol = SyntaxVariableSymbol(counter_name, False, False)
+    counter_symbol.isOutput = True
+    counter_symbol.syntaxType = SyntaxType("int32")
+    syntaxUserOp.add_tmpSymbol(counter_symbol)
+    # preCode分为两部分，先根据init决定是否初始化，根据输入的布尔值决定是否自减
+    # counter_name需要加入到outC之中
+    depth = genEqu.depth
+    int_expr = syntax_tempo_expr_objects[0]
+    bool_expr = syntax_tempo_expr_objects[1]
+    # 根据init初始化
+    pre_code = f"{'    ' * depth}kcg_int32 {counter_name};\n"
+    pre_code += f"{'    ' * depth}if (outC->{syntaxUserOp.initSymbol}){{\n" \
+                f"{'    ' * (depth + 1)}{counter_name} = {SyntaxExpr_generate(int_expr, syntaxUserOp, genEqu)};\n" \
+                f"{'    ' * depth}}}\n" \
+                f"{'    ' * depth}else {{\n" \
+                f"{'    ' * (depth + 1)}{counter_name} = outC->{counter_name};\n" \
+                f"{'    ' * depth}}}\n"
+    # 根据bool值进行自减，若已经小于0了就不变，然后如果bool为true则减一，如果为false则不变
+    pre_code += f"{'    ' * depth}if ({counter_name}<kcg_lit_int32(0)) {{\n" \
+                f"{'    ' * (depth + 1)}outC->{counter_name} = {counter_name};\n" \
+                f"{'    ' * depth}}}\n" \
+                f"{'    ' * depth}else if ({SyntaxExpr_generate(bool_expr, syntaxUserOp, genEqu)}){{\n" \
+                f"{'    ' * (depth + 1)}outC->{counter_name} = {counter_name} - kcg_lit_int32(1);\n" \
+                f"{'    ' * depth}}}\n" \
+                f"{'    ' * depth}else {{\n" \
+                f"{'    ' * (depth + 1)}outC->{counter_name} = {counter_name};\n" \
+                f"{'    ' * depth}}}\n"
+    genEqu.add_preEquations(pre_code)
+    # 返回的代码为当前countern是否为0
+
+    out_code = f"({SyntaxExpr_generate(bool_expr, syntaxUserOp, genEqu)}&(outC->{counter_name} == kcg_lit_int32(0)))"
+    return out_code
 
 
 @register_tempo_expr_hander("WHEN")
@@ -472,31 +706,33 @@ def register_userOp_handler(type_):
 
 
 @register_userOp_handler("simple_equation")
-def generate_userOp_simple_equation(syntaxEquation, syntaxUserOp,code_generator:GenerateCode):
+def generate_userOp_simple_equation(syntaxEquation, syntaxUserOp, code_generator: GenerateCode, depth=1):
     # out1=in1;若out1是数组或结构体，则需要使用memcpy，不能使用=。若右边是函数调用，且返回多个值，也不能直接使用=
     global lhs_type
-    lhs_type = syntaxUserOp.get_localVariable_InThisAndPreEnv(syntaxEquation.lhs[0]).syntaxType.type
-    genEqu = GenEqu()
+    lhs_symbol = syntaxUserOp.get_localVariable_InThisAndPreEnv(syntaxEquation.lhs[0])
+    if lhs_symbol is None: lhs_symbol = syntaxUserOp.get_tmpSymbol(syntaxEquation.lhs[0])
+    lhs_type = lhs_symbol.syntaxType.type
+    genEqu = GenEqu(depth)
     genEqu.expr = SyntaxExpr_generate(syntaxEquation.expr, syntaxUserOp, genEqu)
     code = ""
     code += "".join(genEqu.preEquations)
-    code += f"{syntaxUserOp.var_change_name(syntaxEquation.lhs[0])} = {genEqu.expr};\n"
+    code += f"{'    ' * depth}{syntaxUserOp.var_change_name(syntaxEquation.lhs[0])} = {genEqu.expr};\n"
     code += "".join(genEqu.postEquations)
     return code
 
 
 @register_userOp_handler("assume")
-def generate_userOp_assume(syntaxEquation, syntaxUserOp,code_generator:GenerateCode):
+def generate_userOp_assume(syntaxEquation, syntaxUserOp, code_generator: GenerateCode, depth=1):
     return ""
 
 
 @register_userOp_handler("guarantee")
-def generate_userOp_guarantee(syntaxEquation, syntaxUserOp,code_generator:GenerateCode):
+def generate_userOp_guarantee(syntaxEquation, syntaxUserOp, code_generator: GenerateCode, depth=1):
     return ""
 
 
 @register_userOp_handler("emission")
-def generate_userOp_emission(syntaxEquation, syntaxUserOp,code_generator:GenerateCode):
+def generate_userOp_emission(syntaxEquation, syntaxUserOp, code_generator: GenerateCode, depth=1):
     code = ""
     for signal in syntaxEquation.lhs:
         code += f"{signal} = kcg_true;\n"
@@ -504,13 +740,12 @@ def generate_userOp_emission(syntaxEquation, syntaxUserOp,code_generator:Generat
 
 
 @register_userOp_handler("control_block")
-def generate_userOp_control_block(syntaxEquation: SyntaxEquation, syntaxUserOp: SyntaxUserOp,code_generator:GenerateCode):
+def generate_userOp_control_block(syntaxEquation, syntaxUserOp, code_generator, depth=1):
     control_block_ID = syntaxEquation.controlBlockID
     control_block = syntaxUserOp.get_childScope(control_block_ID)
     if control_block is None: raise UnknownIdentifierException(f"control_block {control_block_ID} 没有找到")
     print("this is control_block", syntaxEquation.controlBlockID)
     if control_block.type == "automaton":
-
 
         code_generator.add_code_to_types_file(automaton_generate.generate_type(control_block))
         print("HEAD:")
@@ -518,18 +753,18 @@ def generate_userOp_control_block(syntaxEquation: SyntaxEquation, syntaxUserOp: 
         print("INIT:")
         print(automaton_generate.generate_init(control_block))
 
-        return automaton_generate.generate_body(control_block,code_generator)
+        return automaton_generate.generate_body(control_block, code_generator, depth)
     else:
         return ""  # 这里是if和elseblock的部分
 
 
-def SyntaxUserOp_generate(syntaxUserOp,code_generator):
+def SyntaxUserOp_generate(syntaxUserOp, code_generator):
     code = ""
     for elem in syntaxUserOp.equations:
         type_ = elem.type
         generate_userOp_handler = generate_userOp_handlers.get(type_)
         if generate_userOp_handler:
-            code += generate_userOp_handler(elem, syntaxUserOp,code_generator)
+            code += generate_userOp_handler(elem, syntaxUserOp, code_generator)
         else:
             raise ValueError(f"syntaxUserOp_generate error , type : {type_}")
     print("=== UserOp ===\n")
@@ -705,226 +940,40 @@ def generate_type_block(rootPackage):
         h_content += generate_type_symbol(typeSymbol, rootPackage)
     return h_content
 
-def generate_data_def(data_def:SyntaxDataDefScope,code_generator:GenerateCode,depth=0)->str:
+
+def generate_data_def(data_def: SyntaxDataDefScope, code_generator: GenerateCode, depth=0) -> str:
     """给所有继承了data_def类的作用域生成代码，user_op除外，用genrateCode里面的函数"""
     # localVariable + tmpVariable
-    src_content=""
-    post_content=""
+    src_content = ""
+    post_content = ""
     for name, symbol in data_def.localSymbolTable.items():
-        src_content += f"{'   '*depth}{symbol.syntaxType.change_name()} {name};\n"
+        src_content += f"{'    ' * depth}{symbol.syntaxType.change_name()} {name};\n"
     for signal in data_def.signalSymbolSet:
-        src_content += f"{'   '*depth}kcg_bool {signal};\n"
+        src_content += f"{'    ' * depth}kcg_bool {signal};\n"
     for paraSymbol in data_def.tmpParams:
         if paraSymbol.isOutput == False:
-            src_content += f"{'   '*depth}{paraSymbol.syntaxType.change_name()} {paraSymbol.name};\n"
+            src_content += f"{'    ' * depth}{paraSymbol.syntaxType.change_name()} {paraSymbol.name};\n"
         if paraSymbol.postExpr != None:
             genEqu = GenEqu()
-            if len(genEqu.preEquations)!=0:post_content+=f"{'   '*depth}"
-            post_content += f"{'   '*depth}".join(genEqu.preEquations)
-            post_content += f"{'   '*depth}{data_def.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, data_def, genEqu)};\n"
-            if len(genEqu.postEquations) != 0: post_content += f"{'   ' * depth}"
-            post_content += f"{'   '*depth}".join(genEqu.postEquations)
+            if len(genEqu.preEquations) != 0: post_content += f"{'    ' * depth}"
+            post_content += f"{'    ' * depth}".join(genEqu.preEquations)
+            post_content += f"{'    ' * depth}{data_def.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, data_def, genEqu)};\n"
+            if len(genEqu.postEquations) != 0: post_content += f"{'    ' * depth}"
+            post_content += f"{'    ' * depth}".join(genEqu.postEquations)
     for elem in data_def.equations:
         type_ = elem.type
         generate_userOp_handler = generate_userOp_handlers.get(type_)
         if generate_userOp_handler:
-            src_content += '   '*depth+generate_userOp_handler(elem, data_def,code_generator)
+            src_content += generate_userOp_handler(elem, data_def, code_generator, depth)
         else:
             raise ValueError(f"syntaxUserOp_generate error , type : {type_}")
-    src_content+=post_content
+    src_content += post_content
     return src_content
-class GenerateCode:
-    def __init__(self, rootNode, mainNode, outputDir):
-        self.rootNode = rootNode
-        self.mainNode = mainNode
-        self.outputDir = outputDir
-        if not os.path.isdir(self.outputDir):
-            os.makedirs(self.outputDir)
-        mainNode = self.mainNode.split("::")
-        self.outputDir = f"{outputDir}/{mainNode[-1]}" if len(
-            mainNode) == 1 else f"{outputDir}/{mainNode[-1]}_{'_'.join(mainNode[:-1])}"
-        if not os.path.exists(f"{self.outputDir}/src"): os.makedirs(f"{self.outputDir}/src")
-        if not os.path.exists(f"{self.outputDir}/include"): os.makedirs(f"{self.outputDir}/include")
-
-    def generate_const_file(self):
-        # 只要写了const_block无论是否使用都会使用,从root_node开始深度遍历
-        c_content = '''#include "kcg_consts.h"'''
-        h_content = '''#ifndef _KCG_CONSTS_H_\n#define _KCG_CONSTS_H_\n#include "kcg_types.h"\n'''
-
-        h, c = generate_const_equation(self.rootNode)
-        h_content += h
-        c_content += c
-
-        h_content += '''#endif'''
-        # print("==== h_content ====\n",h_content)
-        # print("==== c_content ====\n",c_content)
-        # write_file(f"{self.outputDir}/include/kcg_consts.h",h_content,"w")
-        # write_file(f"{self.outputDir}/src/kcg_consts.c",c_content,"w")
-        with open("%s/include/kcg_consts.h" % (self.outputDir), 'w') as f:
-            f.write(h_content)
-        with open("%s/src/kcg_consts.c" % (self.outputDir), 'w') as f:
-            f.write(c_content)
-
-    def generate_sensor_file(self):
-        pass
-
-    def generate_types_file(self):
-        src_file = "./template/kcg_types.h"
-        target_file = f"{self.outputDir}/include/kcg_types.h"
-        # write_file_from_src_to_target(src_file,target_file)
-
-        # 中间还需要写和types相关的内容
 
 
-        content = "#endif"
-        with open(target_file, 'w') as target:
-            with open(src_file, 'r') as src:
-                target.write(src.read())
-            target.write(generate_type_block(self.rootNode))
-
-    def add_code_to_types_file(self, code: str):
-        target_file = f"{self.outputDir}/include/kcg_types.h"
-        with open(target_file, "a") as target:
-            target.write(code)
-
-    # write_file(target_file,content,"a")
-
-    def generate_assign_file(self):
-        src_file = "../template/kcg_assign.h"
-        target_file = f"{self.outputDir}/include/kcg_assign.h"
-        # write_file_from_src_to_target(src_file,target_file)
-
-    def generate_imported_types_file(self):
-        pass
-
-    def generate_macro_libmathext_file(self):
-        path_dict = {"../template/macro_libmathext32.h": f"{self.outputDir}/include/macro_libmathext32.h",
-                     "../template/macro_libmathext64.h": f"{self.outputDir}/include/macro_libmathext64.h"}
-        for k, v in path_dict.items():
-            write_file_from_src_to_target(k, v)
-
-    def generate_head_inC(self, node):
-        global_name = node.get_global_name()
-        code = "typedef struct{\n"
-        for para in node.inParams:
-            code += f"{para.syntaxType.change_name()} {para.name};\n"
-        code += f"}}inC_{global_name};\n"
-        return code
-
-    def generate_head_outC(self, node):
-        global_name = node.get_global_name()
-        code = "typedef struct{\n"
-        for para in node.outParams:
-            code += f"{para.syntaxType.change_name()} {para.name};\n"
-        for para in node.tmpParams:
-            if para.isOutput == True:
-                print("para ", para.name)
-                code += f"{para.syntaxType.change_name()} {para.name};\n"
-        for name, child_scope in node.childScopeTable.items():
-            if child_scope.type == "automaton":
-                code += automaton_generate.generate_head(child_scope)
-        code += f"}}outC_{global_name};\n"
-        return code
-
-    def generate_head_func(self, node):
-        global_name = node.get_global_name()
-        code = f'''extern void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC);\n'''
-        return code
-
-    def generate_head_other_func(self, node):
-        global_name = node.get_global_name()
-        code = f"extern void {global_name}_reset(outC_{global_name} *outC);\n" \
-               f"extern void {global_name}_init(outC_{global_name} *outC);\n"
-        return code
-
-    def generate_head_file(self, node):
-        global_name = node.get_global_name()
-        head_content = f'#ifndef _{global_name}_H_\n#define _{global_name}_H_\n#include"kcg_types.h"\n'
-        head_content += self.generate_head_inC(node)
-        head_content += self.generate_head_outC(node)
-        head_content += self.generate_head_func(node)
-        head_content += self.generate_head_other_func(node)
-
-        head_content += f"#endif"
-        # print("==== head_content ====\n")
-        # print(head_content)
-        # print("=======================\n")
-        target_file = f"{self.outputDir}/include/{global_name}.h"
-        with open(target_file, "w") as target:
-            target.write(head_content)
-
-    def generate_src_func_file(self, node, body_content):
-        global_name = node.get_global_name()
-        post_content = ""
-        src_content = ""
-        src_content += f"void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC){{\n"
-        # localVariable + tmpVariable
-        for name, symbol in node.localSymbolTable.items():
-            src_content += f"{symbol.syntaxType.change_name()} {name};\n"
-        for signal in node.signalSymbolSet:
-            src_content += f"kcg_bool {signal};\n"
-        for paraSymbol in node.tmpParams:
-            if paraSymbol.isOutput == False:
-                src_content += f"{paraSymbol.syntaxType.change_name()} {paraSymbol.name};\n"
-            if paraSymbol.postExpr != None:
-                genEqu = GenEqu()
-                post_content += "".join(genEqu.preEquations)
-                post_content += f"{node.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, node, genEqu)};\n"
-                post_content += "".join(genEqu.postEquations)
-        # body
-        src_content += body_content
-        # init,pre等的后处理语句
-        src_content += post_content
-        src_content += f"}}\n"
-        print("==== src_content ====\n")
-        print(src_content)
-        print("======================")
-        return src_content
-
-    def generate_src_init(self, node):
-        global_name = node.get_global_name()
-        code = "#ifndef KCG_USER_DEFINED_INIT\n" \
-               f"void {global_name}_init(outC_{global_name} *outC)\n" \
-               "{\n"
-        # 给每个outC里面的变量赋值，不包括状态机的部分
-        for para in node.outParams:
-            code += f"outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
-        for para in node.tmpParams:
-            if para.isOutput == True:
-                print("para ", para.name)
-                code += f"outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
-
-        # 给状态机设置初始状态
-        for name, child_scope in node.childScopeTable.items():
-            if child_scope.type == "automaton":
-                code += automaton_generate.generate_init(child_scope) + "\n"
-        code += "}\n" \
-                "#endif\n"
-        return code
-
-    def generate_src_reset(self, node):
-        return ""
-
-    def generate_src_file(self, node, body_content):
-        global_name = node.get_global_name()
-        src_content = f'''#include "kcg_consts.h"\n#include "{global_name}.h"\n'''
-        src_content += self.generate_src_func_file(node, body_content)
-        src_content += self.generate_src_init(node)
-        src_content += self.generate_src_reset(node)
-
-        target_file = f"{self.outputDir}/src/{global_name}.c"
-        with open(target_file, "w") as target:
-            target.write(src_content)
-
-    def generate_node_file(self, node):
-        body_content = SyntaxUserOp_generate(node,self)
-        self.generate_head_file(node)
-        self.generate_src_file(node, body_content)
-
-
-def scade_generate(root_operator,code_generator:GenerateCode):
+def scade_generate(root_operator, code_generator: GenerateCode):
     for k, v in root_scope.userOpTable.items():
-        SyntaxUserOp_generate(v,code_generator)
+        SyntaxUserOp_generate(v, code_generator)
 
 
 def scade_parse(input_path: str, main_operator: str, output_path: str):

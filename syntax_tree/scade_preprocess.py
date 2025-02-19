@@ -740,21 +740,24 @@ def p_state_lv6id(p):
 def p_actions(p):
     '''Actions : DO LBPARENTHESE Actions_1 Emission_body Actions_2 RBPARENTHESE
     | DO Data_def'''
+    global cur_scope
     if len(p) == 3:
         p[0] = p[2]
-        return
-    global cur_scope
-    scope = SyntaxDataDefScope(type="data_def", name=cur_scope.generate_name_for_subScope(), prevscope=cur_scope,
-                               visibility="public")
-    cur_scope.add_childScope(scope)
-    if not p[3]:
-        p[4].emit = False
-    scope.add_equation(p[4])
-    for equation in p[5]:
-        scope.add_equation(equation)
-    scope.topologySort()
-    p[0] = scope.name
-    # 不切换作用域，直接新建一个作用域塞到当前作用域里就可以了
+    else:
+        scope = SyntaxDataDefScope(type="data_def", name=cur_scope.generate_name_for_subScope(), prevscope=cur_scope,
+                                   visibility="public")
+        cur_scope.add_childScope(scope)
+        if not p[3]:
+            p[4].emit = False
+        scope.add_equation(p[4])
+        for equation in p[5]:
+            scope.add_equation(equation)
+        scope.topologySort()
+        p[0] = scope.name
+        # 不切换作用域，直接新建一个作用域塞到当前作用域里就可以了
+    # 更新一下当前作用域的返回值列表，将actions的返回值列表并入state内
+    action_scope = cur_scope.get_childScope(p[0])
+    cur_scope.returnSymbolsTable.update(action_scope.returnSymbolsTable)
 
 
 def p_actions_1(p):
