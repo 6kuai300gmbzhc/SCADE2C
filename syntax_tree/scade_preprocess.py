@@ -58,7 +58,7 @@ def p_decls_zero_or_more(p):
     pass
 
 
-# todo 差一个open path
+
 def p_decls(p):
     '''Decls : Const_block
     | Type_block
@@ -66,8 +66,14 @@ def p_decls(p):
     | Group_block
     | Package_decl
     | User_op_decl
+    | Open_path
     '''
 
+def p_open_path(p):
+    '''Open_path : OPEN Path_id SEMICOLON
+    '''
+    global cur_scope
+    cur_scope.add_open_package(p[2].value)
 
 # 类型定义,在type_decl阶段就把类型登记到当前的符号表中去。
 def p_type_block(p):

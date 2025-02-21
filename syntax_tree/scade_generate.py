@@ -23,7 +23,7 @@ class GenerateCode:
 
     def generate_const_file(self):
         # 只要写了const_block无论是否使用都会使用,从root_node开始深度遍历
-        c_content = '''#include "kcg_consts.h"'''
+        c_content = '''#include "kcg_consts.h"\n'''
         h_content = '''#ifndef _KCG_CONSTS_H_\n#define _KCG_CONSTS_H_\n#include "kcg_types.h"\n'''
 
         h, c = generate_const_equation(self.rootNode)
@@ -93,21 +93,22 @@ class GenerateCode:
         stack = deque()
         stack.append(node)
         # 只有最上层的状态机需要登记outC，其他不需要
-        #只有userOP有outParams，也就是最上层节点
+        # 只有userOP有outParams，也就是最上层节点
         for para in node.outParams:
             code += f"    {para.syntaxType.change_name()} {para.name};\n"
         for name, child_scope in node.childScopeTable.items():
             if child_scope.type == "automaton":
-                code += automaton_generate.generate_head(child_scope)
+                code += automaton_generate.generate_init_symbol_for_head(child_scope)
         while stack:
             cur_node = stack.pop()
             for name, child_scope in cur_node.childScopeTable.items():
                 stack.append(child_scope)
-            if cur_node.type=="automaton":continue
+            if cur_node.type == "automaton":
+                code += automaton_generate.generate_state_nxt_for_head(cur_node)
 
             for para in cur_node.tmpParams:
                 if para.isOutput:
-                    print("para ", para.name)
+                    print("para out", para.name)
                     code += f"    {para.syntaxType.change_name()} {para.name};\n"
 
         code += f"}}outC_{global_name};\n"
@@ -169,22 +170,35 @@ class GenerateCode:
         return src_content
 
     def generate_src_init(self, node):
+
         global_name = node.get_global_name()
         code = "#ifndef KCG_USER_DEFINED_INIT\n" \
                f"void {global_name}_init(outC_{global_name} *outC)\n" \
                "{\n"
+        # 与outC部分是同理的，需要统计全部作用域中的变量，所以用深度优先遍历一下
         # 给每个outC里面的变量赋值，不包括状态机的部分
+        stack = deque()
+        stack.append(node)
+        # 只有最上层的状态机需要登记outC，其他不需要
+        # 只有userOP有outParams，也就是最上层节点
         for para in node.outParams:
             code += f"    outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
-        for para in node.tmpParams:
-            if para.isOutput == True:
-                print("para ", para.name)
-                code += f"    outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
-
         # 给状态机设置初始状态
         for name, child_scope in node.childScopeTable.items():
             if child_scope.type == "automaton":
-                code += automaton_generate.generate_init(child_scope) + "\n"
+                code += automaton_generate.generate_init_symbol_for_init(child_scope)
+        while stack:
+            cur_node = stack.pop()
+            for name, child_scope in cur_node.childScopeTable.items():
+                stack.append(child_scope)
+            if cur_node.type == "automaton":
+                code += automaton_generate.generate_state_nxt_for_init(cur_node)
+
+            for para in cur_node.tmpParams:
+                if para.isOutput:
+                    print("para init ", para.name)
+                    code += f"    outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
+
         code += "}\n" \
                 "#endif\n"
         return code
@@ -570,6 +584,12 @@ def generate_id_expr_single_quote_lv6id(syntax_id_expr_objects, syntaxUserOp, ge
 
 @register_id_expr_handler("lastSinglequoteLv6id")
 def generate_id_expr_last_single_quote_lv6id(syntax_id_expr_objects, syntaxUserOp, genEqu):
+    """last的情况总是记录这个值上个周期的值，在状态机外与pre相同，在状态机内，pre会读出目标变量在这个状态内上次改变的值"""
+    #向outC中新添加一个变量
+    #例如b=last 'a,添加tmp_a，句子变成：
+    #b=outC->tmp_a;outC->tmp_a=a;
+    #而这句本身是无因果关系的，因此
+    #todo 必须要在合适的地方更新last语句中临时增加的变量，我想是第二阶段的任务
     return ""
 
 
@@ -749,9 +769,9 @@ def generate_userOp_control_block(syntaxEquation, syntaxUserOp, code_generator, 
 
         code_generator.add_code_to_types_file(automaton_generate.generate_type(control_block))
         print("HEAD:")
-        print(automaton_generate.generate_head(control_block))
+        print(automaton_generate.generate_state_nxt_for_head(control_block))
         print("INIT:")
-        print(automaton_generate.generate_init(control_block))
+        print(automaton_generate.generate_init_symbol_for_init(control_block))
 
         return automaton_generate.generate_body(control_block, code_generator, depth)
     else:

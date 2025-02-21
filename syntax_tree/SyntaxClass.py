@@ -256,10 +256,14 @@ class SyntaxType:
 
     def generate_init_expr(self):
         '''生成这个类型变量的初始值，给init函数准备的'''
-        if self.type in self.basic_type:
+        if self.type=="bool":
+            return "kcg_true"
+        elif self.type in self.basic_type:
             return f"kcg_lit_{self.type}(0)"
         else:
-            return ""  # 我也不知道应该生成什么，相信后人的智慧
+            return ""
+            # 我也不知道应该生成什么，相信后人的智慧
+            # 我恨过去的自己
 
 
 class SyntaxTypeSymbol:
@@ -1320,6 +1324,9 @@ class SyntaxPackageScope(SyntaxScope):
     userOpTable: dict
     '''函数，node的自定义符号表，因为path寻路只寻package所以独立出来，userop名字->SyntaxUserOpSymbol'''
 
+    openPackageList: list
+    '''打开的其他package列表，存一个到目标package的路径，需要根据当前package的位置去寻找离他最近的那个'''
+
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
         self.typeSymbolTable = dict()
@@ -1327,6 +1334,7 @@ class SyntaxPackageScope(SyntaxScope):
         self.sensorSymbolTable = dict()
         self.groupSymbolTable = dict()
         self.userOpTable = dict()
+        self.openPackageList = list()
 
     def package2str(self, depth=0):
         s = "    " * depth
@@ -1342,6 +1350,9 @@ class SyntaxPackageScope(SyntaxScope):
         s += "\033[0m"
         s += "\n"
         depth = depth + 1
+        s += "    " * depth + "\033[33mopen packages:\033[0m\n"
+        for package in self.openPackageList:
+            s += "    " * depth + "    " + package + "\n"
         s += "    " * depth + "\033[33mtypeSymbolTable:\033[0m\n"
         for ID, symbol in self.typeSymbolTable.items():
             s += "    " * depth + "    " + ID + ":" + str(symbol) + "\n"
@@ -1380,6 +1391,9 @@ class SyntaxPackageScope(SyntaxScope):
     def add_userOp(self, userOp: SyntaxUserOp) -> None:
         self.userOpTable[userOp.name] = userOp
         # self.childScopeTable[userOp.name]=userOp
+
+    def add_open_package(self,path) -> None:
+        self.openPackageList.append(path)
 
     def var_change_name(self, name):
         # generate_id_expr_path_id函数中syntaxUserOp可能为UserOp，此时需要添加inC，outC，可能是package，为了防止package情况下，没有var_change_name。
