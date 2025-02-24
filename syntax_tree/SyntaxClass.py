@@ -256,7 +256,7 @@ class SyntaxType:
 
     def generate_init_expr(self):
         '''生成这个类型变量的初始值，给init函数准备的'''
-        if self.type=="bool":
+        if self.type == "bool":
             return "kcg_true"
         elif self.type in self.basic_type:
             return f"kcg_lit_{self.type}(0)"
@@ -559,9 +559,9 @@ class SyntaxScope:
     def add_tmpSymbol(self, tmpSymbol):
         self.tmpParams.append(tmpSymbol)
 
-    def get_tmpSymbol(self,tmpSymbolName):
+    def get_tmpSymbol(self, tmpSymbolName):
         for symbol in self.tmpParams:
-            if symbol.name==tmpSymbolName:return symbol
+            if symbol.name == tmpSymbolName: return symbol
         return None
 
     def hasInternalState_InThisAndPreEnv(self):
@@ -569,6 +569,33 @@ class SyntaxScope:
         self.hasInternalState = True
         if self.prevScope is not None:
             self.prevScope.hasInternalState_InThisAndPreEnv()
+
+    def get_userOp(self):
+        """返回此作用域对应的userOp作用域"""
+        if self.type == "package": raise Exception(f"{self.name}是一个package")
+        op_scope = self
+        while op_scope.type != "function" and op_scope.type != "node":
+            op_scope = op_scope.prevScope
+        return op_scope
+
+    def resolve_path(self,path:list):
+        """解析Path类型，直接返回对应的package,输入数组格式,即split::后的"""
+        if self.type=="package":
+            cur_package=self
+        else:
+            cur_package=self.get_userOp().prevScope
+        # 先根据path第一个找到对应package，然后逐层向下找
+        tar_package=cur_package.get_package_InThisAndPreEnv(path[0])
+        if not tar_package:
+            raise UnknownIdentifierException(f"找不到{path[0]}")
+        for package_name in path[1:]:
+            tar_package=tar_package.get_package(package_name)
+            if not tar_package:
+                raise UnknownIdentifierException(f"找不到{path[0]}")
+        return tar_package
+
+
+
 
 
 class SyntaxIfBlock:
@@ -767,7 +794,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 return self.prevScope.prevScope.have_signal_InThisAndPreEnv(name)
             return self.prevScope.have_signal_InThisAndPreEnv(name)
 
-    def generate_name_for_tmp(self,postfix="tmp"):
+    def generate_name_for_tmp(self, postfix="tmp"):
         '''生成一个没有被用过的变量名，用来代码生成'''
         count = 1
 
@@ -795,14 +822,16 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
         return self.returnSymbolsTable
 
+    def add_dependent_function_to_userOp(self,path):
+        op_scope=self.get_userOp()
+        op_scope.add_dependent_function(path)
+
     def generate_init_name_and_check(self) -> str:
         """生成一个用来初始化的名字，将该名字作为此作用域的initsymbol名字。并确保没重名的情况，最高到函数级别不重名即可"""
         name = "init"
         num = 1
-        op_scope = self
-        while op_scope.type != "function" and op_scope.type != "node":
-            op_scope = op_scope.prevScope
-            # 函数级别
+        op_scope=self.get_userOp()
+        # 函数级别
         init_name = name + str(num)
         while not (self.get_localVariable_InThisAndPreEnv(init_name) is None and
                    not self.have_signal_InThisAndPreEnv(init_name) and
@@ -1173,16 +1202,16 @@ class SyntaxAutomaton(SyntaxScope):
     def graph2str(self, depth=0):
         out = ""
         for vertex in self.transferGraph:
-            out += f"\033[32m{'    ' * depth}{vertex.name}:\n\033[0m"
+            out += f"\033[32m{'    ' * depth}{vertex.value}:\n\033[0m"
             out += f"{'    ' * depth}TO:{len(vertex.get_to_vertexes())}\n\033[33m"
             for to_vertex in vertex.get_to_vertexes():
                 connection = vertex.get_to_connection(to_vertex)
-                out += f"{'    ' * depth}{connection.type} {to_vertex.name}\n"
+                out += f"{'    ' * depth}{connection.type} {to_vertex.value}\n"
 
             out += f"\033[0m{'    ' * depth}FROM:{len(vertex.get_from_vertexes())}\n\033[33m"
             for from_vertex in vertex.get_from_vertexes():
                 connection = vertex.get_from_connection(from_vertex)
-                out += f"{'    ' * depth}{connection.type} {from_vertex.name}\n"
+                out += f"{'    ' * depth}{connection.type} {from_vertex.value}\n"
             out += "\n"
         return out + "\033[0m"
 
@@ -1216,6 +1245,8 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''声明的模板类型'''
     specDecl: str = None
     '''声明的SPECIALIZE类型，存放一个pathID，没有声明则为None'''
+    dependentFunctions: list
+    '''此函数依赖的其他函数的路径列表'''
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
@@ -1224,6 +1255,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         # self.tmpParams = list()
         self.whereDecl = list()
         self.sizeDecl = list()
+        self.dependentFunctions = list()
 
     def set_sizeDecl(self, sizeDecl: list):
         self.sizeDecl = sizeDecl
@@ -1247,6 +1279,9 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
         '''递归的找局部变量，包括输入输出参数'''
         return self.get_localVariable(name)  # 上层不可能有变量了
+
+    def add_dependent_function(self,path):
+        self.dependentFunctions.append(path)
 
     def userOp2str(self, depth=0):
         s = "    " * depth
@@ -1307,7 +1342,7 @@ class SyntaxPackageScope(SyntaxScope):
     prevScope: SyntaxScope
     '''父作用域'''
     childScopeTable: dict
-    '''子作用域'''
+    '''子作用域,这里只保存了子package'''
     sentences: list
     '''该作用域中的scade语句'''
     visibility: str = "public"
@@ -1392,9 +1427,29 @@ class SyntaxPackageScope(SyntaxScope):
         self.userOpTable[userOp.name] = userOp
         # self.childScopeTable[userOp.name]=userOp
 
-    def add_open_package(self,path) -> None:
+    def add_open_package(self, path) -> None:
         self.openPackageList.append(path)
 
     def var_change_name(self, name):
         # generate_id_expr_path_id函数中syntaxUserOp可能为UserOp，此时需要添加inC，outC，可能是package，为了防止package情况下，没有var_change_name。
         return name
+
+    def get_package(self, package_name):
+        return self.childScopeTable[package_name]
+
+    def get_package_InThisAndPreEnv(self, package_name):
+        tar_package = self.get_package(package_name)
+        if tar_package: return tar_package
+        if self.is_global(): return None
+        return self.prevScope.get_package_InThisAndPreEnv(package_name)
+
+    def is_global(self):
+        return self.name == "*global"
+
+    def open(self,tar_package):
+        """打开对应package，将各种symbol复制到此处"""
+        print(f"{self.name}打开了{tar_package.name}")
+        self.typeSymbolTable|=tar_package.typeSymbolTable
+        self.constSymbolTable|=tar_package.constSymbolTable
+        self.sensorSymbolTable|=tar_package.sensorSymbolTable
+        self.groupSymbolTable|=tar_package.groupSymbolTable

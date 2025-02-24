@@ -1,5 +1,6 @@
 from syntax_tree.SyntaxClass import *
 from syntax_tree.scade_preprocess import *
+from syntax_tree.scade_postprocess import post_process
 from functools import wraps
 
 # 暂时使用，当把每个expr的type都设置了，就可以不使用了
@@ -764,14 +765,14 @@ def generate_userOp_control_block(syntaxEquation, syntaxUserOp, code_generator, 
     control_block_ID = syntaxEquation.controlBlockID
     control_block = syntaxUserOp.get_childScope(control_block_ID)
     if control_block is None: raise UnknownIdentifierException(f"control_block {control_block_ID} 没有找到")
-    print("this is control_block", syntaxEquation.controlBlockID)
+    # print("this is control_block", syntaxEquation.controlBlockID)
     if control_block.type == "automaton":
 
         code_generator.add_code_to_types_file(automaton_generate.generate_type(control_block))
-        print("HEAD:")
-        print(automaton_generate.generate_state_nxt_for_head(control_block))
-        print("INIT:")
-        print(automaton_generate.generate_init_symbol_for_init(control_block))
+        # print("HEAD:")
+        # print(automaton_generate.generate_state_nxt_for_head(control_block))
+        # print("INIT:")
+        # print(automaton_generate.generate_init_symbol_for_init(control_block))
 
         return automaton_generate.generate_body(control_block, code_generator, depth)
     else:
@@ -1015,6 +1016,8 @@ def scade_parse(input_path: str, main_operator: str, output_path: str):
     string_tokens = get_tokens(strs)
     scade_lexer.set_tokens(string_tokens)
     nodes = parser.parse(strs, lexer=scade_lexer)
+
+    post_process(root_scope)
 
     gen = GenerateCode(root_scope, main_operator, output_path)
     gen.generate_const_file()

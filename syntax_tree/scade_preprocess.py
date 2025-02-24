@@ -937,7 +937,7 @@ def p_returns_var(p):
     p[0] += p[1]
     if p[2] in p[1]:
         # 重复定义，报错
-        raise MultipleFlowDefinitionExceoption(p[2])
+        raise MultipleFlowDefinitionException(p[2])
     else:
         p[0].append(p[2])
 
@@ -950,7 +950,7 @@ def p_returns_var_1(p):
         p[0] += p[1]
         if p[2].value in p[1]:
             #重复定义，报错
-            raise MultipleFlowDefinitionExceoption(p[2].value)
+            raise MultipleFlowDefinitionException(p[2].value)
         else:p[0].append(p[2].value)
 
 
@@ -1432,6 +1432,11 @@ def p_prefix(p):
     '''Prefix : Path_id
     | PREFIXOP'''
     p[0] = p[1]
+    if p[1].strs=="path_id":
+        # 让此句所处的函数级作用域添加此路径作为依赖的函数
+        global cur_scope
+        cur_scope.add_dependent_function_to_userOp(p[1].value)
+
 
 
 def p_operator_1(p):
