@@ -740,15 +740,20 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     initSymbol: str = ""
     '''这个作用域内专用的init变量，每个data_def拥有自己的init变量'''
 
+    equationDependentGraph: Graph
+    """标识语句依赖关系的单向图"""
+
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
         self.signalSymbolSet = set()
         self.localSymbolTable = dict()
         self.returnSymbolsTable = dict()
+        self.equationDependentGraph = Graph()
 
     def add_equation(self, input_equation: SyntaxEquation):
         # 直接放进去，遍历完所有语句之后再进行排序
         self.equations.append(input_equation)
+        self.equationDependentGraph.addVertex(input_equation)
         # 更新返回列表
         for lhs in input_equation.lhs:
             if lhs == "_": return
@@ -763,7 +768,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 if not symbol: raise UnknownIdentifierException(
                     input_equation.type + " " + lhs + " in " + str(input_equation))
                 self.returnSymbolsTable[lhs] = symbol
-
     def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:
         '''在当前作用域找局部变量'''
         if name not in self.localSymbolTable.keys():
@@ -1247,6 +1251,8 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''声明的SPECIALIZE类型，存放一个pathID，没有声明则为None'''
     dependentFunctions: list
     '''此函数依赖的其他函数的路径列表'''
+    output2inputDependents: dict
+    '''记录此函数中，输出参数对输入参数的因果关系key,key为output,value为input的列表，均为对应数组下标'''
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
@@ -1256,6 +1262,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         self.whereDecl = list()
         self.sizeDecl = list()
         self.dependentFunctions = list()
+        self.output2inputDependents = dict()
 
     def set_sizeDecl(self, sizeDecl: list):
         self.sizeDecl = sizeDecl
@@ -1282,6 +1289,13 @@ class SyntaxUserOp(SyntaxDataDefScope):
 
     def add_dependent_function(self,path):
         self.dependentFunctions.append(path)
+
+    def add_input_output_dependency(self,input_index,output_index):
+        """在这两个输入/输出参数之间建立因果关系"""
+        if output_index not in self.output2inputDependents.keys():
+            self.output2inputDependents[output_index]=[]
+        if input_index in self.output2inputDependents[output_index]:return
+        self.output2inputDependents[output_index].append(input_index)
 
     def userOp2str(self, depth=0):
         s = "    " * depth
@@ -1435,7 +1449,9 @@ class SyntaxPackageScope(SyntaxScope):
         return name
 
     def get_package(self, package_name):
-        return self.childScopeTable[package_name]
+        if package_name in self.childScopeTable.keys():
+            return self.childScopeTable[package_name]
+        else:return None
 
     def get_package_InThisAndPreEnv(self, package_name):
         tar_package = self.get_package(package_name)
