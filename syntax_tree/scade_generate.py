@@ -590,7 +590,7 @@ def generate_id_expr_last_single_quote_lv6id(syntax_id_expr_objects, syntaxUserO
     #例如b=last 'a,添加tmp_a，句子变成：
     #b=outC->tmp_a;outC->tmp_a=a;
     #而这句本身是无因果关系的，因此
-    #todo 必须要在合适的地方更新last语句中临时增加的变量，我想是第二阶段的任务
+    #todo 必须要在合适的地方更新last语句中临时增加的变量，我想是第二阶段的任务，不是！就是这个阶段的任务，恶心死了
     return ""
 
 

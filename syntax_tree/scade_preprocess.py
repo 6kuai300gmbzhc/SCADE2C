@@ -58,7 +58,6 @@ def p_decls_zero_or_more(p):
     pass
 
 
-
 def p_decls(p):
     '''Decls : Const_block
     | Type_block
@@ -69,11 +68,13 @@ def p_decls(p):
     | Open_path
     '''
 
+
 def p_open_path(p):
     '''Open_path : OPEN Path_id SEMICOLON
     '''
     global cur_scope
     cur_scope.add_open_package(p[2].value)
+
 
 # 类型定义,在type_decl阶段就把类型登记到当前的符号表中去。
 def p_type_block(p):
@@ -322,7 +323,6 @@ def p_user_op_decl(p):
     'User_op_decl : User_op_name User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
     # 遍历结束，换回作用域
     global cur_scope
-    cur_scope.topologySort()
     cur_scope = cur_scope.prevScope
 
 
@@ -490,18 +490,17 @@ def p_equation(p):  # 把return 挪到control_block里面了方便声明作用�
     cur_scope.add_equation(p[1])
 
 
-
 # 在这里添加到对应scope中
 def p_simple_equation(p):
     '''Simple_equation : Lhs EQU Expr'''
-    p[0] = SyntaxEquation(type="simple_equation", lhs=p[1],lineno=p.lineno(2))
+    p[0] = SyntaxEquation(type="simple_equation", lhs=p[1], lineno=p.lineno(2))
     p[0].set_expr(p[3])
 
 
 def p_assert(p):
     '''Assert : ASSUME LV6ID COLON Expr
             | GUARANTEE LV6ID COLON Expr'''
-    p[0] = SyntaxEquation(type=p[1].value, lhs=list(),lineno=p.lineno(1))
+    p[0] = SyntaxEquation(type=p[1].value, lhs=list(), lineno=p.lineno(1))
     p[0].assertID = p[2].value
     p[0].set_expr(p[4])
 
@@ -522,8 +521,8 @@ def p_emission_body(p):
         lhs.append(p[3].value)
         lhs += p[4]
         expr = p[6]
-    p[0] = SyntaxEquation(type="emission", lhs=lhs,lineno=p.lineno(1))
-    if expr is not None:p[0].set_expr(expr)
+    p[0] = SyntaxEquation(type="emission", lhs=lhs, lineno=p.lineno(1))
+    if expr is not None: p[0].set_expr(expr)
 
 
 def p_emission_body_1(p):
@@ -578,18 +577,16 @@ def p_control_block(p):
      | State_machine Return'''
     global cur_scope
     cur_scope.hasInternalState_InThisAndPreEnv()
-    lhs=cur_scope.get_childScope(p[1]).get_return_symbolTable()
-    #检查ruturn的变量是否符合要求，即显示返回的变量里面有没有lhs以外的东西
+    lhs = cur_scope.get_childScope(p[1]).get_return_symbolTable()
+    # 检查ruturn的变量是否符合要求，即显示返回的变量里面有没有lhs以外的东西
     for symbol_name in p[2]:
-        if symbol_name=="..":#遇到这个说明完成了..只会在最后面
+        if symbol_name == "..":  # 遇到这个说明完成了..只会在最后面
             break
         if symbol_name not in lhs.keys():
-            #没有就报错
+            # 没有就报错
             raise UnknownIdentifierException(symbol_name)
-    p[0] = SyntaxEquation(type="control_block", lhs=lhs.keys(),lineno=p.lineno(1))
+    p[0] = SyntaxEquation(type="control_block", lhs=lhs.keys(), lineno=p.lineno(1))
     p[0].controlBlockID = p[1]
-
-
 
 
 def p_id_zero_or_one(p):
@@ -619,6 +616,7 @@ def p_state_machine_decl(p):  # 切换作用域
     cur_scope.add_childScope(scope)
     cur_scope = scope
     p.set_lineno(0, p.lineno(1))
+
 
 def p_state_machine_end(p):  # 切换回来
     '''State_machine_end : empty'''
@@ -680,12 +678,10 @@ def p_state_decl_3(p):
         p[0] = None
 
 
-
 def p_state_decl_4(p):  # 在这里恢复作用域到automaton
     '''State_decl_4 : UNTIL State_decl_6 State_decl_7
                     | empty '''
     global cur_scope
-    cur_scope.topologySort()
     if len(p) != 2:
         if p[2] and len(p[2]) > 0: cur_scope.set_untilTransitions(p[2])
         if p[3]: cur_scope.set_synchroArrow(p[3])
@@ -758,7 +754,6 @@ def p_actions(p):
         scope.add_equation(p[4])
         for equation in p[5]:
             scope.add_equation(equation)
-        scope.topologySort()
         p[0] = scope.name
         # 不切换作用域，直接新建一个作用域塞到当前作用域里就可以了
     # 更新一下当前作用域的返回值列表，将actions的返回值列表并入state内
@@ -820,7 +815,7 @@ def p_fork_1(p):
 def p_fork_2(p):
     '''Fork_2 : Else_fork
     | empty'''
-    if isinstance(p[1],lex_value):
+    if isinstance(p[1], lex_value):
         p[0] = None
     else:
         p[0] = p[1]
@@ -949,9 +944,10 @@ def p_returns_var_1(p):
     if len(p) != 2:
         p[0] += p[1]
         if p[2].value in p[1]:
-            #重复定义，报错
+            # 重复定义，报错
             raise MultipleFlowDefinitionException(p[2].value)
-        else:p[0].append(p[2].value)
+        else:
+            p[0].append(p[2].value)
 
 
 def p_returns_var_2(p):
@@ -981,7 +977,6 @@ def p_beforeDataDef(p):
 def p_afterDataDef(p):
     '''AfterDataDef : empty'''
     global cur_scope
-    cur_scope.topologySort()
     cur_scope = cur_scope.prevScope
 
 
@@ -1204,18 +1199,21 @@ def p_bool_expr(p):
         p[0] = SyntaxExpr(type="Bool_expr", subtype="HASHTAG")
         p[0].add_object(p[3])
 
+
 def p_hashtag_list(p):
     '''Hashtag_List : Hashtag_List_1
     | empty'''
     p[0] = list()
-    if isinstance(p[1],list):
+    if isinstance(p[1], list):
         p[0] += p[1]
+
 
 def p_hashtag_list_1(p):
     '''Hashtag_List_1 : Expr Hashtag_List_2'''
     p[0] = list()
     p[0].append(p[1])
     p[0] += p[2]
+
 
 def p_hashtag_list_2(p):
     '''Hashtag_List_2 : COMMA Expr Hashtag_List_2
@@ -1224,6 +1222,7 @@ def p_hashtag_list_2(p):
     if len(p) != 2:
         p[0].append(p[2])
         p[0] += p[3]
+
 
 def p_bool_expr_bin(p):
     '''Bool_expr : Expr AND Expr
@@ -1432,11 +1431,10 @@ def p_prefix(p):
     '''Prefix : Path_id
     | PREFIXOP'''
     p[0] = p[1]
-    if p[1].strs=="path_id":
+    if p[1].strs == "path_id":
         # 让此句所处的函数级作用域添加此路径作为依赖的函数
         global cur_scope
         cur_scope.add_dependent_function_to_userOp(p[1].value)
-
 
 
 def p_operator_1(p):
@@ -1718,8 +1716,10 @@ def p_empty(p):
     'empty :'
     p[0] = lex_value('Empty', "")
 
+
 def p_error(p):
-    print("error",p)
+    print("error", p)
+
 
 def get_parse(input_path: str, root_operator: str):
     parser = yacc(debug=1, start="Program")

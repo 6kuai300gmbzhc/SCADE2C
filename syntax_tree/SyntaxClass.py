@@ -3,25 +3,49 @@ from collections import defaultdict, deque
 from graph import *
 
 
-class SyntaxOperator:
+class HasRhs:
+    rhsList: list[set[str]]
+    '''记录了引用的变量，只有局部变量和signal用来排序,考虑到多返回值的情况，按顺序存放每个返回值所对应的依赖变量'''
+
+    def __init__(self):
+        self.rhsList = list()
+
+    def add_rhs(self, tar):
+        """将目标集合添加到右值中,即返回值+1
+        Parameters:
+            tar:有rhs的类，即expr，operator，equation
+        """
+        for rhs in tar.rhsList:
+            self.rhsList.append(rhs)
+
+    def set_rhs(self, rhs):
+        """设置右值
+        Parameters:
+            rhs:右值列表
+        """
+        self.rhsList.append(set(rhs))
+
+    def has_name_in_rhs(self, name):
+        """返回rhs中是否有这个变量的名字"""
+        for rhs in self.rhsList:
+            if name in rhs: return True
+        return False
+
+
+class SyntaxOperator(HasRhs):
     '''在Expr中的Apply_expr中的调用头部分，可以嵌套自己'''
     subtype: str
     '''operator的小类，看共享文档'''
     objects: list
     '''按顺序保存了具体的内容，具体看文档'''
-    rhs: set[str]
-    '''记录了引用的变量，只有局部变量和signal用来排序'''
 
     def __init__(self, subtype: str):
+        super().__init__()
         self.subtype = subtype
         self.objects = list()
-        self.rhs = set()
 
     def add_object(self, object):
         self.objects.append(object)
-        # 这里合并一下rhs，只有expr，和operator有rhs
-        if isinstance(object, SyntaxExpr) or isinstance(object, SyntaxOperator):
-            self.rhs |= object.rhs
 
     def __repr__(self):
         s = "operator::"
@@ -33,7 +57,7 @@ class SyntaxOperator:
         return s
 
 
-class SyntaxExpr:
+class SyntaxExpr(HasRhs):
     """保存expr，右值表达式，可以递归的自己包含自己"""
     type: str
     '''Id_expr  一个ID
@@ -54,56 +78,30 @@ class SyntaxExpr:
     '''上面大类中对应的每个小类（很多），具体看共享文档'''
     objects: list
     '''按顺序保存了具体的内容，具体看文档'''
-    rhs: set[str]
-    '''引用到的右值集合，用来给equations排序,只有变量没有函数，因为排序不需要函数
-    只有局部变量和signal
-    '''
     exprType: str
     '''expr的真实数据类型，如uint8,uint32,uint64'''
 
     def __init__(self, type: str, subtype: str):
+        super().__init__()
         self.type = type
         self.subType = subtype
         self.objects = list()
-        self.rhs = set()
 
     def add_object(self, object):
         self.objects.append(object)
-        if self.type == "Tempo_expr" and (self.subType == "PRE" or self.subType == "FBY"): return  # 这两个都是引用过去的变量，没有因果关系
-        if isinstance(object, list):
-            for expr in object:
-                if isinstance(expr, list):
-                    for t in expr:
-                        self.rhs |= self.get_rhs(t)
-                else:
-                    self.rhs |= self.get_rhs(expr)
-        else:
-            self.rhs |= self.get_rhs(object)
-
-    def get_rhs(self, object) -> set:
-        # 这里登记右值列表，只留变量，和信号（不包括带pre的),只有expr和operator有
-        if isinstance(object, SyntaxExpr) or isinstance(object, SyntaxOperator):
-            return object.rhs
-        # 在这里把右值加入，只有Id_expr下的Path_id和singlequoteLv6id需要新增rhs，其余情况都是合并
-        if self.type != "Id_expr": return set()
-        # pathId也去掉，只留下当前作用域的ID，就是只有局部变量和signal
-        if (self.subType == "Path_id" and "::" not in str(object)) or self.subType == "singlequoteLv6id":
-            output = set()
-            output.add(str(object))
-            return output
-        return set()
 
     def __repr__(self):
         s = ""
         s += self.type + "::" + self.subType + "("
-        for object in self.objects:
-            s += str(object) + ","
-        s = s[:-1]
+        if self.objects:
+            for object in self.objects:
+                s += str(object) + ","
+            s = s[:-1]
         s += ")"
         return s
 
 
-class SyntaxEquation:
+class SyntaxEquation(HasRhs):
     """保存一句scade的equation，用来排序和生成代码，包含左值和右值"""
     type: str
     '''euqaion的类型，包括simple_equation，assume，guarantee，emission，control_block'''
@@ -139,26 +137,24 @@ class SyntaxEquation:
     对simple_equation来说就是左值
     对assert来说是空列表
     '''
-    rhs: set[str]
-    '''对应表达式的右值变量的集合，如果没有右值变量，则为空集合'''
 
     def __init__(self, type: str, lhs: list, lineno: int):
+        super().__init__()
         self.type = type
         self.lhs = lhs
-        self.rhs = set()
         self.lineno = lineno
 
     def set_expr(self, expr: SyntaxExpr):
         self.expr = expr
-        self.rhs = expr.rhs
+
+    def set_rhs(self):
+        if self.type != "control_block":
+            self.rhsList = self.expr.rhsList
+        else:
+            pass  # todo 处理为状态机的情况！！！
 
     def equation2str(self, depth=0):
         s = "    " * depth + "行号" + ": " + str(self.lineno) + " "
-        s += " rhs: ("
-        for rhsSymbol in self.rhs:
-            s += rhsSymbol + ","
-        if len(self.rhs) > 0: s = s[:-1]
-        s += ") "
         if self.type == "assume" or self.type == "guarantee":
             s += self.type + " " + self.assertID + " : " + str(self.expr)
             return s
@@ -183,6 +179,18 @@ class SyntaxEquation:
             s += self.controlBlockID
 
         return s
+
+    def dependent_on_param(self, param_name):
+        """这个句子是否直接依赖于这个变量？输入变量名称"""
+        for ls in self.rhsList:
+            if param_name in ls: return True
+        return False
+
+    def dependent_on_equation(self, tar_equation):
+        """判断自己是否依赖dest，即检测自己的右值是否和dest的左值重合"""
+        for lhs in tar_equation.lhs:
+            if self.dependent_on_param(lhs): return True
+        return False
 
     def __repr__(self):
         return self.equation2str()
@@ -570,7 +578,7 @@ class SyntaxScope:
         if self.prevScope is not None:
             self.prevScope.hasInternalState_InThisAndPreEnv()
 
-    def get_userOp(self):
+    def get_my_userOp(self):
         """返回此作用域对应的userOp作用域"""
         if self.type == "package": raise Exception(f"{self.name}是一个package")
         op_scope = self
@@ -578,24 +586,21 @@ class SyntaxScope:
             op_scope = op_scope.prevScope
         return op_scope
 
-    def resolve_path(self,path:list):
+    def resolve_path(self, path: list):
         """解析Path类型，直接返回对应的package,输入数组格式,即split::后的"""
-        if self.type=="package":
-            cur_package=self
+        if self.type == "package":
+            cur_package = self
         else:
-            cur_package=self.get_userOp().prevScope
+            cur_package = self.get_my_userOp().prevScope
         # 先根据path第一个找到对应package，然后逐层向下找
-        tar_package=cur_package.get_package_InThisAndPreEnv(path[0])
+        tar_package = cur_package.get_package_InThisAndPreEnv(path[0])
         if not tar_package:
             raise UnknownIdentifierException(f"找不到{path[0]}")
         for package_name in path[1:]:
-            tar_package=tar_package.get_package(package_name)
+            tar_package = tar_package.get_package(package_name)
             if not tar_package:
                 raise UnknownIdentifierException(f"找不到{path[0]}")
         return tar_package
-
-
-
 
 
 class SyntaxIfBlock:
@@ -768,6 +773,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 if not symbol: raise UnknownIdentifierException(
                     input_equation.type + " " + lhs + " in " + str(input_equation))
                 self.returnSymbolsTable[lhs] = symbol
+
     def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:
         '''在当前作用域找局部变量'''
         if name not in self.localSymbolTable.keys():
@@ -826,15 +832,15 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
         return self.returnSymbolsTable
 
-    def add_dependent_function_to_userOp(self,path):
-        op_scope=self.get_userOp()
+    def add_dependent_function_to_userOp(self, path):
+        op_scope = self.get_my_userOp()
         op_scope.add_dependent_function(path)
 
     def generate_init_name_and_check(self) -> str:
         """生成一个用来初始化的名字，将该名字作为此作用域的initsymbol名字。并确保没重名的情况，最高到函数级别不重名即可"""
         name = "init"
         num = 1
-        op_scope=self.get_userOp()
+        op_scope = self.get_my_userOp()
         # 函数级别
         init_name = name + str(num)
         while not (self.get_localVariable_InThisAndPreEnv(init_name) is None and
@@ -864,39 +870,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
 
         if self.prevScope is not None and not self.prevScope.hasInternalState:
             self.prevScope.hasInternalState_InThisAndPreEnv()
-
-    def topologySort(self):
-        edges = list()
-        nodes = {node: False for node in self.equations}
-        # 更新一下依赖的关系
-        for input_equation in nodes:
-            for equation in nodes:
-                if is_dependent(input_equation, equation):  # 输入句子依赖这个句子
-                    edges.append([equation, input_equation])
-        # Step 1: 构建图的邻接表和入度字典
-        graph = defaultdict(list)
-        in_degree = {node: 0 for node in nodes}
-
-        for u, v in edges:
-            graph[u].append(v)
-            in_degree[v] += 1
-
-        # Step 2: 找到所有入度为 0 的节点
-        queue = deque([node for node in nodes if in_degree[node] == 0])
-
-        # Step 3: 拓扑排序
-        topo_order = []
-
-        while queue:
-            node = queue.popleft()
-            topo_order.append(node)
-
-            for neighbor in graph[node]:
-                in_degree[neighbor] -= 1
-                if in_degree[neighbor] == 0:
-                    queue.append(neighbor)
-        if len(topo_order) != len(self.equations): raise EquationDependentException(self.get_global_name() + "存在循环引用")
-        self.equations = topo_order
 
     def set_signalSymbolList(self, signalSymbolList: list):
         self.signalSymbolSet = set(signalSymbolList)
@@ -952,13 +925,20 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             s += equation.equation2str(depth=depth + 1) + "\n"
         return s
 
+    def find_userOp_by_path(self, path:str):
+        """根据路径找到对应的userop，没有则返回None
+         Parameters:
+            path: 带::的路径，指向某个userop
+        """
+        path_id = path.split("::")
+        userOp = self.get_my_userOp()
+        if len(path_id) > 1:
+            package_path = path_id[:-1]
+            target_package = userOp.resolve_path(package_path)
+        else:
+            target_package = userOp.prevScope
+        return target_package.get_userOp(path_id[-1])
 
-def is_dependent(src: SyntaxEquation, dest: SyntaxEquation):
-    '''判断src是否依赖dest，即检测src的右值是否和dest的左值重合'''
-    for lhs in dest.lhs:
-        if lhs in src.rhs:
-            return True
-    return False
 
 
 class SyntaxArrow:
@@ -1252,7 +1232,10 @@ class SyntaxUserOp(SyntaxDataDefScope):
     dependentFunctions: list
     '''此函数依赖的其他函数的路径列表'''
     output2inputDependents: dict
-    '''记录此函数中，输出参数对输入参数的因果关系key,key为output,value为input的列表，均为对应数组下标'''
+    '''记录此函数中，输出参数对输入参数的因果关系key,key为output,value为input的列表，均为对应数组下标
+    注意，在此userop没有返回值的时候，也会存在依赖关系，就好像存在一个默认的返回值一样。
+    所以要注意区分，不能依靠这个表来判断函数的返回值情况，只有inParams才行
+    '''
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
@@ -1287,14 +1270,14 @@ class SyntaxUserOp(SyntaxDataDefScope):
         '''递归的找局部变量，包括输入输出参数'''
         return self.get_localVariable(name)  # 上层不可能有变量了
 
-    def add_dependent_function(self,path):
+    def add_dependent_function(self, path):
         self.dependentFunctions.append(path)
 
-    def add_input_output_dependency(self,input_index,output_index):
+    def add_input_output_dependency(self, input_index, output_index):
         """在这两个输入/输出参数之间建立因果关系"""
         if output_index not in self.output2inputDependents.keys():
-            self.output2inputDependents[output_index]=[]
-        if input_index in self.output2inputDependents[output_index]:return
+            self.output2inputDependents[output_index] = []
+        if input_index in self.output2inputDependents[output_index]: return
         self.output2inputDependents[output_index].append(input_index)
 
     def userOp2str(self, depth=0):
@@ -1449,9 +1432,10 @@ class SyntaxPackageScope(SyntaxScope):
         return name
 
     def get_package(self, package_name):
-        if package_name in self.childScopeTable.keys():
-            return self.childScopeTable[package_name]
-        else:return None
+        return self.childScopeTable.get(package_name)
+
+    def get_userOp(self, userOp_name):
+        return self.userOpTable.get(userOp_name)
 
     def get_package_InThisAndPreEnv(self, package_name):
         tar_package = self.get_package(package_name)
@@ -1462,10 +1446,10 @@ class SyntaxPackageScope(SyntaxScope):
     def is_global(self):
         return self.name == "*global"
 
-    def open(self,tar_package):
+    def open(self, tar_package):
         """打开对应package，将各种symbol复制到此处"""
         print(f"{self.name}打开了{tar_package.name}")
-        self.typeSymbolTable|=tar_package.typeSymbolTable
-        self.constSymbolTable|=tar_package.constSymbolTable
-        self.sensorSymbolTable|=tar_package.sensorSymbolTable
-        self.groupSymbolTable|=tar_package.groupSymbolTable
+        self.typeSymbolTable |= tar_package.typeSymbolTable
+        self.constSymbolTable |= tar_package.constSymbolTable
+        self.sensorSymbolTable |= tar_package.sensorSymbolTable
+        self.groupSymbolTable |= tar_package.groupSymbolTable
