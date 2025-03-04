@@ -10,18 +10,40 @@ class HasRhs:
     def __init__(self):
         self.rhsList = list()
 
-    def add_rhs(self, tar):
-        """将目标集合添加到右值中,即返回值+1
+    def absorb_rhs(self, tar):
+        """将目标类的rhs吸收到右值中,即返回值增加
         Parameters:
             tar:有rhs的类，即expr，operator，equation
         """
         for rhs in tar.rhsList:
             self.rhsList.append(rhs)
 
+    def merge_rhs_in1(self, tar, index=0):
+        """将目标类的右值添加到右值中,但是全部融入指定位置
+        Parameters:
+            tar:有rhs的类，即expr，operator，equation
+            index: 目标rhs的数组下标
+        """
+        if not self.rhsList[index]:
+            self.rhsList[index] = set()
+        for rhs in tar.rhsList:
+            self.rhsList[index] |= rhs
+
+    def add_empty_rhs(self):
+        """添加一个空的右值列表"""
+        self.rhsList.append(set())
+
     def set_rhs(self, rhs):
         """设置右值
         Parameters:
-            rhs:右值列表
+            rhs:右值列表,str格式
+        """
+        self.rhsList = [set(rhs)]
+
+    def add_rhs(self, rhs):
+        """添加右值,返回值+1
+        Parameters:
+            rhs:右值列表,str格式
         """
         self.rhsList.append(set(rhs))
 
@@ -146,12 +168,6 @@ class SyntaxEquation(HasRhs):
 
     def set_expr(self, expr: SyntaxExpr):
         self.expr = expr
-
-    def set_rhs(self):
-        if self.type != "control_block":
-            self.rhsList = self.expr.rhsList
-        else:
-            pass  # todo 处理为状态机的情况！！！
 
     def equation2str(self, depth=0):
         s = "    " * depth + "行号" + ": " + str(self.lineno) + " "
@@ -452,7 +468,9 @@ class SyntaxVariableSymbol:
     lastExpr: SyntaxExpr = None
     '''对应last的值，可以为none'''
     postExpr: SyntaxExpr = None
-    '''pre和init使用，init最好在程序的最后设置为false，pre在程序最后添加上该周期的值'''
+    '''pre和init使用，init最好在程序的最后设置为false，pre在程序最后添加上该周期的值
+    last也用了
+    '''
 
     def __init__(self, name: str, isClock: bool, isProbe: bool):
         self.name = name
@@ -816,7 +834,9 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
 
     def var_change_name(self, name):
         symbol = self.get_localVariable_InThisAndPreEnv(name)
-        if symbol != None:
+        if symbol is None:
+            symbol = self.get_tmpSymbol(name)
+        if symbol is not None:
             if symbol.isOutput:
                 return f"outC->{symbol.name}"
             elif symbol.isInput:
@@ -925,7 +945,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             s += equation.equation2str(depth=depth + 1) + "\n"
         return s
 
-    def find_userOp_by_path(self, path:str):
+    def find_userOp_by_path(self, path: str):
         """根据路径找到对应的userop，没有则返回None
          Parameters:
             path: 带::的路径，指向某个userop
@@ -938,7 +958,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         else:
             target_package = userOp.prevScope
         return target_package.get_userOp(path_id[-1])
-
 
 
 class SyntaxArrow:
@@ -1201,7 +1220,7 @@ class SyntaxAutomaton(SyntaxScope):
 
 
 class SyntaxUserOp(SyntaxDataDefScope):
-    """记录func或者node，既作为symbol，也作为一种scope存在"""
+    """记录func或者node，作为一种scope存在"""
     type: str
     '''分为function和node两种'''
     name: str
@@ -1214,7 +1233,8 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''该作用域中的scade语句'''
     visibility: str = "public"
     '''可见性，默认为public'''
-
+    isImported: bool
+    '''是不是imported'''
     sizeDecl: list
     '''输入的size参数，其中每个值都是const'''
     inParams: list  # 存SyntaxVariableSymbol
@@ -1231,13 +1251,13 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''声明的SPECIALIZE类型，存放一个pathID，没有声明则为None'''
     dependentFunctions: list
     '''此函数依赖的其他函数的路径列表'''
-    output2inputDependents: dict
-    '''记录此函数中，输出参数对输入参数的因果关系key,key为output,value为input的列表，均为对应数组下标
+    output2inputDependents: list[list[int]]
+    '''记录此函数中，输出参数对输入参数的因果关系,二维数组，依次给output记录其依赖的input的列表，均为对应数组下标
     注意，在此userop没有返回值的时候，也会存在依赖关系，就好像存在一个默认的返回值一样。
-    所以要注意区分，不能依靠这个表来判断函数的返回值情况，只有inParams才行
+    所以要注意区分，不能依靠这个表来判断函数的返回值情况，只有outParams才行
     '''
 
-    def __init__(self, type, name, prevscope, visibility):
+    def __init__(self, type, name, prevscope, visibility,isImported=False):
         super().__init__(type, name, prevscope, visibility)
         self.inParams = list()
         self.outParams = list()
@@ -1245,10 +1265,20 @@ class SyntaxUserOp(SyntaxDataDefScope):
         self.whereDecl = list()
         self.sizeDecl = list()
         self.dependentFunctions = list()
-        self.output2inputDependents = dict()
+        self.output2inputDependents = list()
+        self.isImported=isImported
 
     def set_sizeDecl(self, sizeDecl: list):
         self.sizeDecl = sizeDecl
+
+    def set_outParams(self, outParams):
+        self.outParams = outParams
+        if not self.outParams:
+            self.output2inputDependents.append([])
+            return
+        for para in self.outParams:
+            para.isOutput = True
+            self.output2inputDependents.append([])
 
     def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:
         '''在当前作用域找局部变量，包括输入输出参数'''
@@ -1271,12 +1301,11 @@ class SyntaxUserOp(SyntaxDataDefScope):
         return self.get_localVariable(name)  # 上层不可能有变量了
 
     def add_dependent_function(self, path):
+        if path in self.dependentFunctions: return
         self.dependentFunctions.append(path)
 
     def add_input_output_dependency(self, input_index, output_index):
         """在这两个输入/输出参数之间建立因果关系"""
-        if output_index not in self.output2inputDependents.keys():
-            self.output2inputDependents[output_index] = []
         if input_index in self.output2inputDependents[output_index]: return
         self.output2inputDependents[output_index].append(input_index)
 

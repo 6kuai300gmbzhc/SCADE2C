@@ -80,8 +80,8 @@ class Graph:
                 out += f"({v.getValue()} , {f.getValue()})"
         return out
 
-    def topological_sort(self):
-        """进行拓扑排序，返回排序之后的顶点数组,若无法排序则返回None"""
+    def topological_sort(self) -> list or None:
+        """进行拓扑排序，返回排序之后的数组,若无法排序则返回None"""
         # 计算每个节点的入度
         # key就是value，value就是key
         in_degree = {key: 0 for key in self.vertList}
@@ -103,6 +103,7 @@ class Graph:
         if len(topo_order) != self.numVertices:
             return None
         return topo_order
+
 
 if __name__ == "__main__":
     # 实例化

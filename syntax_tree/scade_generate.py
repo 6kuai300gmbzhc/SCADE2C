@@ -1,3 +1,4 @@
+import SymbolClass
 from syntax_tree.SyntaxClass import *
 from syntax_tree.scade_preprocess import *
 from syntax_tree.scade_postprocess import post_process
@@ -586,17 +587,29 @@ def generate_id_expr_single_quote_lv6id(syntax_id_expr_objects, syntaxUserOp, ge
 @register_id_expr_handler("lastSinglequoteLv6id")
 def generate_id_expr_last_single_quote_lv6id(syntax_id_expr_objects, syntaxUserOp, genEqu):
     """last的情况总是记录这个值上个周期的值，在状态机外与pre相同，在状态机内，pre会读出目标变量在这个状态内上次改变的值"""
-    #向outC中新添加一个变量
-    #例如b=last 'a,添加tmp_a，句子变成：
-    #b=outC->tmp_a;outC->tmp_a=a;
-    #而这句本身是无因果关系的，因此
-    #todo 必须要在合适的地方更新last语句中临时增加的变量，我想是第二阶段的任务，不是！就是这个阶段的任务，恶心死了
-    return ""
+    # 向outC中新添加一个变量
+    # 例如b=last 'a,添加tmp_a，句子变成：
+    # b=outC->tmp_a;outC->tmp_a=a;
+    target_name = syntax_id_expr_objects[0][1:]
+    target_var = syntaxUserOp.get_localVariable_InThisAndPreEnv(target_name)
+    if not target_var:
+        raise UnknownIdentifierException(f"在{syntaxUserOp.get_global_name()}中找不到{target_name}")
+
+    tmp_var_name = syntaxUserOp.generate_name_for_tmp(postfix=f"{target_name}_mem_last")
+    tmp_var = SyntaxVariableSymbol(tmp_var_name, False, False)
+    tmp_var.syntaxType = target_var.syntaxType
+    tmp_var.isOutput = True
+    tmp_var.postExpr = SyntaxExpr(type="Id_expr", subtype="Path_id")
+    tmp_var.postExpr.add_object(target_name)
+    syntaxUserOp.add_tmpSymbol(tmp_var)
+
+    out_name = syntaxUserOp.var_change_name(tmp_var_name)
+    return out_name
 
 
 @register_id_expr_handler("ID")
 def generate_id_expr_ID(syntax_id_expr_objects, syntaxUserOp, genEqu):
-    return ""
+    return syntax_id_expr_objects[0]
 
 
 generate_expr_handlers = {}
@@ -730,6 +743,7 @@ def register_userOp_handler(type_):
 def generate_userOp_simple_equation(syntaxEquation, syntaxUserOp, code_generator: GenerateCode, depth=1):
     # out1=in1;若out1是数组或结构体，则需要使用memcpy，不能使用=。若右边是函数调用，且返回多个值，也不能直接使用=
     global lhs_type
+    if syntaxEquation.lhs[0]=="_":return""
     lhs_symbol = syntaxUserOp.get_localVariable_InThisAndPreEnv(syntaxEquation.lhs[0])
     if lhs_symbol is None: lhs_symbol = syntaxUserOp.get_tmpSymbol(syntaxEquation.lhs[0])
     lhs_type = lhs_symbol.syntaxType.type
@@ -965,22 +979,9 @@ def generate_type_block(rootPackage):
 def generate_data_def(data_def: SyntaxDataDefScope, code_generator: GenerateCode, depth=0) -> str:
     """给所有继承了data_def类的作用域生成代码，user_op除外，用genrateCode里面的函数"""
     # localVariable + tmpVariable
+    decl_content = ""
     src_content = ""
     post_content = ""
-    for name, symbol in data_def.localSymbolTable.items():
-        src_content += f"{'    ' * depth}{symbol.syntaxType.change_name()} {name};\n"
-    for signal in data_def.signalSymbolSet:
-        src_content += f"{'    ' * depth}kcg_bool {signal};\n"
-    for paraSymbol in data_def.tmpParams:
-        if paraSymbol.isOutput == False:
-            src_content += f"{'    ' * depth}{paraSymbol.syntaxType.change_name()} {paraSymbol.name};\n"
-        if paraSymbol.postExpr != None:
-            genEqu = GenEqu()
-            if len(genEqu.preEquations) != 0: post_content += f"{'    ' * depth}"
-            post_content += f"{'    ' * depth}".join(genEqu.preEquations)
-            post_content += f"{'    ' * depth}{data_def.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, data_def, genEqu)};\n"
-            if len(genEqu.postEquations) != 0: post_content += f"{'    ' * depth}"
-            post_content += f"{'    ' * depth}".join(genEqu.postEquations)
     for elem in data_def.equations:
         type_ = elem.type
         generate_userOp_handler = generate_userOp_handlers.get(type_)
@@ -988,8 +989,22 @@ def generate_data_def(data_def: SyntaxDataDefScope, code_generator: GenerateCode
             src_content += generate_userOp_handler(elem, data_def, code_generator, depth)
         else:
             raise ValueError(f"syntaxUserOp_generate error , type : {type_}")
-    src_content += post_content
-    return src_content
+    for name, symbol in data_def.localSymbolTable.items():
+        decl_content += f"{'    ' * depth}{symbol.syntaxType.change_name()} {name};\n"
+    for signal in data_def.signalSymbolSet:
+        decl_content += f"{'    ' * depth}kcg_bool {signal};\n"
+    for paraSymbol in data_def.tmpParams:
+        if paraSymbol.isOutput == False:
+            decl_content += f"{'    ' * depth}{paraSymbol.syntaxType.change_name()} {paraSymbol.name};\n"
+        if paraSymbol.postExpr != None:
+            genEqu = GenEqu()
+            if len(genEqu.preEquations) != 0: post_content += f"{'    ' * depth}"
+            post_content += f"{'    ' * depth}".join(genEqu.preEquations)
+            post_content += f"{'    ' * depth}{data_def.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, data_def, genEqu)};\n"
+            if len(genEqu.postEquations) != 0: post_content += f"{'    ' * depth}"
+            post_content += f"{'    ' * depth}".join(genEqu.postEquations)
+    content = decl_content+src_content+post_content
+    return content
 
 
 def scade_generate(root_operator, code_generator: GenerateCode):
@@ -1023,10 +1038,15 @@ def scade_parse(input_path: str, main_operator: str, output_path: str):
     gen.generate_const_file()
     # gen.generate_main_file()
     gen.generate_types_file()
-    for k, v in root_scope.userOpTable.items():
-        gen.generate_node_file(v)
-        # gen.generate_head_file(v)
-        # gen.generate_src_file(v)
+    stack = deque([root_scope])
+    while stack:
+        tar_package=stack.pop()
+        for k, v in tar_package.userOpTable.items():
+            gen.generate_node_file(v)
+            # gen.generate_head_file(v)
+            # gen.generate_src_file(v)
+        for k,sub_package in tar_package.childScopeTable.items():
+            stack.append(sub_package)
 
     # scade_generate(main_operator)
     gen.add_code_to_types_file("#endif\n")  # 结束

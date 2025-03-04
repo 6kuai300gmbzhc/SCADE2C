@@ -334,7 +334,9 @@ def p_user_op_name(p):
         visibility = p[2]["Visibility"]
     else:
         visibility = "public"
-    user_op_scope = SyntaxUserOp(type=p[1]["Op_kind"], name=p[3].value, prevscope=cur_scope, visibility=visibility)
+    imported = "External" in p[2].keys()
+    user_op_scope = SyntaxUserOp(type=p[1]["Op_kind"], name=p[3].value, prevscope=cur_scope,
+                                 visibility=visibility,isImported=imported)
     cur_scope.add_userOp(user_op_scope)
     cur_scope = user_op_scope
 
@@ -375,9 +377,7 @@ def p_in_params(p):
 def p_out_params(p):
     'Out_Params : Params'
     global cur_scope
-    cur_scope.outParams = p[1]
-    for para in cur_scope.outParams:
-        para.isOutput = True
+    cur_scope.set_outParams(p[1])
 
 
 def p_params(p):
@@ -1019,7 +1019,7 @@ def p_id_expr(p):
     elif len(p) == 4:
         p[0] = SyntaxExpr(type="Id_expr", subtype="lastSinglequoteLv6id")
         p[0].add_object(p[2].value + p[3].value)
-
+        # 为什么我要在这里把'加上？？现在删不掉了
 
 def p_atom(p):
     '''Atom : Bool_atom
@@ -1396,7 +1396,7 @@ def p_operator(p):
                 p[0] = SyntaxOperator(subtype="Path_id")
             else:
                 p[0] = SyntaxOperator(subtype="PREFIXOP")
-            p[0].add_object(p[2])
+            p[0].add_object(p[2].value)
             p[0].add_object(p[4])
     elif length == 8:
         p[0] = SyntaxOperator(subtype="iterator")
