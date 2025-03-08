@@ -1,6 +1,7 @@
 from syntax_tree.SyntaxClass import *
 import syntax_tree.graph
 import itertools
+import syntax_tree.automaton_post_process as Post_automaton
 
 
 # 记录函数之间依赖关系的单向图
@@ -72,7 +73,7 @@ def post_process_userOp(userOp: SyntaxUserOp) -> None:
     """在这里，遍历内部所有语句，对语句进行拓扑排序，并更新此函数的输入输出参数之间的依赖关系"""
     # 如果函数是imported的话，就假设输入输出之间全都有关系
     if userOp.isImported:
-        userOp.output2inputDependents=[[i for i in range(len(userOp.inParams))]*len(userOp.outParams)]
+        userOp.output2inputDependents = [[i for i in range(len(userOp.inParams))] * len(userOp.outParams)]
     else:
         equation_graph = post_process_data_def(userOp)
         build_userOp_output2inputDependents(userOp, equation_graph)
@@ -85,7 +86,10 @@ def build_userOp_output2inputDependents(userOp: SyntaxUserOp, equation_graph):
     在图中找到左值是out_param的句子，然后前向遍历，看看其他的句子里面有没有in_param
     如果这个uesrOp没有返回值的话，也要添加参数之间的依赖关系！！！！就是说这些返回值会有默认的依赖
     """
-    if not userOp.inParams: return  # 没有输入参数，非常好，直接返回
+    if not userOp.inParams:
+        userOp.output2inputDependents = [[] * len(userOp.outParams)]
+        # 没有输入参数，则依赖表就是空，输出完全不依赖输入
+        return  # 没有输入参数，非常好，直接返回
     # 如果这个函数没有输出呢？
     if not userOp.outParams:
         for in_index in range(len(userOp.inParams)):
@@ -95,41 +99,38 @@ def build_userOp_output2inputDependents(userOp: SyntaxUserOp, equation_graph):
                     userOp.add_input_output_dependency(in_index, 0)  # 放一个虚空索引
         return
     for out_index in range(len(userOp.outParams)):
-        for equation_vertex in equation_graph:
-            out_param = userOp.outParams[out_index]
-            if out_param.name not in equation_vertex.value.lhs: continue
-
-            # 这就是找到了,然后开始深度优先搜索
-            # 额，什么leetcode题目
-            checked_set = set()
-            dfs = deque([equation_vertex])
-            while dfs:
-                cur_vertex = dfs.pop()
-                checked_set.add(cur_vertex)
-                cur_equation = cur_vertex.value
-                # 看看现在这个句子里面有没有输入参数，也就是看看带输出参数的句子依赖于有这个带输入参数的句子
-                for in_index in range(len(userOp.inParams)):
-                    in_param = userOp.inParams[in_index]
+        out_param = userOp.outParams[out_index]
+        for in_index in range(len(userOp.inParams)):
+            in_param = userOp.inParams[in_index]
+            if out_param.dependent_on_symbol(in_param):
+                userOp.add_input_output_dependency(in_index, out_index)
+            for equation_vertex in equation_graph:
+                if out_param.name not in equation_vertex.value.lhs: continue
+                # 这就是找到了,然后开始深度优先搜索
+                # 额，什么leetcode题目
+                # 四层for循环，看了就想死，不管了
+                from_vertexes = equation_vertex.get_all_from_vertexes()
+                for cur_vertex in from_vertexes:
+                    cur_equation = cur_vertex.value
+                    # 看看现在这个句子里面有没有输入参数，也就是看看带输出参数的句子依赖于有这个带输入参数的句子
                     if cur_equation.has_name_in_rhs(in_param.name):
                         userOp.add_input_output_dependency(in_index, out_index)
-                # 把新equation节点加入栈
-                for nxt_vertex in cur_vertex.get_from_vertexes():
-                    if nxt_vertex in checked_set: continue
-                    dfs.append(nxt_vertex)
 
 
 def post_process_data_def(data_def: SyntaxDataDefScope) -> Graph:
     """对所有data_def类型，遍历其内部的所有语句，给出依赖关系，对语句进行拓扑排序,返回此作用域内的单向图"""
     # 先看一眼其内部所有的语句,把依赖关系建立起来
-
+    if not data_def.equations: return data_def.equationDependentGraph
     for equation in data_def.equations:
         post_process_equation(equation, data_def)
     graph = data_def.equationDependentGraph
     for src_equation in data_def.equations:
+        graph.addVertex(src_equation)
+        src_equation.set_vertex(graph.getVertex(src_equation))  # 有点蠢
         # 右值依赖左值
         # 对这个句子，找到其他右值有其左值的句子，添加依赖关系
         for dst_equation in data_def.equations:
-            if src_equation is not dst_equation and src_equation.dependent_on_equation(dst_equation):
+            if src_equation is not dst_equation and src_equation.dependent_on_equation_directly(dst_equation):
                 # src依赖dst
                 # 所以在dst到src有边
                 graph.addEdge(dst_equation, src_equation)
@@ -145,10 +146,38 @@ def post_process_equation(equation: SyntaxEquation, data_def) -> None:
     # 只有control_block有不同的地方，其他都一样
     if equation.type != "control_block":
         post_process_expr(equation.expr, data_def)
-        equation.rhsList = equation.expr.rhsList
+        equation.build_lhs_rhs_dict()
     else:
+        control_block = data_def.get_childScope(equation.controlBlockID)
+        post_process_control_block(control_block)
+        # 对control_block进行处理时，需要找到它对应的scope，然后根据returns值，去查看输出值的所有依赖变量
         # todo 状态机后处理流程
         pass
+
+
+post_process_control_block_handlers = {}
+
+
+def post_control_block_handler(type_):
+    def decorator(func):
+        post_process_control_block_handlers[type_] = func
+        return func
+
+    return decorator
+
+
+def post_process_control_block(control_block):
+    for name, sub_scope in control_block.childScopeTable.items():
+        post_process_data_def(sub_scope)
+    # 提前处理完内部的所有子作用域
+    type_ = control_block.type
+    control_block_handler = post_process_control_block_handlers[type_]
+    control_block_handler(control_block)
+
+
+@post_control_block_handler('automaton')
+def post_automaton(automaton: SyntaxAutomaton):
+    Post_automaton.post_process(automaton)
 
 
 post_process_expr_handlers = {}
@@ -171,8 +200,8 @@ def post_process_expr(expr, data_def):
         if type(sub_expr) == SyntaxExpr:
             post_process_expr(sub_expr, data_def)
     if type_ in post_process_expr_handlers.keys():
-        generate_expr_handler = post_process_expr_handlers[type_]
-        generate_expr_handler(expr, data_def)
+        expr_handler = post_process_expr_handlers[type_]
+        expr_handler(expr, data_def)
     else:
         set_rhs_default(expr)
 
@@ -180,7 +209,7 @@ def post_process_expr(expr, data_def):
 def set_rhs_default(expr):
     # 默认的情况下，expr的rhs是各子expr之和，合并成一个
     # 我一定会处理函数调用的情况，所以这里就没有operator了
-    flat_list=flatten_list(expr.objects)
+    flat_list = flatten_list(expr.objects)
     tar_rhs = set()
     for sub_expr in flat_list:
         if type(sub_expr) != SyntaxExpr: continue
@@ -188,9 +217,10 @@ def set_rhs_default(expr):
             tar_rhs |= rhs
     expr.set_rhs(tar_rhs)
 
+
 @post_expr_handler('Id_expr')
 def post_Id_expr(expr: SyntaxExpr, data_def):
-    if expr.subType == "ID" or expr.subType=="lastSinglequoteLv6id": return
+    if expr.subType == "ID" or expr.subType == "lastSinglequoteLv6id": return
     name = expr.objects[0]
     if expr.subType == "Path_id":
         if "::" in name: return  # 是path说明是常量
@@ -199,10 +229,11 @@ def post_Id_expr(expr: SyntaxExpr, data_def):
     # id_expr仅有单个返回值，设置rhs
     expr.set_rhs([name])
 
+
 @post_expr_handler("Tempo_expr")
 def post_tempo_expr(expr: SyntaxExpr, data_def):
-    if expr.subType=="PRE": return
-    if expr.subType=="FBY":
+    if expr.subType == "PRE": return
+    if expr.subType == "FBY":
         expr.absorb_rhs(expr.objects[2])
         return
     set_rhs_default(expr)
@@ -234,8 +265,8 @@ def post_Apply_expr(expr, data_def):
     operator = expr.objects[0]
     type_ = operator.subtype
     if type_ in post_process_operator_handlers.keys():
-        generate_operator_handler = post_process_operator_handlers[type_]
-        generate_operator_handler(operator, expr, data_def)
+        operator_handler = post_process_operator_handlers[type_]
+        operator_handler(operator, expr, data_def)
 
 
 post_process_operator_handlers = {}

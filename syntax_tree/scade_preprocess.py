@@ -757,7 +757,10 @@ def p_actions(p):
         p[0] = scope.name
         # 不切换作用域，直接新建一个作用域塞到当前作用域里就可以了
     # 更新一下当前作用域的返回值列表，将actions的返回值列表并入state内
+    # 给当前state加一个记录action的作用域
+
     action_scope = cur_scope.get_childScope(p[0])
+    cur_scope.add_action_subscope(action_scope)
     cur_scope.returnSymbolsTable.update(action_scope.returnSymbolsTable)
 
 
@@ -1134,6 +1137,8 @@ def p_list(p):
     p[0] = SyntaxExpr(type="List_expr", subtype="List_expr")
     if isinstance(p[1], list):
         p[0].add_object(p[1])
+    else:
+        p[0].add_object([])
 
 
 def p_list_1(p):

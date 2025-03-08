@@ -7,12 +7,30 @@ class Vertex:
         self.value = value
         self.connectedTo = {}
         self.connectedFrom = {}
+        self.connectedFromAllSet = set()
 
     def add_to(self, nbr, arrow=0):
         self.connectedTo[nbr] = arrow
 
     def add_from(self, nbr, arrow=0):
+        # 把from的节点的依赖节点集合合并进来,再加上自己
         self.connectedFrom[nbr] = arrow
+        self.update_connectedFromAll(nbr)
+
+    def update_connectedFromAll(self, vertex):
+        """把目标节点的集合合并到自己身上,并递归的更新自己所连接到的其他节点"""
+        checked_set= set()
+        stack=deque([self])
+        while stack:
+            tar_vertex=stack.pop()
+            if tar_vertex in checked_set: continue
+            tar_vertex.connectedFromAllSet |= vertex.connectedFromAllSet
+            tar_vertex.connectedFromAllSet.add(vertex)
+            checked_set.add(tar_vertex)
+            for nxt_vertex in tar_vertex.get_to_vertexes():
+                stack.append(nxt_vertex)
+
+
 
     def __str__(self):
         return str(self.value) + \
@@ -34,6 +52,9 @@ class Vertex:
     def get_from_connection(self, nbr):
         return self.connectedFrom[nbr]
 
+    def get_all_from_vertexes(self) -> set:
+        return self.connectedFromAllSet
+
 
 class Graph:
     def __init__(self):
@@ -52,10 +73,17 @@ class Graph:
         else:
             return None
 
+    def get_all_from_vertexes_from_value(self, value) -> list or None:
+        """找到连接到有此值的节点的其他所有节点"""
+        src_vertex = self.getVertex(value)
+        if not src_vertex: return None
+        return src_vertex.get_all_from_vertexes()
+
     def __contains__(self, n):
         return n in self.vertList
 
     def addEdge(self, from_vertex, to_vertex, arrow=0):
+        # 在添加边的时候，也需要更新to_vertex，更新所有可以到它的节点列表
         if from_vertex not in self.vertList:
             self.addVertex(from_vertex)
         if to_vertex not in self.vertList:
@@ -116,11 +144,13 @@ if __name__ == "__main__":
     g.addEdge(1, 2, 4)
     g.addEdge(2, 3, 9)
     g.addEdge(3, 4, 7)
-    g.addEdge(3, 5, 3)
-    g.addEdge(4, 0, 1)
+    # g.addEdge(3, 5, 3)
+    # g.addEdge(4, 0, 1)
     g.addEdge(5, 4, 8)
     g.addEdge(5, 2, 1)
     for v in g:
+        print()
+        print(v.value)
         print("TO")
         for w in v.get_to_vertexes():
             print("(%s , %s)" % (v.getValue(), w.getValue()))
@@ -128,3 +158,4 @@ if __name__ == "__main__":
         for f in v.get_from_vertexes():
             print("(%s , %s)" % (f.getValue(), v.getValue()))
         print("FIN")
+        print([t.value for t in v.connectedFromAllSet])

@@ -3,6 +3,9 @@ from collections import defaultdict, deque
 from graph import *
 
 
+# 拓扑排序和模板实例化操作
+# 实例化还在写，虽然非常不想写，半年前的记忆触发了
+
 class HasRhs:
     rhsList: list[set[str]]
     '''记录了引用的变量，只有局部变量和signal用来排序,考虑到多返回值的情况，按顺序存放每个返回值所对应的依赖变量'''
@@ -123,6 +126,10 @@ class SyntaxExpr(HasRhs):
         return s
 
 
+class SyntaxDataDefScope:
+    pass
+
+
 class SyntaxEquation(HasRhs):
     """保存一句scade的equation，用来排序和生成代码，包含左值和右值"""
     type: str
@@ -151,7 +158,6 @@ class SyntaxEquation(HasRhs):
     '''此语句在原文中的行号
     如果为-1则是遍历时加上去的
     '''
-
     lhs: list[str]
     '''左值列表，可以由0-多个ID组成，
     对control_block来说就是return的值，用来排序
@@ -159,15 +165,29 @@ class SyntaxEquation(HasRhs):
     对simple_equation来说就是左值
     对assert来说是空列表
     '''
+    lhs2RhsDict: dict
+    '''存储lhs到rhs列表的字典，说实话有点冗余了，但是也没办法就这样吧'''
+    vertex: Vertex = None
+    '''这个句子所对应的图节点'''
+
+    scope: SyntaxDataDefScope
+    '''这个句子所属于的作用域'''
 
     def __init__(self, type: str, lhs: list, lineno: int):
         super().__init__()
         self.type = type
         self.lhs = lhs
         self.lineno = lineno
+        self.lhs2RhsDict = dict()
 
     def set_expr(self, expr: SyntaxExpr):
         self.expr = expr
+
+    def set_vertex(self, vertex):
+        self.vertex = vertex
+
+    def set_scope(self, scope: SyntaxDataDefScope):
+        self.scope = scope
 
     def equation2str(self, depth=0):
         s = "    " * depth + "行号" + ": " + str(self.lineno) + " "
@@ -196,17 +216,31 @@ class SyntaxEquation(HasRhs):
 
         return s
 
-    def dependent_on_param(self, param_name):
+    def dependent_on_param_directly(self, param_name):
         """这个句子是否直接依赖于这个变量？输入变量名称"""
         for ls in self.rhsList:
             if param_name in ls: return True
         return False
 
-    def dependent_on_equation(self, tar_equation):
-        """判断自己是否依赖dest，即检测自己的右值是否和dest的左值重合"""
+    def dependent_on_equation_directly(self, tar_equation):
+        """判断自己是否直接依赖dest，即检测自己的右值是否和dest的左值重合"""
         for lhs in tar_equation.lhs:
-            if self.dependent_on_param(lhs): return True
+            if self.dependent_on_param_directly(lhs): return True
         return False
+
+    def get_dependent_equations(self) -> list:
+        """这个句子所依赖的全部句子"""
+        return [vertex.value for vertex in self.vertex.get_all_from_vertexes()]
+
+    def get_rhs_list_by_name(self, lhs: str):
+        """找到这个句子中，lhs所对应的rhs列表"""
+        return self.lhs2RhsDict.get(lhs)
+
+    def build_lhs_rhs_dict(self):
+        """把自己lhs和rhs所对应起来"""
+        self.rhsList = self.expr.rhsList
+        for i in range(len(self.lhs)):
+            self.lhs2RhsDict[self.lhs[i]] = self.rhsList[i]
 
     def __repr__(self):
         return self.equation2str()
@@ -449,6 +483,7 @@ class SyntaxClockExpr:
 
 
 class SyntaxVariableSymbol:
+    """局部变量，即在var内部所声明的变量，不包括signal，这一点非常好，因为一个局部变量最多只能是一个equation的左值"""
     name: str
     '''自定义变量名字'''
     isClock: bool
@@ -478,6 +513,12 @@ class SyntaxVariableSymbol:
         self.isProbe = isProbe
         self.isOutput = False
         self.isInput = False
+
+    def get_all_dependent_symbols(self, data_def):
+        """此局部变量,在这个作用域中所依赖的全部其他变量"""
+        # output=list()
+        # rhs_list=self.equation.get_rhs_list_by_name(self.name)
+        # for rhs_name in rhs_list:
 
     def __repr__(self):
         s = ""
@@ -757,7 +798,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     signalSymbolSet: set
     '''存放signal类型，保存signal的ID集合,signal的ID没有‘，只有ID本身的部分'''
     localSymbolTable: dict
-    '''存放局部变量，变量名字->SyntaxVariableSymbol'''
+    '''存放局部变量，变量名字->SyntaxVariableSymbol,signal不属于这个集合'''
     returnSymbolsTable: dict
     '''存放了当前及下级作用域修改的，外部作用域的变量，变量名字->SyntaxVariableSymbol'''
     initSymbol: str = ""
@@ -765,6 +806,8 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
 
     equationDependentGraph: Graph
     """标识语句依赖关系的单向图"""
+    lhs2EquationDict: dict
+    """左值名字找对应句子的dict，没有signal！！"""
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
@@ -772,11 +815,14 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         self.localSymbolTable = dict()
         self.returnSymbolsTable = dict()
         self.equationDependentGraph = Graph()
+        self.lhs2EquationDict = dict()
 
     def add_equation(self, input_equation: SyntaxEquation):
         # 直接放进去，遍历完所有语句之后再进行排序
+        # 还有各种设置索引和句子所属作用域
         self.equations.append(input_equation)
         self.equationDependentGraph.addVertex(input_equation)
+        input_equation.set_scope(self)
         # 更新返回列表
         for lhs in input_equation.lhs:
             if lhs == "_": return
@@ -785,12 +831,16 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 # 信号部分单独处理一下,找不到就报错
                 if not self.have_signal_InThisAndPreEnv(lhs):
                     raise UnknownIdentifierException(lhs + " in " + str(input_equation))
-            elif "'" not in lhs and not self.get_localVariable(lhs):
-                # 当前作用域找不到这个变量，但是上面的作用域找到了，说明是一个要返回的变量
-                symbol = self.get_localVariable_InThisAndPreEnv(lhs)
-                if not symbol: raise UnknownIdentifierException(
-                    input_equation.type + " " + lhs + " in " + str(input_equation))
-                self.returnSymbolsTable[lhs] = symbol
+            else:
+                symbol = self.get_localVariable(lhs)
+                if not symbol:
+                    symbol = self.get_localVariable_InThisAndPreEnv(lhs)
+                    self.returnSymbolsTable[lhs] = symbol
+                    # 当前作用域找不到这个变量，但是上面的作用域找到了，说明是一个要返回的变量
+                if not symbol:
+                    raise UnknownIdentifierException(
+                        input_equation.type + " " + lhs + " in " + str(input_equation))
+                self.lhs2EquationDict[lhs] = input_equation
 
     def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:
         '''在当前作用域找局部变量'''
@@ -1052,11 +1102,14 @@ class SyntaxState(SyntaxDataDefScope):
     '''弱转移列表,保存了存有（SyntaxExpr，SyntaxArrow）的列表'''
     synchroArrow: SyntaxArrow = None
     '''同步转移，可为None'''
+    actionChildScopeList: list[SyntaxDataDefScope]
+    '''该状态下所有arrow中action对应的datadef'''
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
         self.untilTransitions = list()
         self.unlessTransitions = list()
+        self.actionChildScopeList = list()
 
     def set_synchroArrow(self, synchroArrow: SyntaxArrow):
         self.synchroArrow = synchroArrow
@@ -1078,6 +1131,9 @@ class SyntaxState(SyntaxDataDefScope):
             for arrow in arrows:
                 # 状态的前一个作用域必定是automaton
                 self.prevScope.add_edge(self.name, arrow.target, arrow)
+
+    def add_action_subscope(self, action: SyntaxDataDefScope):
+        self.actionChildScopeList.append(action)
 
     def get_strong_transfer_arrows(self) -> list[SyntaxArrow]:
         """获取这个状态可能抵达的其他状态的arrow，只有强转移"""
@@ -1257,7 +1313,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
     所以要注意区分，不能依靠这个表来判断函数的返回值情况，只有outParams才行
     '''
 
-    def __init__(self, type, name, prevscope, visibility,isImported=False):
+    def __init__(self, type, name, prevscope, visibility, isImported=False):
         super().__init__(type, name, prevscope, visibility)
         self.inParams = list()
         self.outParams = list()
@@ -1266,7 +1322,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         self.sizeDecl = list()
         self.dependentFunctions = list()
         self.output2inputDependents = list()
-        self.isImported=isImported
+        self.isImported = isImported
 
     def set_sizeDecl(self, sizeDecl: list):
         self.sizeDecl = sizeDecl
@@ -1309,9 +1365,15 @@ class SyntaxUserOp(SyntaxDataDefScope):
         if input_index in self.output2inputDependents[output_index]: return
         self.output2inputDependents[output_index].append(input_index)
 
+    def isTemplate(self):
+        return self.numericKind is not None
+
     def userOp2str(self, depth=0):
         s = "    " * depth
-        s += "\033[31muserOpScope as " + self.type + " "
+        s += "\033[31m"
+        if self.isImported:
+            s += " imported "
+        s += "userOpScope as " + self.type + " "
         prev_list = list()
         p = self.prevScope
         while p is not None:
