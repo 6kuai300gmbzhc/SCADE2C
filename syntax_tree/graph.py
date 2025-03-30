@@ -19,18 +19,16 @@ class Vertex:
 
     def update_connectedFromAll(self, vertex):
         """把目标节点的集合合并到自己身上,并递归的更新自己所连接到的其他节点"""
-        checked_set= set()
-        stack=deque([self])
+        checked_set = set()
+        stack = deque([self])
         while stack:
-            tar_vertex=stack.pop()
+            tar_vertex = stack.pop()
             if tar_vertex in checked_set: continue
             tar_vertex.connectedFromAllSet |= vertex.connectedFromAllSet
             tar_vertex.connectedFromAllSet.add(vertex)
             checked_set.add(tar_vertex)
             for nxt_vertex in tar_vertex.get_to_vertexes():
                 stack.append(nxt_vertex)
-
-
 
     def __str__(self):
         return str(self.value) + \
@@ -61,17 +59,16 @@ class Graph:
         self.vertList = {}
         self.numVertices = 0
 
-    def addVertex(self, key):
-        if key in self.vertList.keys(): return
+    def addVertex(self, key) -> Vertex:
+        if key in self.vertList.keys():
+            return self.getVertex(key)
         self.numVertices = self.numVertices + 1
         newVertex = Vertex(key)
         self.vertList[key] = newVertex
+        return newVertex
 
-    def getVertex(self, n):
-        if n in self.vertList:
-            return self.vertList[n]
-        else:
-            return None
+    def getVertex(self, key):
+        return self.vertList.get(key)
 
     def get_all_from_vertexes_from_value(self, value) -> list or None:
         """找到连接到有此值的节点的其他所有节点"""

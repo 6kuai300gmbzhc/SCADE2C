@@ -83,12 +83,11 @@ class GenerateCode:
         global_name = node.get_global_name()
         code = "typedef struct{\n"
         for para in node.inParams:
-            code += f"    {para.syntaxType.change_name()} {para.name};\n"
-        code += f"}}inC_{global_name};\n"
+            code += f"{para.syntaxType.change_name()} {para.name};\n"
+        code += f"}}{node.get_inC_name()};\n"
         return code
 
     def generate_head_outC(self, node):
-        global_name = node.get_global_name()
         code = "typedef struct{\n"
         # 这里要将node及其以下的所有子作用域的out情况都统计进来
         # 所以写一个深度优先搜索吧
@@ -113,7 +112,7 @@ class GenerateCode:
                     print("para out", para.name)
                     code += f"    {para.syntaxType.change_name()} {para.name};\n"
 
-        code += f"}}outC_{global_name};\n"
+        code += f"}}{node.get_outC_name()};\n"
         return code
 
     def generate_head_func(self, node):
@@ -318,7 +317,7 @@ def generate_tempo_expr_fby(syntax_tempo_expr_objects, syntaxUserOp, genEqu):
         }}\n
         {syntaxUserOp.var_change_name(tmp_idx_var)} = 0;\n
     }}\n
-    {tmp_var} = {syntaxUserOp.var_change_name(tmp_arr_var)}[{syntaxUserOp.var_change_name(tmp_idx_var)}];\n    
+    {tmp_var} = {syntaxUserOp.var_change_name(tmp_arr_var)}[{syntaxUserOp.var_change_name(tmp_idx_var)}];\n
 '''
     postCode = f'''
     {syntaxUserOp.var_change_name(tmp_arr_var)}[{syntaxUserOp.var_change_name(tmp_idx_var)}]={SyntaxExpr_generate(syntax_tempo_expr_objects[0], syntaxUserOp, genEqu)};\n
@@ -372,7 +371,9 @@ def generate_tempo_expr_times(syntax_tempo_expr_objects, syntaxUserOp, genEqu):
 
 @register_tempo_expr_hander("WHEN")
 def generate_tempo_expr_when(syntax_tempo_expr_objects, syntaxUserOp, genEqu):
-    pass
+    # when 运算符的目标码为第一个表达式的值，因为 when 运算符在表达式中不改变目标码，仅告知编译器流的时钟即可。
+    # 完全没有告知，后面做
+    return SyntaxExpr_generate(syntax_tempo_expr_objects[0],syntaxUserOp,genEqu)
 
 
 @register_tempo_expr_hander("MERGE")
@@ -444,8 +445,7 @@ def generate_bool_expr_hashtag(syntax_bool_expr_objects, syntaxUserOp, genEqu):
 
 @register_bool_expr_handler("binOp")
 def generate_bool_expr_binop(syntax_bool_expr_objects, syntaxUserOp, genEqu):
-    binOp_dict = {"and": " & ", "or": " | ", "xor": " ^ "}
-    return f"({SyntaxExpr_generate(syntax_bool_expr_objects[0], syntaxUserOp, genEqu)}{binOp_dict[syntax_bool_expr_objects[1]]}{SyntaxExpr_generate(syntax_bool_expr_objects[2], syntaxUserOp, genEqu)})"
+    return f"({SyntaxExpr_generate(syntax_bool_expr_objects[0], syntaxUserOp, genEqu)}{SyntaxExpr.bool_binary_dict[syntax_bool_expr_objects[1]]}{SyntaxExpr_generate(syntax_bool_expr_objects[2], syntaxUserOp, genEqu)})"
 
 
 generate_atom_expr_handlers = {}
@@ -481,12 +481,18 @@ def generate_atom_expr_character(syntax_atom_expr_objects, syntaxUserOp, genEqu)
 
 @register_atom_expr_handler("typed_integer")
 def generate_atom_expr_typed_integer(syntax_atom_expr_objects, syntaxUserOp, genEqu):
-    return ""
+    lst=syntax_atom_expr_objects[0].split("_")
+    value=lst[0]
+    type_str=lst[1].split("i")
+    return f"kcg_lit_{'int'.join(type_str)}({value})"
 
 
 @register_atom_expr_handler("typed_float")
 def generate_atom_expr_typed_float(syntax_atom_expr_objects, syntaxUserOp, genEqu):
-    return ""
+    lst=syntax_atom_expr_objects[0].split("_")
+    value=lst[0]
+    type_str=lst[1][1:] # 后两位，就是32或者64
+    return f"kcg_lit_float{type_str}({value})"
 
 
 generate_relation_expr_handlers = {}
@@ -546,9 +552,7 @@ def generate_arith_expr_binOp(syntax_arith_expr_objects, syntaxUserOp, genEqu):
         var_type = "uint64"
         return f"kcg_lsl_{var_type}({SyntaxExpr_generate(syntax_arith_expr_objects[0], syntaxUserOp, genEqu)},{SyntaxExpr_generate(syntax_arith_expr_objects[2], syntaxUserOp, genEqu)})"
     else:
-        binop_dict = {"+": "+", "-": "-", "*": "*", "/": "/", "mod": "%", "land": "&", "lor": "|", "lxor": "^",
-                      "lsr": ">>"}
-        return f"{SyntaxExpr_generate(syntax_arith_expr_objects[0], syntaxUserOp, genEqu)} {binop_dict[syntax_arith_expr_objects[1]]} {SyntaxExpr_generate(syntax_arith_expr_objects[2], syntaxUserOp, genEqu)}"
+        return f"{SyntaxExpr_generate(syntax_arith_expr_objects[0], syntaxUserOp, genEqu)} {SyntaxExpr.binop_dict[syntax_arith_expr_objects[1]]} {SyntaxExpr_generate(syntax_arith_expr_objects[2], syntaxUserOp, genEqu)}"
 
 
 generate_id_expr_handlers = {}
@@ -565,17 +569,13 @@ def register_id_expr_handler(type_):
 @register_id_expr_handler("Path_id")
 def generate_id_expr_path_id(syntax_id_expr_objects, syntaxUserOp, genEqu):
     # TODO:如果path_id是包含“::”的路径名，生成代码时需要将::替换为_，需要修改路径的顺序
-    # symbol = syntaxUserOp.get_localVariable(syntax_id_expr_objects[0])
-    # if symbol != None:
-    #     if symbol.isOutput:
-    #         return f"outC->{symbol.name}"
-    #     elif symbol.isInput:
-    #         return f"inC->{symbol.name}"
-    #     else:
-    #         return symbol.name
-    # else:
-    #     raise ValueError(f"generate_id_expr_path_id error, path_id:{syntax_id_expr_objects[0]}")
-    return syntaxUserOp.var_change_name(syntax_id_expr_objects[0])
+    path_id = syntax_id_expr_objects[0]  # 获取路径标识符，例如 "n"
+
+    const_symbol=syntaxUserOp.check_and_get_constant_param(path_id)
+    if const_symbol is not None:
+        return const_symbol.get_value()
+    # 否则，调用 var_change_name 处理局部变量
+    return syntaxUserOp.var_change_name(path_id)
 
 
 @register_id_expr_handler("singlequoteLv6id")
@@ -599,7 +599,7 @@ def generate_id_expr_last_single_quote_lv6id(syntax_id_expr_objects, syntaxUserO
     tmp_var = SyntaxVariableSymbol(tmp_var_name, False, False)
     tmp_var.syntaxType = target_var.syntaxType
     tmp_var.isOutput = True
-    tmp_var.postExpr = SyntaxExpr(type="Id_expr", subtype="Path_id")
+    tmp_var.postExpr = SyntaxExpr(type="Id_expr", subtype="Path_id", scope=syntaxUserOp)
     tmp_var.postExpr.add_object(target_name)
     syntaxUserOp.add_tmpSymbol(tmp_var)
 
@@ -710,9 +710,46 @@ def generate_Array_expr(syntaxExpr, syntaxUserOp, genEqu):
 
 
 @register_expr_handler('Apply_expr')
-def generate_Apply_expr(syntaxExpr, syntaxUserOp, genEqu):
-    return ""
+def generate_Apply_expr(syntaxExpr,syntaxUserOp,genEqu):
+    # 对函数调用情况的代码生成
+    # 在文档里给出了详细的描述
+    # 先生成operator对应的代码，若函数调用情况则会对结构体进行修改，若make和flatten则直接返回一个对象
+    operator = syntaxExpr.objects[0]
+    parameters=syntaxExpr.objects[1].objects
+    return generate_operator(operator,parameters, syntaxUserOp, genEqu)
+generate_operator_handlers = {}
 
+def register_operator_handler(type_):
+    def decorator(func):
+        generate_operator_handlers[type_] = func
+        return func
+    return decorator
+
+def generate_operator(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
+    subtype_ = operator.subtype
+    generate_operator_handler = generate_operator_handlers.get(subtype_)
+    if generate_operator_handler:
+        return generate_operator_handler(operator,parameters, data_def, genEqu)
+    else:
+        raise ValueError(f"generate_operator , subtype:{subtype_}")
+@register_operator_handler("Path_id")
+def generate_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
+    # 这里是函数调用语句
+    # 生成一个inC结构体，将输入参数填入
+    # 生成一个空outC结构体
+    # 如果是node，则这个outC去当前函数的outC里面取
+    # 如果是function，就直接初始化一个，说实话有点恶心
+    # 结束调用后，把outC里面的结果拿出来进行进一步赋值操作
+    # 我要玩守望先锋！
+    applied_userOp=operator.appliedUserOp
+    global_name=applied_userOp.get_global_name()
+    if applied_userOp.type=="node":
+
+    return syntax_expr_objects[0]
+@register_operator_handler("PREFIXOP")
+def generate_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
+
+    return SyntaxExpr_generate(operator.correspondExpr, data_def, genEqu)
 
 @register_expr_handler('Mixed_constructor')
 def generate_Mixed_constructor(syntaxExpr, syntaxUserOp, genEqu):
@@ -1007,11 +1044,6 @@ def generate_data_def(data_def: SyntaxDataDefScope, code_generator: GenerateCode
     return content
 
 
-def scade_generate(root_operator, code_generator: GenerateCode):
-    for k, v in root_scope.userOpTable.items():
-        SyntaxUserOp_generate(v, code_generator)
-
-
 def scade_parse(input_path: str, main_operator: str, output_path: str):
     parser = yacc(debug=1, start="Program")
 
@@ -1032,7 +1064,8 @@ def scade_parse(input_path: str, main_operator: str, output_path: str):
     scade_lexer.set_tokens(string_tokens)
     nodes = parser.parse(strs, lexer=scade_lexer)
 
-    post_process(root_scope)
+    post_process(root_scope,main_operator)
+    # 后处理流程，在这里进行拓扑排序，类型校验，模板函数实例化等问题，会对语法树进行更新
 
     gen = GenerateCode(root_scope, main_operator, output_path)
     gen.generate_const_file()
@@ -1048,7 +1081,6 @@ def scade_parse(input_path: str, main_operator: str, output_path: str):
         for k,sub_package in tar_package.childScopeTable.items():
             stack.append(sub_package)
 
-    # scade_generate(main_operator)
     gen.add_code_to_types_file("#endif\n")  # 结束
 
 

@@ -362,25 +362,27 @@ def t_FLOATNUM(t):
     suffix_pattern=re.compile(r'(_f32|_f64)$')
     if suffix_pattern.search(t.value):
          t.type=reserved.get(t.value.split("_")[-1],"TYPED_FLOAT")
+         t.value = lex_value('typed_float', t.value)
     else:
         t.value=lex_value('floatnum',float(t.value))
     return t
 
 # decimal and hexadecimal
 def t_INTEGERNUM(t):
-    r'(0x[0-9a-fA-F]+)|(0b[01]+)|(0[0-7]+)|0|([1-9][0-9]*)(_i|_ui)?(8|16|32|64)?'
+    r'((0x[0-9a-fA-F]+)|(0b[01]+)|(0[0-7]+)|0|([1-9][0-9]*))(_i|_ui)?(8|16|32|64)?'
     suffix_pattern=re.compile(r'(_ui|_i)(8|16|32|64)$')
     if suffix_pattern.search(t.value):
         t.type=reserved.get(t.value.split("_")[-1],"TYPED_INTEGER")
+        t.value = lex_value('typed_integer',t.value)
         return t
-    if len(t.value)>1 and t.value[1]=='x':
-        num=int(t.value,16)
-    elif len(t.value)>1 and t.value[1]=='b':
-        num=int(t.value,1)
-    elif t.value[0]=='0' and len(t.value)>1 :
-        num=int(t.value,8)
-    else:
-        num=int(t.value)
+    # if len(t.value)>1 and t.value[1]=='x':
+    #     num=int(t.value,16)
+    # elif len(t.value)>1 and t.value[1]=='b':
+    #     num=int(t.value,1)
+    # elif t.value[0]=='0' and len(t.value)>1 :
+    #     num=int(t.value,8)
+    # else:
+    #     num=int(t.value)
     t.value = lex_value('integernum', t.value)
     return t
 

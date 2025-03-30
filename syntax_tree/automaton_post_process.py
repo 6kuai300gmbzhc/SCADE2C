@@ -10,8 +10,10 @@ import syntax_tree.scade_postprocess as scade_postprocess
 # 最后的输出结果是rhsList这个东西
 def post_process(automaton: SyntaxAutomaton):
     # 先遍历内部所有state
+    rhs_dict = dict()
     for name, state in automaton.stateTable.items():
-        post_process_state(state)
+        rhs_dict.update(post_process_state(state))
+    return rhs_dict
 
 
 def post_process_state(state: SyntaxState):
@@ -20,19 +22,27 @@ def post_process_state(state: SyntaxState):
     """
     # 先拿左值，再看对应的右值
     # 找到左值对应的句子，找到这个句子的依赖句子，找到依赖句子的右值，依次看右值是不是上层句子
-    state_graph = scade_postprocess.post_process_data_def(state)
-    dependent_dict = dict()
-    update_state_dependent_dict(state_graph, dependent_dict)
+    scade_postprocess.post_process_data_def(state)
+    dependent_dict = dict()  # key 输出名字，value输入名字
+    dependent_dict.update(update_state_dependent_dict(state))
     for action in state.actionChildScopeList:
-        action_graph = scade_postprocess.post_process_data_def(action)
-        update_state_dependent_dict(action_graph, dependent_dict)
+        scade_postprocess.post_process_data_def(action)
+        dependent_dict.update(update_state_dependent_dict(action))
+    return dependent_dict
 
 
-def update_state_dependent_dict(data_def:SyntaxDataDefScope) -> dict:
+def update_state_dependent_dict(data_def: SyntaxDataDefScope) -> dict:
     """更新state中输入输出参数的依赖列表，更新存储于dict中"""
     # returnSymbolsTable的key就是左值，感谢之前的我整理出来这个东西
     # for name, return_symbol in data_def.returnSymbolsTable.items():
     #     # 找到这个返回的变量，所依赖的所有其他变量
     #     dependent_equations=return_symbol.equation.get_dependent_equations()
     #     for equation in dependent_equations:
-
+    out_dict = dict()
+    for symbol_name in data_def.returnSymbolsTable:
+        out_dict[symbol_name] = list()
+        dependent_params = scade_postprocess.find_non_intermediate_dependencies(data_def, symbol_name)
+        for dependent_param_name in dependent_params:
+            if data_def.is_param_declared_externally(dependent_param_name):
+                out_dict[symbol_name].append(dependent_param_name)
+    return out_dict

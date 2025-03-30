@@ -170,9 +170,9 @@ def p_type_expr(p):
         p[0].fields.update(p[3].value)
         return
     if len(p) == 4:
-        p[0] = SyntaxType(type="list")
-        p[0].listType = p[1]
-        p[0].listExpr = p[3]
+        p[0] = SyntaxType(type="array")
+        p[0].arrayType = p[1]
+        p[0].arrayExpr = p[3]
         return
     if p[1].value == "signed" or p[1].value == "unsigned":
         # signed/unsigned的两个声明，类型为signed unsigned
@@ -322,9 +322,25 @@ def p_pack_lv6id(p):
 def p_user_op_decl(p):
     'User_op_decl : User_op_name User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
     # 遍历结束，换回作用域
+    # 这里，如果userOp是模板函数，就要给所有的模板类型的变量声明设置数据类型
     global cur_scope
+    if cur_scope.isTemplate:
+        templateType = cur_scope.numericKind
+        set_templateType_for_decls(cur_scope.inParams,templateType)
+        set_templateType_for_decls(cur_scope.outParams,templateType)
+        stack=deque([cur_scope])
+        while stack:
+            cur_data_def=stack.pop()
+            if isinstance(cur_data_def,SyntaxDataDefScope):
+                set_templateType_for_decls(list(cur_data_def.localSymbolTable.values()), templateType)
+                # 为什么dict_values和list不是一个数据类型？？？
+            for sub_scope in cur_data_def.childScopeTable.values():
+                stack.append(sub_scope)
     cur_scope = cur_scope.prevScope
 
+def set_templateType_for_decls(var_list:list[SyntaxVariableSymbol],templateType:str):
+    for var in var_list:
+        var.syntaxType.templateType=templateType
 
 def p_user_op_name(p):
     '''User_op_name : Op_kind Interface_status User_op_decl_Lv6id'''
@@ -500,7 +516,7 @@ def p_simple_equation(p):
 def p_assert(p):
     '''Assert : ASSUME LV6ID COLON Expr
             | GUARANTEE LV6ID COLON Expr'''
-    p[0] = SyntaxEquation(type=p[1].value, lhs=list(), lineno=p.lineno(1))
+    p[0] = SyntaxEquation(type=p[1].value, lhs=["_"], lineno=p.lineno(1))
     p[0].assertID = p[2].value
     p[0].set_expr(p[4])
 
@@ -585,7 +601,7 @@ def p_control_block(p):
         if symbol_name not in lhs.keys():
             # 没有就报错
             raise UnknownIdentifierException(symbol_name)
-    p[0] = SyntaxEquation(type="control_block", lhs=lhs.keys(), lineno=p.lineno(1))
+    p[0] = SyntaxEquation(type="control_block", lhs=list(lhs.keys()), lineno=p.lineno(1))
     p[0].controlBlockID = p[1]
 
 
@@ -1014,13 +1030,13 @@ def p_id_expr(p):
     | SINGLEQUOTE LV6ID
     | LAST SINGLEQUOTE LV6ID'''
     if len(p) == 2:
-        p[0] = SyntaxExpr(type="Id_expr", subtype="Path_id")
+        p[0] = SyntaxExpr(type="Id_expr", subtype="Path_id",scope=cur_scope)
         p[0].add_object(p[1].value)
     elif len(p) == 3:
-        p[0] = SyntaxExpr(type="Id_expr", subtype="singlequoteLv6id")
+        p[0] = SyntaxExpr(type="Id_expr", subtype="singlequoteLv6id",scope=cur_scope)
         p[0].add_object(p[1].value + p[2].value)
     elif len(p) == 4:
-        p[0] = SyntaxExpr(type="Id_expr", subtype="lastSinglequoteLv6id")
+        p[0] = SyntaxExpr(type="Id_expr", subtype="lastSinglequoteLv6id",scope=cur_scope)
         p[0].add_object(p[2].value + p[3].value)
         # 为什么我要在这里把'加上？？现在删不掉了
 
@@ -1032,9 +1048,9 @@ def p_atom(p):
     | TYPED_INTEGER
     | TYPED_FLOAT'''
     if p[1].strs == 'true' or p[1].strs == 'false':
-        p[0] = SyntaxExpr(type="Atom", subtype="bool_atom")
+        p[0] = SyntaxExpr(type="Atom", subtype="bool_atom",scope=cur_scope)
     else:
-        p[0] = SyntaxExpr(type="Atom", subtype=p[1].strs)
+        p[0] = SyntaxExpr(type="Atom", subtype=p[1].strs,scope=cur_scope)
     p[0].add_object(p[1].value)
 
 
@@ -1048,27 +1064,26 @@ def p_tempo_expr(p):
     global cur_scope
     cur_scope.hasInternalState_InThisAndPreEnv()
     if len(p) == 3:
-        p[0] = SyntaxExpr(type="Tempo_expr", subtype="PRE")
+        p[0] = SyntaxExpr(type="Tempo_expr", subtype="PRE",scope=cur_scope)
         p[0].add_object(p[2])
     elif len(p) == 4:
         if p[2].strs == "->":
-            p[0] = SyntaxExpr(type="Tempo_expr", subtype="ARROW")
+            p[0] = SyntaxExpr(type="Tempo_expr", subtype="ARROW",scope=cur_scope)
         elif p[2].strs == "times":
-            p[0] = SyntaxExpr(type="Tempo_expr", subtype="TIMES")
+            p[0] = SyntaxExpr(type="Tempo_expr", subtype="TIMES",scope=cur_scope)
         elif p[2].strs == "when":
-            p[0] = SyntaxExpr(type="Tempo_expr", subtype="WHEN")
+            p[0] = SyntaxExpr(type="Tempo_expr", subtype="WHEN",scope=cur_scope)
         p[0].add_object(p[1])
         p[0].add_object(p[3])
     elif p[1].strs == "fby":
-        p[0] = SyntaxExpr(type="Tempo_expr", subtype="FBY")
+        p[0] = SyntaxExpr(type="Tempo_expr", subtype="FBY",scope=cur_scope)
         p[0].add_object(p[3])
         p[0].add_object(p[5])
         p[0].add_object(p[7])
     elif p[1].strs == "merge":
-        p[0] = SyntaxExpr(type="Tempo_expr", subtype="MERGE")
+        p[0] = SyntaxExpr(type="Tempo_expr", subtype="MERGE",scope=cur_scope)
         p[0].add_object(p[3])
-        p[0].add_object(p[5])
-        p[0].add_object(p[6])
+        p[0].add_object([p[5], p[6]])
 
 
 def p_tempo_expr_1(p):
@@ -1082,7 +1097,7 @@ def p_tempo_expr_1(p):
 
 def p_arith_expr(p):
     '''Arith_expr : LPARENTHESE Expr COLON Type_expr RPARENTHESE'''
-    p[0] = SyntaxExpr(type="Arith_expr", subtype="cast")
+    p[0] = SyntaxExpr(type="Arith_expr", subtype="cast",scope=cur_scope)
     p[0].add_object(p[2])
     p[0].add_object(p[4])
 
@@ -1091,7 +1106,7 @@ def p_arith_expr_unary(p):
     '''Arith_expr : MINUS Expr %prec UMINUS
     | PLUS Expr %prec UPLUS
     | LNOT Expr'''
-    p[0] = SyntaxExpr(type="Arith_expr", subtype="unary")
+    p[0] = SyntaxExpr(type="Arith_expr", subtype="unary",scope=cur_scope)
     p[0].add_object(p[1].value)
     p[0].add_object(p[2])
 
@@ -1107,7 +1122,7 @@ def p_arith_expr_binOp(p):
     | Expr LXOR Expr
     | Expr LSL Expr
     | Expr LSR Expr'''
-    p[0] = SyntaxExpr(type="Arith_expr", subtype="binOp")
+    p[0] = SyntaxExpr(type="Arith_expr", subtype="binOp",scope=cur_scope)
     p[0].add_object(p[1])
     p[0].add_object(p[2].value)
     p[0].add_object(p[3])
@@ -1120,7 +1135,7 @@ def p_relation_expr(p):
     | Expr GREATER Expr
     | Expr LESSEQU Expr
     | Expr GREATEREQU Expr'''
-    p[0] = SyntaxExpr(type="Relation_expr", subtype="Relation_expr")
+    p[0] = SyntaxExpr(type="Relation_expr", subtype="Relation_expr",scope=cur_scope)
     p[0].add_object(p[1])
     p[0].add_object(p[2].value)
     p[0].add_object(p[3])
@@ -1134,7 +1149,7 @@ def p_list_expr(p):
 def p_list(p):
     '''List : List_1
             | empty'''
-    p[0] = SyntaxExpr(type="List_expr", subtype="List_expr")
+    p[0] = SyntaxExpr(type="List_expr", subtype="List_expr",scope=cur_scope)
     if isinstance(p[1], list):
         p[0].add_object(p[1])
     else:
@@ -1161,12 +1176,12 @@ def p_switch_expr(p):
     '''Switch_expr : IF Expr THEN Expr ELSE Expr
     | LPARENTHESE CASE Expr OF Switch_expr_1 RPARENTHESE'''
     if p[1].strs == "if":
-        p[0] = SyntaxExpr(type="Switch_expr", subtype="IF")
+        p[0] = SyntaxExpr(type="Switch_expr", subtype="IF",scope=cur_scope)
         p[0].add_object(p[2])
         p[0].add_object(p[4])
         p[0].add_object(p[6])
     else:
-        p[0] = SyntaxExpr(type="Switch_expr", subtype="CASE")
+        p[0] = SyntaxExpr(type="Switch_expr", subtype="CASE",scope=cur_scope)
         p[0].add_object(p[3])
         p[0].add_object(p[5])
 
@@ -1198,10 +1213,10 @@ def p_bool_expr(p):
     '''Bool_expr : NOT Expr
     | HASHTAG LPARENTHESE Hashtag_List RPARENTHESE'''
     if len(p) == 3:
-        p[0] = SyntaxExpr(type="Bool_expr", subtype="NOT")
+        p[0] = SyntaxExpr(type="Bool_expr", subtype="NOT",scope=cur_scope)
         p[0].add_object(p[2])
     else:
-        p[0] = SyntaxExpr(type="Bool_expr", subtype="HASHTAG")
+        p[0] = SyntaxExpr(type="Bool_expr", subtype="HASHTAG",scope=cur_scope)
         p[0].add_object(p[3])
 
 
@@ -1233,7 +1248,7 @@ def p_bool_expr_bin(p):
     '''Bool_expr : Expr AND Expr
     | Expr OR Expr
     | Expr XOR Expr'''
-    p[0] = SyntaxExpr(type="Bool_expr", subtype="binOp")
+    p[0] = SyntaxExpr(type="Bool_expr", subtype="binOp",scope=cur_scope)
     p[0].add_object(p[1])
     p[0].add_object(p[2].value)
     p[0].add_object(p[3])
@@ -1243,11 +1258,11 @@ def p_struct_expr(p):
     '''Struct_expr : Expr POINT LV6ID
     | LBPARENTHESE Label_expr Struct_expr_1 RBPARENTHESE'''
     if len(p) == 4:
-        p[0] = SyntaxExpr(type="Struct_expr", subtype="get")
+        p[0] = SyntaxExpr(type="Struct_expr", subtype="get",scope=cur_scope)
         p[0].add_object(p[1])
         p[0].add_object(p[3].value)
     else:
-        p[0] = SyntaxExpr(type="Struct_expr", subtype="construct")
+        p[0] = SyntaxExpr(type="Struct_expr", subtype="construct",scope=cur_scope)
         labels = list()
         labels.append(p[2])
         labels += p[3]
@@ -1274,10 +1289,10 @@ def p_array_expr(p):
     '''Array_expr : LBRACKET List RBRACKET
     | Expr Index'''
     if len(p) == 4:
-        p[0] = SyntaxExpr(type="Array_expr", subtype="list")
+        p[0] = SyntaxExpr(type="Array_expr", subtype="list",scope=cur_scope)
         p[0].add_object(p[2])
     else:
-        p[0] = SyntaxExpr(type="Array_expr", subtype="get")
+        p[0] = SyntaxExpr(type="Array_expr", subtype="get",scope=cur_scope)
         p[0].add_object(p[1])
         p[0].add_object(p[2])
 
@@ -1286,10 +1301,10 @@ def p_array_expr2(p):
     '''Array_expr : REVERSE Expr
     | Expr AT Expr'''
     if len(p) == 3:
-        p[0] = SyntaxExpr(type="Array_expr", subtype="reverse")
+        p[0] = SyntaxExpr(type="Array_expr", subtype="reverse",scope=cur_scope)
         p[0].add_object(p[2])
     else:
-        p[0] = SyntaxExpr(type="Array_expr", subtype="at")
+        p[0] = SyntaxExpr(type="Array_expr", subtype="at",scope=cur_scope)
         p[0].add_object(p[1])
         p[0].add_object(p[3])
 
@@ -1298,11 +1313,11 @@ def p_array_expr3(p):
     '''Array_expr : Expr EXPONENT Expr
     | Expr LBRACKET Expr TPOINT Expr RBRACKET'''
     if len(p) == 4:
-        p[0] = SyntaxExpr(type="Array_expr", subtype="construct")
+        p[0] = SyntaxExpr(type="Array_expr", subtype="construct",scope=cur_scope)
         p[0].add_object(p[1])
         p[0].add_object(p[3])
     else:
-        p[0] = SyntaxExpr(type="Array_expr", subtype="slice")
+        p[0] = SyntaxExpr(type="Array_expr", subtype="slice",scope=cur_scope)
         p[0].add_object(p[1])
         p[0].add_object(p[3])
         p[0].add_object(p[5])
@@ -1312,12 +1327,12 @@ def p_array_expr4(p):
     '''Array_expr : LPARENTHESE Expr POINT Array_expr_1 DEFAULT Expr RPARENTHESE
     | TRANSPOSE LPARENTHESE Expr SEMICOLON INTEGERNUM SEMICOLON INTEGERNUM RPARENTHESE'''
     if len(p) == 8:
-        p[0] = SyntaxExpr(type="Array_expr", subtype="getdefault")
+        p[0] = SyntaxExpr(type="Array_expr", subtype="getdefault",scope=cur_scope)
         p[0].add_object(p[2])
         p[0].add_object(p[4])
         p[0].add_object(p[6])
     else:
-        p[0] = SyntaxExpr(type="Array_expr", subtype="transpose")
+        p[0] = SyntaxExpr(type="Array_expr", subtype="transpose",scope=cur_scope)
         p[0].add_object(p[3])
         p[0].add_object(p[5].value)
         p[0].add_object(p[7].value)
@@ -1345,7 +1360,7 @@ def p_label_or_index(p):
     if len(p) == 2:
         p[0] = p[1]
     else:
-        p[0] = SyntaxExpr(type="Id_expr", subtype="ID")
+        p[0] = SyntaxExpr(type="Id_expr", subtype="ID",scope=cur_scope)
         p[0].add_object(p[2].value)
 
 
@@ -1356,7 +1371,7 @@ def p_index(p):
 
 def p_apply_expr(p):
     '''Apply_expr : Operator LPARENTHESE List RPARENTHESE'''
-    p[0] = SyntaxExpr(type="Apply_expr", subtype="Apply_expr")
+    p[0] = SyntaxExpr(type="Apply_expr", subtype="Apply_expr",scope=cur_scope)
     p[0].add_object(p[1])
     p[0].add_object(p[3])
 
@@ -1399,13 +1414,17 @@ def p_operator(p):
         else:
             if p[2].strs == "path_id":
                 p[0] = SyntaxOperator(subtype="Path_id")
+                p[0].add_object(p[2].value)
+                p[0].add_object(p[4])
             else:
                 p[0] = SyntaxOperator(subtype="PREFIXOP")
-            p[0].add_object(p[2].value)
-            p[0].add_object(p[4])
+                p[0].add_object(p[2].value)
+                p[0].add_object(p[4])
+
     elif length == 8:
         p[0] = SyntaxOperator(subtype="iterator")
-        p[0].add_object(p[2].value)
+        p[0].add_object(p[2][0])
+        p[0].add_object(p[2][1])
         p[0].add_object(p[3])
         p[0].add_object(p[5])
     elif length == 9:
@@ -1425,7 +1444,8 @@ def p_operator(p):
         p[0].add_object(p[8])
     elif length == 12:
         p[0] = SyntaxOperator(subtype="iterator_mw")
-        p[0].add_object(p[2])
+        p[0].add_object(p[2][0])
+        p[0].add_object(p[2][1])
         p[0].add_object(p[3])
         p[0].add_object(p[5])
         p[0].add_object(p[8])
@@ -1470,10 +1490,9 @@ def p_iterator(p):
     | MAPFOLDI
     | MAPFOLDI INTEGERNUM'''
     if len(p) == 2:
-        p[0] = p[1]
+        p[0] = [p[1],1]
     else:
-        p[0] = p[1]
-        p[0].value += "_" + p[2].value
+        p[0] = [p[1],int(p[2].value)]
 
 
 def p_iterator_mw(p):
@@ -1484,14 +1503,14 @@ def p_iterator_mw(p):
     | MAPFOLDWI
     | MAPFOLDWI INTEGERNUM'''
     if len(p) == 2:
-        p[0] = p[1].value
+        p[0] = [p[1],1]
     else:
-        p[0] = p[1].value + "_" + p[2].value
+        p[0] = [p[1],int(p[2].value)]
 
 
 def p_mixed_constructor(p):
     '''Mixed_constructor : LPARENTHESE Expr WITH Mixed_constructor_1 EQU Expr RPARENTHESE'''
-    p[0] = SyntaxExpr(type="Mixed_constructor", subtype="Mixed_constructor")
+    p[0] = SyntaxExpr(type="Mixed_constructor", subtype="Mixed_constructor",scope=cur_scope)
     p[0].add_object(p[2])
     p[0].add_object(p[4])
     p[0].add_object(p[6])

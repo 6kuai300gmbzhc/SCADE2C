@@ -5,13 +5,26 @@ from graph import *
 
 # 拓扑排序和模板实例化操作
 # 实例化还在写，虽然非常不想写，半年前的记忆触发了
+class HasRhs:
+    pass
+class SyntaxVariableSymbol:
+    pass
+class SyntaxScope:
+    pass
+class SyntaxExpr(HasRhs):
+    pass
+class SyntaxUserOp:
+    pass
 
 class HasRhs:
     rhsList: list[set[str]]
     '''记录了引用的变量，只有局部变量和signal用来排序,考虑到多返回值的情况，按顺序存放每个返回值所对应的依赖变量'''
+    lhsTypeList: list
+    '''记录了返回值的类型列表，按顺序存放每个返回值的对应类型, 存放syntaxtype，很好'''
 
     def __init__(self):
         self.rhsList = list()
+        self.lhsTypeList = list()
 
     def absorb_rhs(self, tar):
         """将目标类的rhs吸收到右值中,即返回值增加
@@ -56,6 +69,24 @@ class HasRhs:
             if name in rhs: return True
         return False
 
+    def add_lhs_type(self, type):
+        """
+        添加一个返回的左值类型
+        Parameters:
+            type:SyntaxType
+        """
+        self.lhsTypeList.append(type)
+
+    def set_lhs_type(self, type_list):
+        """
+        设置返回的左值类型
+        Parameters:
+            type_list:[SyntaxType]
+        """
+        self.lhsTypeList = type_list
+
+
+
 
 class SyntaxOperator(HasRhs):
     '''在Expr中的Apply_expr中的调用头部分，可以嵌套自己'''
@@ -63,6 +94,45 @@ class SyntaxOperator(HasRhs):
     '''operator的小类，看共享文档'''
     objects: list
     '''按顺序保存了具体的内容，具体看文档'''
+
+    correspondExpr: SyntaxExpr
+    '''为prefixOP时候有效，保存了等效的expr,后处理，类型校验，代码生成等环节直接调用它即可'''
+    appliedUserOp: SyntaxUserOp
+    '''为path_id时有效，保存了指向调用的userop的指针'''
+
+
+    prefix_op_2_expr_dict = {
+        ("$+$", "$-$", "$*$", "$/$", "$mod$", "$land$", "$lor$", "$lxor$", "$lsr$", "$lsl$"): ["Arith_expr", "binOp"],#ese
+        ("+$", "-$", "lnot$"): ["Arith_expr", "unary"],#se
+        ("$=$", "$<>$", "$<$", "$>$", "$<=$", "$>=$"): ["Relation_expr", "Relation_expr"],#ese
+        ("$and$", "$or$", "$xor$"): ["Bool_expr", "binOp"],#ese
+        ("not$"): ["Bool_expr", "NOT"],#e
+        ("$@$"): ["Array_expr", "at"],#ee
+        ("reverse$"): ["Array_expr", "reverse"],#e
+        ("$times$"): ["Tempo_expr", "TIMES"]#ee
+    }
+
+    def set_expr_for_prefix_op(self, scope,params:list):
+        """设置prefixOp类型所等价的expr
+        直到类型校验阶段才会有这样的expr，因为之前是无法确定具体有哪些参数的
+        """
+        if not self.subtype == "PREFIXOP":
+            raise Exception("不对，不是prefixOP")
+        corres_typs = None
+        prefixOp = self.objects[0]
+        for key_set, types in SyntaxOperator.prefix_op_2_expr_dict.items():
+            if prefixOp in key_set:
+                corres_typs = types
+                break
+        tar_expr=SyntaxExpr(type=corres_typs[0], subtype=corres_typs[1], scope=scope)
+        # 然后向tar_expr内部填入对应的object
+        # 这里直接让expr那边做校验，开摆了
+        tar_expr.objects = params.copy() # 浅拷贝
+        if tar_expr.subType=="Relation_expr" or tar_expr.subType=="binOp":
+            tar_expr.objects.insert(1,prefixOp.replace("$",""))
+        elif tar_expr.subType=="unary":
+            tar_expr.objects.insert(0,prefixOp.replace("$",""))
+        self.correspondExpr=tar_expr
 
     def __init__(self, subtype: str):
         super().__init__()
@@ -103,17 +173,44 @@ class SyntaxExpr(HasRhs):
     '''上面大类中对应的每个小类（很多），具体看共享文档'''
     objects: list
     '''按顺序保存了具体的内容，具体看文档'''
-    exprType: str
-    '''expr的真实数据类型，如uint8,uint32,uint64'''
+    scope: SyntaxScope
+    '''这个expr所处作用域'''
 
-    def __init__(self, type: str, subtype: str):
+    syntaxSymbol = None
+    '''Id_expr时，存储的对应symbol，会用到它的,ID没有，很合理'''
+
+    appliedOpDict: dict[SyntaxUserOp:list[int]]
+    """需要统计每个userOP调用其他函数的数量,仅在为Apply_expr时有效
+    让operator返回他调用的函数情况！一个字典，key为userOp,value为list，逐层保存，比如map (map func<<2>>)<<3>>
+    会得到一个字典：{func:[3,2]}
+    一个equation可能有很多个applyexpr
+    """
+
+    binop_dict = {"+": "+", "-": "-", "*": "*", "/": "/", "mod": "%", "land": "&", "lor": "|", "lxor": "^",
+                  "lsr": ">>", "lsl": "<<"}
+    unary_op_set = {"+", "-", "lnot"}
+    relation_dict = {"=": "==", "<>": "!=", "<": "<", ">": ">", "<=": "<=", ">=": ">="}
+    bool_unary_set = {"not", "#"}
+    bool_binary_dict = {"and": " & ", "or": " | ", "xor": " ^ "}
+    other = {"reverse", "times", "@"}
+
+    # apply_Expr中的prefixOP接受以上所有类型的运算，除了#，且运算规则也是完全相同的
+    def __init__(self, type: str, subtype: str, scope: SyntaxScope):
         super().__init__()
         self.type = type
         self.subType = subtype
         self.objects = list()
+        self.scope = scope
+        self.appliedOpDict=dict()
 
     def add_object(self, object):
         self.objects.append(object)
+
+    def set_symbol(self, symbol):
+        self.syntaxSymbol = symbol
+
+    def set_applied_Op(self,applied_Op):
+        self.appliedOpDict=applied_Op
 
     def __repr__(self):
         s = ""
@@ -123,7 +220,40 @@ class SyntaxExpr(HasRhs):
                 s += str(object) + ","
             s = s[:-1]
         s += ")"
+        if self.lhsTypeList:
+            s += " as "
+            if len(self.lhsTypeList) == 1:
+                s += self.lhsTypeList[0].type
+            else:
+                s += f"({','.join([t.type for t in self.lhsTypeList])})"
         return s
+
+
+def get_type_and_value_for_atom(atom_expr: SyntaxExpr):
+    """以str的格式返回这个atom类型的expr值的具体数据类型到底是什么"""
+    subtype = atom_expr.subType
+    content = atom_expr.objects[0]
+    if subtype == "bool_atom":
+        given_type = 'bool'
+        given_value = content == "true"
+    elif subtype == "integernum":
+        given_type = 'integer'
+        given_value = int(content, 0)
+    elif subtype == "floatnum":
+        given_type = 'float'
+        given_value = float(content)
+    elif subtype == "character":
+        given_type = 'char'
+        given_value = content[1::-1]  # 去掉了前后的引号
+    elif subtype == "typed_integer":
+        t = content.split("_")
+        given_type = 'int'.join(t[1].split("i"))
+        given_value = int(t[0], 0)
+    else:  # typed_float
+        t = content.split("_")
+        given_type = f"float{t[1][1:]}"
+        given_value = t[0]
+    return given_type, given_value
 
 
 class SyntaxDataDefScope:
@@ -163,7 +293,7 @@ class SyntaxEquation(HasRhs):
     对control_block来说就是return的值，用来排序
     对emission来说是括号内的signal变量,带'形式的
     对simple_equation来说就是左值
-    对assert来说是空列表
+    对assert来说是一个_即忽略左值
     '''
     lhs2RhsDict: dict
     '''存储lhs到rhs列表的字典，说实话有点冗余了，但是也没办法就这样吧'''
@@ -172,6 +302,7 @@ class SyntaxEquation(HasRhs):
 
     scope: SyntaxDataDefScope
     '''这个句子所属于的作用域'''
+
 
     def __init__(self, type: str, lhs: list, lineno: int):
         super().__init__()
@@ -198,9 +329,11 @@ class SyntaxEquation(HasRhs):
         s += " lhs:"
         s += "("
         if len(self.lhs) > 0:
-            for symbol in self.lhs:
-                s += str(symbol) + ","
-            s = s[:-1]
+            if self.lhsTypeList:
+                s += ",".join(
+                    [f"{str(self.lhs[index])} as {self.lhsTypeList[index].type}" for index in range(len(self.lhs))])
+            else:
+                s += ",".join([f"{str(self.lhs[index])}" for index in range(len(self.lhs))])
         else:
             s += " "
         s += ")"
@@ -216,31 +349,25 @@ class SyntaxEquation(HasRhs):
 
         return s
 
-    def dependent_on_param_directly(self, param_name):
+    def dependent_on_param_directly(self, param_name) -> bool:
         """这个句子是否直接依赖于这个变量？输入变量名称"""
         for ls in self.rhsList:
             if param_name in ls: return True
         return False
 
-    def dependent_on_equation_directly(self, tar_equation):
-        """判断自己是否直接依赖dest，即检测自己的右值是否和dest的左值重合"""
+    def dependent_on_equation_directly_and_get_correspond_lhs(self, tar_equation) -> str or None:
+        """判断自己是否直接依赖tar，即检测自己的右值是否和tar的左值重合,如果依赖的话则返回对应的lhs，否则返回None"""
         for lhs in tar_equation.lhs:
-            if self.dependent_on_param_directly(lhs): return True
-        return False
+            if self.dependent_on_param_directly(lhs): return lhs
+        return None
 
     def get_dependent_equations(self) -> list:
         """这个句子所依赖的全部句子"""
         return [vertex.value for vertex in self.vertex.get_all_from_vertexes()]
 
     def get_rhs_list_by_name(self, lhs: str):
-        """找到这个句子中，lhs所对应的rhs列表"""
+        """找到这个句子中，lhs所对应的rhs列表，没有则为None"""
         return self.lhs2RhsDict.get(lhs)
-
-    def build_lhs_rhs_dict(self):
-        """把自己lhs和rhs所对应起来"""
-        self.rhsList = self.expr.rhsList
-        for i in range(len(self.lhs)):
-            self.lhs2RhsDict[self.lhs[i]] = self.rhsList[i]
 
     def __repr__(self):
         return self.equation2str()
@@ -253,14 +380,17 @@ class SyntaxType:
 class SyntaxType:
     """记录type类型"""
     name: str
-    '''type_block ，用于重命名之后的str，type表示其真实类型'''
+    '''type_block ，用于重命名之后的str，type表示其真实类型，这个只是记录了在type_block中定义的别名'''
 
     type: str
-    '''类型，int8，枚举类型等'''
-    '''field_decl,list,signed,unsigned,typevar,path_id,enum'''
+    '''类型，int8，枚举类型等field_decl,array,signed,unsigned,typevar,path_id,enum
+    见文档
+    '''
 
-    sizeExpr: int = None
-    '''类型为signed，unsigned时有效，存储了对应整数值'''
+    sizeExpr: SyntaxExpr = None
+    '''类型为array,signed,unsigned时有效，存储了数组的长度表达式
+    必须在编译时可知，并且是严格大于0
+    '''
 
     fields: dict = None
     '''类型为field_decl时有效，存储了ID:SyntaxTypeSymbol的键值对'''
@@ -269,18 +399,30 @@ class SyntaxType:
     '''类型为enum时有效，存储了枚举类型的ID列表'''
 
     value: str = None
-    '''类型为typevar，path_id时有效，存储了具体的内容'''
-
-    listType: SyntaxType = None
-    '''类型为list时有效，存储了数组的类型'''
-
-    listExpr: SyntaxExpr = None
-    '''类型为list时有效，存储了数组的长度表达式
-    必须在编译时可知，并且是严格大于0
+    '''类型为typevar，path_id时有效，存储了具体的名字，比如typevar T
+    只是名字而已，而不是具体的类型
     '''
 
+    templateType: str = None
+    '''类型为typevar时有效，存储了模板类型应该具有的类型'''
+
+    arrayType: SyntaxType = None
+    '''类型为array时有效，存储了数组的类型'''
+
     basic_type = ['bool', 'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64', 'float32',
-                  'float64', 'char']
+                  'float64', 'char', 'ID']
+    extend_type = ['integer', 'float', 'signed', 'unsigned', 'numeric', 'any']
+    # 有点蠢
+    hierarchy_dict = {
+        'any': {''' 全部类型'''},
+        'numeric': {'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64',
+                    'float32', 'float64', 'integer', 'float', 'signed', 'unsigned', 'numeric'},
+        'integer': {'integer', 'signed', 'unsigned',
+                    'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64'},
+        'signed': {'signed', 'int8', 'int16', 'int32', 'int64'},
+        'unsigned': {'unsigned', 'uint8', 'uint16', 'uint32', 'uint64'},
+        'float': {'float32', 'float64'}
+    }
 
     def __init__(self, type: str) -> None:
         self.type = type
@@ -288,8 +430,10 @@ class SyntaxType:
     def __repr__(self):
         s = ""
         s += "type:" + self.type + " "
+        if self.arrayType:
+            s += "arrayType:" + str(self.arrayType) + " "
         if self.sizeExpr:
-            s += "sizeExpr:" + str(self.sizeExpr)
+            s += "sizeExpr:" + str(self.sizeExpr) + " "
         if self.fields:
             s += "Fields:{"
             for ID, field in self.fields.items():
@@ -303,14 +447,15 @@ class SyntaxType:
             s = s[:-1]
             s += "}"
         if self.value:
-            s += self.value
-        if self.listType:
-            s += "listType:" + str(self.listType) + " "
-            s += "listSizeExpr:" + str(self.listExpr)
+            s += self.value + " "
         return s
 
     def change_name(self):
-        return f'kcg_{self.type}' if self.type in self.basic_type else self.value
+        if self.type == "array":
+            return f'array_{self.arrayType.type}_{self.get_size()}'
+        # todo 若为path_id类型，需要找到对应的type
+        else:
+            return f'kcg_{self.type}' if self.type in self.basic_type else self.value
 
     def generate_init_expr(self):
         '''生成这个类型变量的初始值，给init函数准备的'''
@@ -322,6 +467,64 @@ class SyntaxType:
             return ""
             # 我也不知道应该生成什么，相信后人的智慧
             # 我恨过去的自己
+
+    def belong_to(self, tar_type):
+        """此type是否包含于对应的type？
+        Parameters:
+            tar_type: 一个SyntaxType
+        """
+        if tar_type.type == "any": return True
+        cur_type = self.get_real_type()
+        dst_type = tar_type.get_real_type()
+
+        if dst_type in self.extend_type:
+            return cur_type in self.hierarchy_dict[dst_type]
+        else:
+            return cur_type == dst_type
+
+    def __eq__(self, other: SyntaxType):
+        if not isinstance(other, SyntaxType):
+            return NotImplemented
+        return self.get_real_type() == other.get_real_type()
+
+    def __ne__(self, other: SyntaxType):
+        return not self.__eq__(other)
+
+    def __le__(self, other):
+        if not isinstance(other, SyntaxType):
+            return NotImplemented
+        return self.belong_to(other)
+
+    def __lt__(self, other):
+        if not isinstance(other, SyntaxType):
+            return NotImplemented
+        return self.__le__(other) and not self.__ne__(other)
+
+    def get_real_type(self):
+        if self.type == "typevar":
+            return self.templateType
+        else:
+            return self.type
+
+    def get_size(self):
+        '''计算size表达式，得到一个int值'''
+        if not hasattr(self, 'size'):
+            if self.type == "field_decl":
+                size = len(self.fields.keys())
+            elif self.type == "array":
+                const_value = cal_const_expr(self.sizeExpr)
+                if not const_value.type_belong_to(SyntaxType("integer")):
+                    raise NotStaticExprException(self.sizeExpr)
+                size = const_value.value
+            elif self.type == "enum":
+                size = len(self.enumList)
+            else:
+                size = 1
+            self.size = size
+        return self.size
+
+
+from syntax_tree.scade_const_expression import cal_const_expr
 
 
 class SyntaxTypeSymbol:
@@ -375,7 +578,7 @@ class SyntaxConstSymbol:
     此处的表达式必须可在编译时计算出数值！
     '''
 
-    def __init__(self, name: str, visibility: str):
+    def __init__(self, name: str, visibility: str = "public"):
         self.name = name
         self.visibility = visibility
 
@@ -389,6 +592,12 @@ class SyntaxConstSymbol:
         else:
             s += "=" + str(self.valueExpr)
         return s
+
+    def get_value(self):
+        """获取值"""
+        if not hasattr(self, "value"):
+            self.value = cal_const_expr(self.valueExpr).value
+        return self.value
 
 
 class SyntaxSensorSymbol:
@@ -514,12 +723,6 @@ class SyntaxVariableSymbol:
         self.isOutput = False
         self.isInput = False
 
-    def get_all_dependent_symbols(self, data_def):
-        """此局部变量,在这个作用域中所依赖的全部其他变量"""
-        # output=list()
-        # rhs_list=self.equation.get_rhs_list_by_name(self.name)
-        # for rhs_name in rhs_list:
-
     def __repr__(self):
         s = ""
         if self.isClock: s += "clock "
@@ -537,12 +740,6 @@ class SyntaxVariableSymbol:
             s += "last = "
             s += str(self.lastExpr)
         return s
-
-
-class SyntaxScope:
-    name: str
-    '''名字'''
-    pass  # 这里是为了让下面的成员变量能识别到自己，删掉就识别不到了
 
 
 class SyntaxScope:
@@ -591,6 +788,7 @@ class SyntaxScope:
             return None
 
     def childScope2str(self, depth=0):
+        if not self.childScopeTable: return ""
         s = ""
         s += "    " * depth + "\033[32mchildScope:\033[0m\n"
         for _, scope in self.childScopeTable.items():
@@ -617,7 +815,7 @@ class SyntaxScope:
             self.initVar = SyntaxVariableSymbol(f"{self.initSymbol}", False, False)
             self.initVar.isOutput = True
             self.initVar.syntaxType = SyntaxType("bool")
-            postExpr = SyntaxExpr(type="Atom", subtype="bool_atom")
+            postExpr = SyntaxExpr(type="Atom", subtype="bool_atom", scope=self)
             postExpr.add_object("true")
             self.initVar.postExpr = postExpr
             self.add_tmpSymbol(self.initVar)
@@ -640,10 +838,19 @@ class SyntaxScope:
     def get_my_userOp(self):
         """返回此作用域对应的userOp作用域"""
         if self.type == "package": raise Exception(f"{self.name}是一个package")
-        op_scope = self
-        while op_scope.type != "function" and op_scope.type != "node":
-            op_scope = op_scope.prevScope
-        return op_scope
+        if getattr(self, "op_scope", None) is None:
+            op_scope = self
+            while op_scope.type != "function" and op_scope.type != "node":
+                op_scope = op_scope.prevScope
+            self.op_scope = op_scope
+            return op_scope
+        else:
+            return self.op_scope
+
+    def get_my_pacakge(self):
+        if self.type == "package":
+            return self
+        return self.get_my_userOp().prevScope
 
     def resolve_path(self, path: list):
         """解析Path类型，直接返回对应的package,输入数组格式,即split::后的"""
@@ -660,6 +867,26 @@ class SyntaxScope:
             if not tar_package:
                 raise UnknownIdentifierException(f"找不到{path[0]}")
         return tar_package
+
+    def check_and_get_constant_param(self, param_name):
+        """检查这个参数是不是一个常数，如果是则返回syntaxconstSymbol，否则返回None"""
+        if isinstance(self, SyntaxPackageScope):
+            package = self
+        else:
+            userOp = self.get_my_userOp()
+            if param_name in userOp.sizeDecl.keys():
+                return userOp.sizeDecl[param_name]
+            package = userOp.prevScope
+        if "::" in param_name:
+            path = param_name.split("::")
+            package_path = path[:-1]
+            tar_package = package.resolve_path(package_path)
+            name = path[-1]
+        else:
+            tar_package = package
+            name = param_name
+        const_param = tar_package.get_const_symbol(name)
+        return const_param
 
 
 class SyntaxIfBlock:
@@ -817,6 +1044,19 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         self.equationDependentGraph = Graph()
         self.lhs2EquationDict = dict()
 
+    def is_param_declared_externally(self, param_name):
+        """判断这个变量是不是在此作用域的外部定义的"""
+        # 当前作用域找不到这个变量，但是上面的作用域找到了，说明是一个要返回的变量
+        symbol = self.get_localVariable(param_name)
+        if symbol is None:
+            symbol = self.get_localVariable_InThisAndPreEnv(param_name)
+        else:
+            return False
+        if symbol is None:
+            raise UnknownIdentifierException(f"{param_name} in {self.get_global_name()}")
+        else:
+            return True
+
     def add_equation(self, input_equation: SyntaxEquation):
         # 直接放进去，遍历完所有语句之后再进行排序
         # 还有各种设置索引和句子所属作用域
@@ -832,15 +1072,12 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 if not self.have_signal_InThisAndPreEnv(lhs):
                     raise UnknownIdentifierException(lhs + " in " + str(input_equation))
             else:
-                symbol = self.get_localVariable(lhs)
-                if not symbol:
-                    symbol = self.get_localVariable_InThisAndPreEnv(lhs)
-                    self.returnSymbolsTable[lhs] = symbol
-                    # 当前作用域找不到这个变量，但是上面的作用域找到了，说明是一个要返回的变量
-                if not symbol:
-                    raise UnknownIdentifierException(
-                        input_equation.type + " " + lhs + " in " + str(input_equation))
+                if self.is_param_declared_externally(lhs):
+                    self.returnSymbolsTable[lhs] = self.get_localVariable_InThisAndPreEnv(lhs)
                 self.lhs2EquationDict[lhs] = input_equation
+
+    def get_equation_by_lhs(self, lhs):
+        return self.lhs2EquationDict.get(lhs)
 
     def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:
         '''在当前作用域找局部变量'''
@@ -865,9 +1102,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         if name in self.signalSymbolSet:
             return True
         else:
-            if self.prevScope.type == "automaton" or \
-                    self.prevScope.type == "if_block" or \
-                    self.prevScope.type == "match_block":
+            if not isinstance(self.prevScope, SyntaxDataDefScope):
                 # 上层是automaton或者control_block就跳过这一层
                 return self.prevScope.prevScope.have_signal_InThisAndPreEnv(name)
             return self.prevScope.have_signal_InThisAndPreEnv(name)
@@ -971,6 +1206,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         return s
 
     def signalSymbolSet2str(self, depth=0):
+        if not self.signalSymbolSet: return ""
         s = ""
         s += "    " * depth + "\033[33msignalSymbolSet:\033[0m\n"
         if len(self.signalSymbolSet) > 0:
@@ -982,6 +1218,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         return s
 
     def localSymbolTable2str(self, depth=0):
+        if not self.localSymbolTable: return ""
         s = ""
         s += "    " * depth + "\033[33mlocalSymbolTable:\033[0m\n"
         for ID, symbol in self.localSymbolTable.items():
@@ -989,6 +1226,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         return s
 
     def equations2str(self, depth=0):
+        if not self.equations: return ""
         s = ""
         s += "    " * depth + "\033[34mequations:\033[0m\n"
         for equation in self.equations:
@@ -1008,6 +1246,17 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         else:
             target_package = userOp.prevScope
         return target_package.get_userOp(path_id[-1])
+
+    def get_type_by_path(self, path_str):
+        """根据路径找到对应的type_decl，没有则返回None
+         Parameters:
+            path_str: 指向某个type_decl,可以没有：：
+        """
+        path = path_str.split("::")
+        tar_package = self.get_my_pacakge()
+        if len(path) > 1:
+            tar_package = tar_package.resolve_path(path[:-1])
+        return tar_package.get_type_symbol(path[-1])
 
 
 class SyntaxArrow:
@@ -1276,7 +1525,9 @@ class SyntaxAutomaton(SyntaxScope):
 
 
 class SyntaxUserOp(SyntaxDataDefScope):
-    """记录func或者node，作为一种scope存在"""
+    """记录func或者node，作为一种scope存在
+    被调用时的名字为他的global_name
+    """
     type: str
     '''分为function和node两种'''
     name: str
@@ -1291,8 +1542,8 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''可见性，默认为public'''
     isImported: bool
     '''是不是imported'''
-    sizeDecl: list
-    '''输入的size参数，其中每个值都是const'''
+    sizeDecl: dict
+    '''输入的size参数，其中每个值都是const,存名字->SyntaxConstSymbol'''
     inParams: list  # 存SyntaxVariableSymbol
     '''输入参数，是一个变量声明列表'''
     outParams: list  # 存SyntaxVariableSymbol
@@ -1307,11 +1558,15 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''声明的SPECIALIZE类型，存放一个pathID，没有声明则为None'''
     dependentFunctions: list
     '''此函数依赖的其他函数的路径列表'''
+    apply_exprs: list[SyntaxExpr]
+    '''记录了这个op下所有函数调用的情况，用来给代码生成环节添加outC
+    '''
     output2inputDependents: list[list[int]]
     '''记录此函数中，输出参数对输入参数的因果关系,二维数组，依次给output记录其依赖的input的列表，均为对应数组下标
     注意，在此userop没有返回值的时候，也会存在依赖关系，就好像存在一个默认的返回值一样。
     所以要注意区分，不能依靠这个表来判断函数的返回值情况，只有outParams才行
     '''
+
 
     def __init__(self, type, name, prevscope, visibility, isImported=False):
         super().__init__(type, name, prevscope, visibility)
@@ -1319,13 +1574,18 @@ class SyntaxUserOp(SyntaxDataDefScope):
         self.outParams = list()
         # self.tmpParams = list()
         self.whereDecl = list()
-        self.sizeDecl = list()
+        self.sizeDecl = dict()
         self.dependentFunctions = list()
         self.output2inputDependents = list()
         self.isImported = isImported
+        self.apply_exprs=list()
 
     def set_sizeDecl(self, sizeDecl: list):
-        self.sizeDecl = sizeDecl
+        # 所有的sizeDecl都是正整数，设置成unsigned类型
+        for name in sizeDecl:
+            const_symbol = SyntaxConstSymbol(name=name)
+            const_symbol.syntaxType = SyntaxType(type="unsigned")
+            self.sizeDecl[name] = const_symbol
 
     def set_outParams(self, outParams):
         self.outParams = outParams
@@ -1368,6 +1628,13 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def isTemplate(self):
         return self.numericKind is not None
 
+    def add_apply_expr(self,expr:SyntaxExpr):
+        self.apply_exprs.append(expr)
+
+    def get_inC_name(self):
+        return f"inC_{self.get_global_name()}"
+    def get_outC_name(self):
+        return f"outC_{self.get_global_name()}"
     def userOp2str(self, depth=0):
         s = "    " * depth
         s += "\033[31m"
@@ -1384,7 +1651,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         s += self.name
         if self.sizeDecl:
             s += "<<"
-            for decl in self.sizeDecl:
+            for decl in self.sizeDecl.keys():
                 s += decl + ","
             s = s[:-1]
             s += ">>"
@@ -1473,27 +1740,34 @@ class SyntaxPackageScope(SyntaxScope):
         s += "\033[0m"
         s += "\n"
         depth = depth + 1
-        s += "    " * depth + "\033[33mopen packages:\033[0m\n"
-        for package in self.openPackageList:
-            s += "    " * depth + "    " + package + "\n"
-        s += "    " * depth + "\033[33mtypeSymbolTable:\033[0m\n"
-        for ID, symbol in self.typeSymbolTable.items():
-            s += "    " * depth + "    " + ID + ":" + str(symbol) + "\n"
-        s += "    " * depth + "\033[33mconstSymbolTable:\033[0m\n"
-        for ID, symbol in self.constSymbolTable.items():
-            s += "    " * depth + "    " + ID + ":" + str(symbol) + "\n"
-        s += "    " * depth + "\033[33msensorSymbolTable:\033[0m\n"
-        for ID, symbol in self.sensorSymbolTable.items():
-            s += "    " * depth + "    " + ID + ":" + str(symbol) + "\n"
-        s += "    " * depth + "\033[33mgroupSymbolTable:\033[0m\n"
-        for ID, symbol in self.groupSymbolTable.items():
-            s += "    " * depth + "    " + ID + ":" + str(symbol) + "\n"
-        s += "    " * depth + "\033[32muserOpTable:\033[0m\n"
-        for ID, symbol in self.userOpTable.items():
-            s += symbol.userOp2str(depth=depth + 1)
-        s += "    " * depth + "\033[32mchildScope:\033[0m\n"
-        for _, scope in self.childScopeTable.items():
-            if scope.type == "package": s += scope.package2str(depth=depth + 1)
+        if self.openPackageList:
+            s += "    " * depth + "\033[33mopen packages:\033[0m\n"
+            for package in self.openPackageList:
+                s += "    " * depth + "    " + package + "\n"
+        if self.typeSymbolTable:
+            s += "    " * depth + "\033[33mtypeSymbolTable:\033[0m\n"
+            for ID, symbol in self.typeSymbolTable.items():
+                s += "    " * depth + "    " + ID + ":" + str(symbol) + "\n"
+        if self.constSymbolTable:
+            s += "    " * depth + "\033[33mconstSymbolTable:\033[0m\n"
+            for ID, symbol in self.constSymbolTable.items():
+                s += "    " * depth + "    " + ID + ":" + str(symbol) + "\n"
+        if self.sensorSymbolTable:
+            s += "    " * depth + "\033[33msensorSymbolTable:\033[0m\n"
+            for ID, symbol in self.sensorSymbolTable.items():
+                s += "    " * depth + "    " + ID + ":" + str(symbol) + "\n"
+        if self.groupSymbolTable:
+            s += "    " * depth + "\033[33mgroupSymbolTable:\033[0m\n"
+            for ID, symbol in self.groupSymbolTable.items():
+                s += "    " * depth + "    " + ID + ":" + str(symbol) + "\n"
+        if self.userOpTable:
+            s += "    " * depth + "\033[32muserOpTable:\033[0m\n"
+            for ID, symbol in self.userOpTable.items():
+                s += symbol.userOp2str(depth=depth + 1)
+        if self.childScopeTable:
+            s += "    " * depth + "\033[32mchildScope:\033[0m\n"
+            for _, scope in self.childScopeTable.items():
+                if scope.type == "package": s += scope.package2str(depth=depth + 1)
         return s
 
     def __repr__(self):
@@ -1544,3 +1818,9 @@ class SyntaxPackageScope(SyntaxScope):
         self.constSymbolTable |= tar_package.constSymbolTable
         self.sensorSymbolTable |= tar_package.sensorSymbolTable
         self.groupSymbolTable |= tar_package.groupSymbolTable
+
+    def get_const_symbol(self, symbol_name):
+        return self.constSymbolTable.get(symbol_name)
+
+    def get_type_symbol(self, type_name):
+        return self.typeSymbolTable.get(type_name)
