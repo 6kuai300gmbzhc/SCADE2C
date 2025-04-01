@@ -7,15 +7,52 @@ from graph import *
 # 实例化还在写，虽然非常不想写，半年前的记忆触发了
 class HasRhs:
     pass
+
+class SyntaxType:
+    pass
+class SyntaxDataDefScope:
+    pass
+class ConstValue:
+    pass
+
 class SyntaxVariableSymbol:
     pass
+
+
 class SyntaxScope:
     pass
+
+
 class SyntaxExpr(HasRhs):
     pass
+
+
 class SyntaxUserOp:
     pass
 
+
+class SyntaxType:
+    pass
+
+import syntax_tree.scade_const_expression as const_expression
+class ConstValue:
+    """在expr间传递值的类，封装类型与值"""
+    type:SyntaxType = None
+    value: int or float or bool or str or list[ConstValue] or dict[str:ConstValue]
+
+    def __init__(self, syntax_type, value):
+        self.type = syntax_type
+        self.value = value
+
+    def type_belong_to(self, syntaxType: SyntaxType):
+        return self.type <= syntaxType
+
+    def get_size(self):
+        return self.type.get_size()
+
+    def __repr__(self):
+        return f"{str(self.type)} value:{str(self.value)}"
+    # 组合代替继承太爽啦
 class HasRhs:
     rhsList: list[set[str]]
     '''记录了引用的变量，只有局部变量和signal用来排序,考虑到多返回值的情况，按顺序存放每个返回值所对应的依赖变量'''
@@ -33,17 +70,6 @@ class HasRhs:
         """
         for rhs in tar.rhsList:
             self.rhsList.append(rhs)
-
-    def merge_rhs_in1(self, tar, index=0):
-        """将目标类的右值添加到右值中,但是全部融入指定位置
-        Parameters:
-            tar:有rhs的类，即expr，operator，equation
-            index: 目标rhs的数组下标
-        """
-        if not self.rhsList[index]:
-            self.rhsList[index] = set()
-        for rhs in tar.rhsList:
-            self.rhsList[index] |= rhs
 
     def add_empty_rhs(self):
         """添加一个空的右值列表"""
@@ -86,8 +112,6 @@ class HasRhs:
         self.lhsTypeList = type_list
 
 
-
-
 class SyntaxOperator(HasRhs):
     '''在Expr中的Apply_expr中的调用头部分，可以嵌套自己'''
     subtype: str
@@ -100,23 +124,23 @@ class SyntaxOperator(HasRhs):
     appliedUserOp: SyntaxUserOp
     '''为path_id时有效，保存了指向调用的userop的指针'''
 
-
     prefix_op_2_expr_dict = {
-        ("$+$", "$-$", "$*$", "$/$", "$mod$", "$land$", "$lor$", "$lxor$", "$lsr$", "$lsl$"): ["Arith_expr", "binOp"],#ese
-        ("+$", "-$", "lnot$"): ["Arith_expr", "unary"],#se
-        ("$=$", "$<>$", "$<$", "$>$", "$<=$", "$>=$"): ["Relation_expr", "Relation_expr"],#ese
-        ("$and$", "$or$", "$xor$"): ["Bool_expr", "binOp"],#ese
-        ("not$"): ["Bool_expr", "NOT"],#e
-        ("$@$"): ["Array_expr", "at"],#ee
-        ("reverse$"): ["Array_expr", "reverse"],#e
-        ("$times$"): ["Tempo_expr", "TIMES"]#ee
+        ("$+$", "$-$", "$*$", "$/$", "$mod$", "$land$", "$lor$", "$lxor$", "$lsr$", "$lsl$"): ["Arith_expr", "binOp"],
+        # ese
+        ("+$", "-$", "lnot$"): ["Arith_expr", "unary"],  # se
+        ("$=$", "$<>$", "$<$", "$>$", "$<=$", "$>=$"): ["Relation_expr", "Relation_expr"],  # ese
+        ("$and$", "$or$", "$xor$"): ["Bool_expr", "binOp"],  # ese
+        ("not$"): ["Bool_expr", "NOT"],  # e
+        ("$@$"): ["Array_expr", "at"],  # ee
+        ("reverse$"): ["Array_expr", "reverse"],  # e
+        ("$times$"): ["Tempo_expr", "TIMES"]  # ee
     }
 
-    def set_expr_for_prefix_op(self, scope,params:list):
+    def set_expr_for_prefix_op(self, scope, params: list):
         """设置prefixOp类型所等价的expr
         直到类型校验阶段才会有这样的expr，因为之前是无法确定具体有哪些参数的
         """
-        if not self.subtype == "PREFIXOP":
+        if self.subtype != "PREFIXOP":
             raise Exception("不对，不是prefixOP")
         corres_typs = None
         prefixOp = self.objects[0]
@@ -124,15 +148,15 @@ class SyntaxOperator(HasRhs):
             if prefixOp in key_set:
                 corres_typs = types
                 break
-        tar_expr=SyntaxExpr(type=corres_typs[0], subtype=corres_typs[1], scope=scope)
+        tar_expr = SyntaxExpr(type=corres_typs[0], subtype=corres_typs[1], scope=scope)
         # 然后向tar_expr内部填入对应的object
         # 这里直接让expr那边做校验，开摆了
-        tar_expr.objects = params.copy() # 浅拷贝
-        if tar_expr.subType=="Relation_expr" or tar_expr.subType=="binOp":
-            tar_expr.objects.insert(1,prefixOp.replace("$",""))
-        elif tar_expr.subType=="unary":
-            tar_expr.objects.insert(0,prefixOp.replace("$",""))
-        self.correspondExpr=tar_expr
+        tar_expr.objects = params.copy()  # 浅拷贝
+        if tar_expr.subType == "Relation_expr" or tar_expr.subType == "binOp":
+            tar_expr.objects.insert(1, prefixOp.replace("$", ""))
+        elif tar_expr.subType == "unary":
+            tar_expr.objects.insert(0, prefixOp.replace("$", ""))
+        self.correspondExpr = tar_expr
 
     def __init__(self, subtype: str):
         super().__init__()
@@ -183,7 +207,14 @@ class SyntaxExpr(HasRhs):
     """需要统计每个userOP调用其他函数的数量,仅在为Apply_expr时有效
     让operator返回他调用的函数情况！一个字典，key为userOp,value为list，逐层保存，比如map (map func<<2>>)<<3>>
     会得到一个字典：{func:[3,2]}
-    一个equation可能有很多个applyexpr
+    一个expr只会调用一个op，所以这个字典肯定只有一对key-value
+    """
+    returnNum: int = 1
+    """这个表达式返回的值的数量，默认为1
+    tempo类型除了time
+    list类型
+    函数调用
+    if/case类型均可返回多个，其他返回一个
     """
 
     binop_dict = {"+": "+", "-": "-", "*": "*", "/": "/", "mod": "%", "land": "&", "lor": "|", "lxor": "^",
@@ -201,7 +232,7 @@ class SyntaxExpr(HasRhs):
         self.subType = subtype
         self.objects = list()
         self.scope = scope
-        self.appliedOpDict=dict()
+        self.appliedOpDict = dict()
 
     def add_object(self, object):
         self.objects.append(object)
@@ -209,8 +240,8 @@ class SyntaxExpr(HasRhs):
     def set_symbol(self, symbol):
         self.syntaxSymbol = symbol
 
-    def set_applied_Op(self,applied_Op):
-        self.appliedOpDict=applied_Op
+    def set_applied_Op(self, applied_Op):
+        self.appliedOpDict = applied_Op
 
     def __repr__(self):
         s = ""
@@ -256,8 +287,6 @@ def get_type_and_value_for_atom(atom_expr: SyntaxExpr):
     return given_type, given_value
 
 
-class SyntaxDataDefScope:
-    pass
 
 
 class SyntaxEquation(HasRhs):
@@ -302,7 +331,6 @@ class SyntaxEquation(HasRhs):
 
     scope: SyntaxDataDefScope
     '''这个句子所属于的作用域'''
-
 
     def __init__(self, type: str, lhs: list, lineno: int):
         super().__init__()
@@ -373,8 +401,6 @@ class SyntaxEquation(HasRhs):
         return self.equation2str()
 
 
-class SyntaxType:
-    pass
 
 
 class SyntaxType:
@@ -443,7 +469,7 @@ class SyntaxType:
         if self.enumList:
             s += "EnumList:{"
             for ID in self.enumList:
-                s += ID + ","
+                s += ID.name + ","
             s = s[:-1]
             s += "}"
         if self.value:
@@ -512,7 +538,7 @@ class SyntaxType:
             if self.type == "field_decl":
                 size = len(self.fields.keys())
             elif self.type == "array":
-                const_value = cal_const_expr(self.sizeExpr)
+                const_value = const_expression.cal_const_expr(self.sizeExpr)
                 if not const_value.type_belong_to(SyntaxType("integer")):
                     raise NotStaticExprException(self.sizeExpr)
                 size = const_value.value
@@ -524,7 +550,7 @@ class SyntaxType:
         return self.size
 
 
-from syntax_tree.scade_const_expression import cal_const_expr
+
 
 
 class SyntaxTypeSymbol:
@@ -558,6 +584,7 @@ class SyntaxTypeSymbol:
         return s
 
 
+
 class SyntaxConstSymbol:
     """常量，为imported时没有初值"""
 
@@ -578,9 +605,16 @@ class SyntaxConstSymbol:
     此处的表达式必须可在编译时计算出数值！
     '''
 
-    def __init__(self, name: str, visibility: str = "public"):
+    __value:ConstValue
+    '''具体计算出来的数值，使用get_value方法来访问
+    也存储了枚举类型值
+    '''
+
+    def __init__(self, name: str, visibility: str = "public",imported=False):
         self.name = name
         self.visibility = visibility
+        self.__value=None
+        self.isImported=imported
 
     def __repr__(self):
         s = ""
@@ -595,10 +629,11 @@ class SyntaxConstSymbol:
 
     def get_value(self):
         """获取值"""
-        if not hasattr(self, "value"):
-            self.value = cal_const_expr(self.valueExpr).value
-        return self.value
-
+        if self.__value is None:
+            self.__value = const_expression.cal_const_expr(self.valueExpr).value
+        return self.__value
+    def set_value(self,value):
+        self.__value=value
 
 class SyntaxSensorSymbol:
     name: str
@@ -859,6 +894,8 @@ class SyntaxScope:
         else:
             cur_package = self.get_my_userOp().prevScope
         # 先根据path第一个找到对应package，然后逐层向下找
+        if len(path) == 0:
+            return cur_package
         tar_package = cur_package.get_package_InThisAndPreEnv(path[0])
         if not tar_package:
             raise UnknownIdentifierException(f"找不到{path[0]}")
@@ -1567,7 +1604,6 @@ class SyntaxUserOp(SyntaxDataDefScope):
     所以要注意区分，不能依靠这个表来判断函数的返回值情况，只有outParams才行
     '''
 
-
     def __init__(self, type, name, prevscope, visibility, isImported=False):
         super().__init__(type, name, prevscope, visibility)
         self.inParams = list()
@@ -1578,7 +1614,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         self.dependentFunctions = list()
         self.output2inputDependents = list()
         self.isImported = isImported
-        self.apply_exprs=list()
+        self.apply_exprs = list()
 
     def set_sizeDecl(self, sizeDecl: list):
         # 所有的sizeDecl都是正整数，设置成unsigned类型
@@ -1628,13 +1664,15 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def isTemplate(self):
         return self.numericKind is not None
 
-    def add_apply_expr(self,expr:SyntaxExpr):
+    def add_apply_expr(self, expr: SyntaxExpr):
         self.apply_exprs.append(expr)
 
     def get_inC_name(self):
         return f"inC_{self.get_global_name()}"
+
     def get_outC_name(self):
         return f"outC_{self.get_global_name()}"
+
     def userOp2str(self, depth=0):
         s = "    " * depth
         s += "\033[31m"

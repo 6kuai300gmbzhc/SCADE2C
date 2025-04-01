@@ -318,10 +318,11 @@ def post_Id_expr(expr: SyntaxExpr, data_def:SyntaxDataDefScope):
         symbol=data_def.check_and_get_constant_param(name)
         if symbol is not None:
             expr.set_rhs([])
+            expr.set_symbol(symbol)
         else:
             symbol=data_def.get_localVariable_InThisAndPreEnv(name)
             if symbol is None:
-                raise UnknownIdentifierException(name)
+                raise UnknownIdentifierException(name+" "+str(expr)) #有枚举类型，可恶,把枚举类型给放到常数变量里了
             expr.set_rhs([name])
         expr.set_symbol(symbol)
     else: # SinglequoteLv6id
@@ -333,13 +334,21 @@ def post_Id_expr(expr: SyntaxExpr, data_def:SyntaxDataDefScope):
 
 @post_expr_handler("Tempo_expr")
 def post_tempo_expr(expr: SyntaxExpr, data_def):
+    # 设置一下返回值数量，从输入参数大概估算一个，不需要具体的校验
     if expr.subType == "PRE":
         expr.set_rhs([])
-        return
-    if expr.subType == "FBY":
+        expr.returnNum=expr.objects[0].returnNum
+    elif expr.subType == "FBY":
         expr.absorb_rhs(expr.objects[2])
-        return
-    set_rhs_default(expr)
+        expr.returnNum = expr.objects[0].returnNum
+    else:
+        set_rhs_default(expr)
+        if expr.subType == "WHEN" or expr.subType=="ARROW":
+            expr.returnNum = expr.objects[0].returnNum
+        elif expr.subType=="MERGE":
+            expr.returnNum = expr.objects[1][0].returnNum
+
+
 
 
 @post_expr_handler('List_expr')
@@ -350,8 +359,10 @@ def post_List_expr(expr: SyntaxExpr, data_def):
     if not expr.objects: return
     expr_list = expr.objects[0]
     new_object_list = list()
+    return_num=0
     for sub_expr in expr_list:
         expr.absorb_rhs(sub_expr)
+        return_num+=sub_expr.returnNum
         if sub_expr.type == "List_expr":
             # 因为还需要考虑到函数调用的因素，所以这里不可能全部的将list展开
             for o in sub_expr.objects[0]:
@@ -359,20 +370,29 @@ def post_List_expr(expr: SyntaxExpr, data_def):
         else:
             new_object_list.append(sub_expr)
     expr.objects[0] = new_object_list
+    expr.returnNum=return_num
 
+@post_expr_handler('Switch_expr')
+def post_Switch_expr(expr,data_def):
+    if expr.subType=="IF":
+        expr.returnNum=expr.objects[1].returnNum
+    else:
+        expr.returnNum=expr.objects[1][1].returnNum
 
 @post_expr_handler('Apply_expr')
 def post_Apply_expr(expr, data_def):
     """遇到函数调用，根据输入，输出参数来确定对应的依赖关系"""
     # 处理一下operator的情况，情况比较复杂，需要分配到每个函数自行解决问题
     operator = expr.objects[0]
+    expr.returnNum,expr.rhsList=post_process_operator(operator,expr,data_def)
+def post_process_operator(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
+    """返回两个参数，expr返回参数数量，和右值列表"""
     type_ = operator.subtype
     if type_ in post_process_operator_handlers.keys():
         operator_handler = post_process_operator_handlers[type_]
-        operator_handler(operator, expr, data_def)
+        return operator_handler(operator, expr, data_def)
     else:
-        set_rhs_default(expr)
-
+        raise Exception(f"{type_}这个operator还没实现后处理")
 
 post_process_operator_handlers = {}
 
@@ -386,37 +406,78 @@ def post_operator_handler(type_):
 
 
 @post_operator_handler('Path_id')
-def post_operator_Path_id(operator: SyntaxOperator, expr: SyntaxExpr, data_def):
+def post_operator_Path_id(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
     """最常用的，函数调用部分，找到目标函数，然后查看输入输出依赖关系，更新expr的右值"""
     # 找到目标函数
     tar_userOp: SyntaxUserOp = data_def.find_userOp_by_path(operator.objects[0])
     params: list[SyntaxExpr] = expr.objects[1].objects[0]
     if not tar_userOp:
         raise UnknownIdentifierException(f"{data_def.get_global_name()}找不到{operator.objects[0]}")
+    operator.appliedUserOp=tar_userOp
     # 找到了之后，根据这个函数的依赖关系确定这个表达式的依赖关系
     # 如果这个函数没有返回值，就直接返回输入的参数
     # 如果有返回值，就看一眼对应的参数，根据依赖表确定情况
     if len(tar_userOp.inParams) != len(params):
         raise ParamMismatcheException(f"{expr}在函数调用时参数数量不匹配")
+    rhs_list=list()
     if not tar_userOp.outParams:
+        rhs_set=set()
         for i in tar_userOp.output2inputDependents[0]:
-            expr.merge_rhs_in1(params[i])
+            rhs_set.add(params[i])
+        rhs_list.append(rhs_set)
     else:
         for i in range(len(tar_userOp.output2inputDependents)):
+            rhs_set=set()
             out_dependent_list = tar_userOp.output2inputDependents[i]
-            expr.add_empty_rhs()
             for j in out_dependent_list:
-                expr.merge_rhs_in1(params[j], i)
+                rhs_set.add(params[j])
+            rhs_list.append(rhs_set)
+    return len(tar_userOp.outParams),rhs_list
+
+@post_operator_handler('PREFIXOP')
+def post_operator_PREFIXOP(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
+    params: list[SyntaxExpr] = expr.objects[1].objects[0]
+
+
 
 @post_operator_handler('flatten')
-def post_operator_Path_id(operator: SyntaxOperator, expr: SyntaxExpr, data_def):
+def post_operator_flatten(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
+    params: list[SyntaxExpr] = expr.objects[1].objects[0]
     tar_type_name=operator.objects[0]
     tar_type=data_def.get_type_by_path(tar_type_name).syntaxType
     if tar_type is None:
         raise UnknownIdentifierException(tar_type_name)
     size=tar_type.get_size()
+    rhs_list=list()
     for i in range(size):
-        expr.add_rhs([expr.objects[0]])
+        rhs_list.append(set(expr.objects[1]))
+    #全部因果关系，返回参数数量为结构体中元素个数
+    return size,rhs_list
+
+
+@post_operator_handler('make')
+def post_operator_make(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
+    params: list[SyntaxExpr] = expr.objects[1].objects[0]
+    tar_type_name=operator.objects[0]
+    tar_type=data_def.get_type_by_path(tar_type_name).syntaxType
+    if tar_type is None:
+        raise UnknownIdentifierException(tar_type_name)
+    size=tar_type.get_size()
+    rhs_list=list()
+    for i in range(size):
+        rhs_list.append(set(expr.objects[1]))
+    # 全部因果关系，返回1个变量
+    return 1,rhs_list
+
+
+@post_operator_handler("iterator")
+def post_operator_map(operator: SyntaxOperator, expr: SyntaxExpr, data_def):
+    sub_operator=operator.objects[2]
+    # 很神奇吧，iterator不修改返回的参数数量
+    # 他们会对调用的op有要求
+    # 在类型推导里做具体的校验
+    return post_process_operator(sub_operator,expr,data_def)
+
 
 
 

@@ -8,6 +8,8 @@ import syntax_tree.scade_postprocess as scade_postprocess
 # equation，在遍历结束之后获取一个依赖单向图，应该通过这个单向图来找？
 # 单向图直接存储了equation之间的依赖关系
 # 最后的输出结果是rhsList这个东西
+
+#todo状态机转移部分的语句需要加入右值列表中
 def post_process(automaton: SyntaxAutomaton):
     # 先遍历内部所有state
     rhs_dict = dict()

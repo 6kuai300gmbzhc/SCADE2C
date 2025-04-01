@@ -192,9 +192,38 @@ def type_inference_Relation(expr, lhs_type_list:list[SyntaxType],data_def):
 @inference_expr_handler('List_expr')
 def type_inference_List(expr, lhs_type_list:list[SyntaxType],data_def):
     #需要每个表达式在后处理哪里先记一下自己返回多少个变量，可恶
-    pass
+    #↑做好了，比想象的简单很多，大部分expr只接受1一个输出
+    # 然后根据子表达式的返回变量情况，把输入的变量类型发送下去做校验
+    expr_list=expr.objects[0]
+    cur_index=0
+    actual_type_list=list()
+    for sub_expr in expr_list:
+        expect_num=sub_expr.returnNum
+        actual_type=type_inference_expr(sub_expr,lhs_type_list[cur_index:cur_index+expect_num],data_def)
+        actual_type_list.extend(actual_type)
+        cur_index+=expect_num
+    expr.set_lhs_type(actual_type_list)
+    return expr.lhsTypeList
+
+
+inference_apply_handlers={}
+def inference_apply_handler(type_):
+    def decorator(func):
+        inference_apply_handlers[type_] = func
+        return func
+
+    return decorator
 
 @inference_expr_handler("Apply_expr")
 def type_inference_Apply(expr, lhs_type_list:list[SyntaxType],data_def):
     #设置这个expr函数调用情况，即对调用函数封装的层次，用于outC中
     #以一个字典的形式保存，map( map func<<3>>)<<2>> 得到的字典是{func:[2,3]}
+    operator=expr.objects[0]
+    handler=inference_apply_handlers.get(operator.subtype)
+    if handler is None:
+        raise Exception(f"不对,{operator.subtype}还没实现")
+    handler(operator,expr,lhs_type_list,data_def)
+
+@inference_apply_handler("Path_id")
+def type_inference_apply_path_id(operator:SyntaxOperator,expr:SyntaxExpr,lhs_type_list:list[SyntaxType],data_def):
+    tar_userOp=operator.appliedUserOp

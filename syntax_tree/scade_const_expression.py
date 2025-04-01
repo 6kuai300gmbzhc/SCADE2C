@@ -1,29 +1,6 @@
 from syntax_tree.SyntaxClass import *
 
 
-class ConstValue:
-    pass
-
-
-class ConstValue:
-    """在expr间传递值的类，封装类型与值"""
-    type: SyntaxType = None
-    value: int or float or bool or str or list[ConstValue] or dict[str:ConstValue]
-
-    def __init__(self, syntax_type, value):
-        self.type = syntax_type
-        self.value = value
-
-    def type_belong_to(self, syntaxType: SyntaxType):
-        return self.type <= syntaxType
-
-    def get_size(self):
-        return self.type.get_size()
-
-    def __repr__(self):
-        return f"{str(self.type)} value:{str(self.value)}"
-    # 组合代替继承太爽啦
-
 
 const_expr_handlers = {}
 
@@ -37,7 +14,7 @@ def const_expr_handler(type_):
 
 
 def cal_const_expr(expr: SyntaxExpr) -> ConstValue:
-    """计算常数表达式，得到整数值
+    """计算常数表达式，得到具体值
     允许的表达式类型：
     userOP对应的size_decl,非imported的const值->Path_id
     Arith_expr中的unary,binOp->unary,binOp

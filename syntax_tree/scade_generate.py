@@ -744,8 +744,8 @@ def generate_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_
     applied_userOp=operator.appliedUserOp
     global_name=applied_userOp.get_global_name()
     if applied_userOp.type=="node":
-
-    return syntax_expr_objects[0]
+        pass
+    return ""
 @register_operator_handler("PREFIXOP")
 def generate_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
 
@@ -897,10 +897,10 @@ def generate_syntax_type_enum(typeSymbol, rootPackage):
     global_name = rootPackage.get_global_name()
     var_name = typeSymbol.name if len(global_name) == 0 else f"{typeSymbol.name}_{global_name}"
     code = f"typedef enum {var_name} {{\n"
-    for idx, enum_elem in enumerate(typeSymbol.syntaxType.enumList):
+    for idx, enum_symbol in enumerate(typeSymbol.syntaxType.enumList):
         if idx != 0:
             code += ",\n"
-        code += f"{enum_elem}" if len(global_name) == 0 else f"{enum_elem}_{global_name}"
+        code += f"{enum_symbol.name}" if len(global_name) == 0 else f"{enum_symbol.name}_{global_name}"
     code += f"\n}} {var_name};\n"
     print("=== enum ===")
     print(code)

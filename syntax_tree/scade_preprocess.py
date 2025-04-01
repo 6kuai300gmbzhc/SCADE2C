@@ -140,7 +140,15 @@ def p_type_def(p):
         p[0] = p[1]
         return
     p[0] = SyntaxType(type="enum")
-    p[0].enumList = p[3]
+    enum_list = list()
+    for enum_value in p[3]:
+        enum_symbol=SyntaxConstSymbol(name=enum_value)
+        enum_symbol.syntaxType=p[0]
+        enum_symbol.set_value(enum_value)
+        cur_scope.add_constSymbol(enum_symbol)
+        enum_list.append(enum_symbol)
+    p[0].enumList=enum_list
+
 
 
 # 返回SyntaxType
