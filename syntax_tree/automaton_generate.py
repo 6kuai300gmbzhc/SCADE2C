@@ -73,7 +73,7 @@ def get_reset_act(automaton: SyntaxAutomaton) -> str:
 def generate_expr_for_arrow_conditions(tmp_name, from_state, code_generator, sub_expr, depth) -> str:
     """将arrow的判断部分的代码生成出来"""
     tmp_symbol = SyntaxVariableSymbol(name=tmp_name, isProbe=False, isClock=False)
-    tmp_symbol.syntaxType = SyntaxType(type="bool")
+    tmp_symbol.syntaxType = SyntaxType(tar_type="bool")
     from_state.add_tmpSymbol(tmp_symbol)
     equation = SyntaxEquation(type="simple_equation", lhs=[tmp_name], lineno=-1)
     equation.set_expr(sub_expr)

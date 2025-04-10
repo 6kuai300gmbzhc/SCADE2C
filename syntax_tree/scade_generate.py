@@ -982,6 +982,7 @@ def generate_const_equation(rootPackage):
         c_content += c
     global_name = rootPackage.get_global_name()
     for name, constSymbol in rootPackage.constSymbolTable.items():
+        if constSymbol.syntaxType==SyntaxType("enum"):continue
         symbol_name = name if len(global_name) == 0 else f"{name}_{global_name}"
         symbol_type = constSymbol.syntaxType.change_name()
         if constSymbol.isImported == True:

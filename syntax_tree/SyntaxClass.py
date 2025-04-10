@@ -2,18 +2,23 @@ from syntax_tree.Exceptions import *
 from collections import defaultdict, deque
 from graph import *
 
-
 # 拓扑排序和模板实例化操作
 # 实例化还在写，虽然非常不想写，半年前的记忆触发了
 class HasRhs:
     pass
 
+
 class SyntaxType:
     pass
+
+
 class SyntaxDataDefScope:
     pass
+
+
 class ConstValue:
     pass
+
 
 class SyntaxVariableSymbol:
     pass
@@ -34,10 +39,10 @@ class SyntaxUserOp:
 class SyntaxType:
     pass
 
-import syntax_tree.scade_const_expression as const_expression
+
 class ConstValue:
     """在expr间传递值的类，封装类型与值"""
-    type:SyntaxType = None
+    type: SyntaxType = None
     value: int or float or bool or str or list[ConstValue] or dict[str:ConstValue]
 
     def __init__(self, syntax_type, value):
@@ -53,6 +58,8 @@ class ConstValue:
     def __repr__(self):
         return f"{str(self.type)} value:{str(self.value)}"
     # 组合代替继承太爽啦
+
+
 class HasRhs:
     rhsList: list[set[str]]
     '''记录了引用的变量，只有局部变量和signal用来排序,考虑到多返回值的情况，按顺序存放每个返回值所对应的依赖变量'''
@@ -119,44 +126,22 @@ class SyntaxOperator(HasRhs):
     objects: list
     '''按顺序保存了具体的内容，具体看文档'''
 
-    correspondExpr: SyntaxExpr
-    '''为prefixOP时候有效，保存了等效的expr,后处理，类型校验，代码生成等环节直接调用它即可'''
     appliedUserOp: SyntaxUserOp
     '''为path_id时有效，保存了指向调用的userop的指针'''
 
     prefix_op_2_expr_dict = {
+        # 双目
         ("$+$", "$-$", "$*$", "$/$", "$mod$", "$land$", "$lor$", "$lxor$", "$lsr$", "$lsl$"): ["Arith_expr", "binOp"],
         # ese
-        ("+$", "-$", "lnot$"): ["Arith_expr", "unary"],  # se
         ("$=$", "$<>$", "$<$", "$>$", "$<=$", "$>=$"): ["Relation_expr", "Relation_expr"],  # ese
         ("$and$", "$or$", "$xor$"): ["Bool_expr", "binOp"],  # ese
-        ("not$"): ["Bool_expr", "NOT"],  # e
         ("$@$"): ["Array_expr", "at"],  # ee
+        ("$times$"): ["Tempo_expr", "TIMES"],  # ee
+        #单目
+        ("+$", "-$", "lnot$"): ["Arith_expr", "unary"],  # se
+        ("not$"): ["Bool_expr", "NOT"],  # e
         ("reverse$"): ["Array_expr", "reverse"],  # e
-        ("$times$"): ["Tempo_expr", "TIMES"]  # ee
     }
-
-    def set_expr_for_prefix_op(self, scope, params: list):
-        """设置prefixOp类型所等价的expr
-        直到类型校验阶段才会有这样的expr，因为之前是无法确定具体有哪些参数的
-        """
-        if self.subtype != "PREFIXOP":
-            raise Exception("不对，不是prefixOP")
-        corres_typs = None
-        prefixOp = self.objects[0]
-        for key_set, types in SyntaxOperator.prefix_op_2_expr_dict.items():
-            if prefixOp in key_set:
-                corres_typs = types
-                break
-        tar_expr = SyntaxExpr(type=corres_typs[0], subtype=corres_typs[1], scope=scope)
-        # 然后向tar_expr内部填入对应的object
-        # 这里直接让expr那边做校验，开摆了
-        tar_expr.objects = params.copy()  # 浅拷贝
-        if tar_expr.subType == "Relation_expr" or tar_expr.subType == "binOp":
-            tar_expr.objects.insert(1, prefixOp.replace("$", ""))
-        elif tar_expr.subType == "unary":
-            tar_expr.objects.insert(0, prefixOp.replace("$", ""))
-        self.correspondExpr = tar_expr
 
     def __init__(self, subtype: str):
         super().__init__()
@@ -204,10 +189,11 @@ class SyntaxExpr(HasRhs):
     '''Id_expr时，存储的对应symbol，会用到它的,ID没有，很合理'''
 
     appliedOpDict: dict[SyntaxUserOp:list[int]]
-    """需要统计每个userOP调用其他函数的数量,仅在为Apply_expr时有效
+    """需要统计每个userOP调用其他函数的数量,仅在为Apply_expr,且调用了某个函数时有效
     让operator返回他调用的函数情况！一个字典，key为userOp,value为list，逐层保存，比如map (map func<<2>>)<<3>>
     会得到一个字典：{func:[3,2]}
     一个expr只会调用一个op，所以这个字典肯定只有一对key-value
+    在类型推导环节填写
     """
     returnNum: int = 1
     """这个表达式返回的值的数量，默认为1
@@ -226,22 +212,29 @@ class SyntaxExpr(HasRhs):
     other = {"reverse", "times", "@"}
 
     # apply_Expr中的prefixOP接受以上所有类型的运算，除了#，且运算规则也是完全相同的
-    def __init__(self, type: str, subtype: str, scope: SyntaxScope):
+    def __init__(self, type: str, subtype: str, scope: SyntaxScope, objects: list or None = None, returnNum=1):
         super().__init__()
         self.type = type
         self.subType = subtype
-        self.objects = list()
+        if objects is None:
+            self.objects = []
+        else:
+            self.objects = objects
         self.scope = scope
         self.appliedOpDict = dict()
+        self.returnNum=returnNum
 
-    def add_object(self, object):
-        self.objects.append(object)
+    def add_object(self, tar_object, index: int = None):
+        if index is None:
+            self.objects.append(tar_object)
+        else:
+            self.objects.insert(index, tar_object)
 
     def set_symbol(self, symbol):
         self.syntaxSymbol = symbol
 
-    def set_applied_Op(self, applied_Op):
-        self.appliedOpDict = applied_Op
+    def add_applied_Op(self, applied_Op, context_list):
+        self.appliedOpDict[applied_Op]=context_list
 
     def __repr__(self):
         s = ""
@@ -259,34 +252,33 @@ class SyntaxExpr(HasRhs):
                 s += f"({','.join([t.type for t in self.lhsTypeList])})"
         return s
 
-
-def get_type_and_value_for_atom(atom_expr: SyntaxExpr):
-    """以str的格式返回这个atom类型的expr值的具体数据类型到底是什么"""
-    subtype = atom_expr.subType
-    content = atom_expr.objects[0]
-    if subtype == "bool_atom":
-        given_type = 'bool'
-        given_value = content == "true"
-    elif subtype == "integernum":
-        given_type = 'integer'
-        given_value = int(content, 0)
-    elif subtype == "floatnum":
-        given_type = 'float'
-        given_value = float(content)
-    elif subtype == "character":
-        given_type = 'char'
-        given_value = content[1::-1]  # 去掉了前后的引号
-    elif subtype == "typed_integer":
-        t = content.split("_")
-        given_type = 'int'.join(t[1].split("i"))
-        given_value = int(t[0], 0)
-    else:  # typed_float
-        t = content.split("_")
-        given_type = f"float{t[1][1:]}"
-        given_value = t[0]
-    return given_type, given_value
-
-
+    def get_type_and_value_for_atom(self):
+        """以str的格式返回这个atom类型的expr值的具体数据类型到底是什么"""
+        if self.type!="Atom":
+            raise TypeMismatchException(self,"bool")
+        subtype = self.subType
+        content = self.objects[0]
+        if subtype == "bool_atom":
+            given_type = 'bool'
+            given_value = content == "true"
+        elif subtype == "integernum":
+            given_type = 'integer'
+            given_value = int(content, 0)
+        elif subtype == "floatnum":
+            given_type = 'float'
+            given_value = float(content)
+        elif subtype == "character":
+            given_type = 'char'
+            given_value = content[1::-1]  # 去掉了前后的引号
+        elif subtype == "typed_integer":
+            t = content.split("_")
+            given_type = 'int'.join(t[1].split("i"))
+            given_value = int(t[0], 0)
+        else:  # typed_float
+            t = content.split("_")
+            given_type = f"float{t[1][1:]}"
+            given_value = t[0]
+        return given_type, given_value
 
 
 class SyntaxEquation(HasRhs):
@@ -297,7 +289,7 @@ class SyntaxEquation(HasRhs):
     '''右值，
     对simple_equation为Syntaxexpr
     对assert为Syntaxexpr
-    对emission为Syntaxexpr,如果为None则无条件emit
+    对emission为Syntaxexpr,无条件emit会填一个为true的expr
     对control_block为None
     '''
     controlBlockID: str
@@ -401,12 +393,15 @@ class SyntaxEquation(HasRhs):
         return self.equation2str()
 
 
-
-
 class SyntaxType:
     """记录type类型"""
     name: str
     '''type_block ，用于重命名之后的str，type表示其真实类型，这个只是记录了在type_block中定义的别名'''
+
+    scope:SyntaxScope or None
+    '''这个type所属的scope,在大部分情况下是没用的，但是如果是path_id类型就需要依靠他来找到真实的type
+    所以对于path_id来说是必填，其他的随便
+    '''
 
     type: str
     '''类型，int8，枚举类型等field_decl,array,signed,unsigned,typevar,path_id,enum
@@ -450,8 +445,9 @@ class SyntaxType:
         'float': {'float32', 'float64'}
     }
 
-    def __init__(self, type: str) -> None:
-        self.type = type
+    def __init__(self, tar_type: str) -> None:
+        self.type = tar_type
+        self._size=None
 
     def __repr__(self):
         s = ""
@@ -511,7 +507,11 @@ class SyntaxType:
     def __eq__(self, other: SyntaxType):
         if not isinstance(other, SyntaxType):
             return NotImplemented
-        return self.get_real_type() == other.get_real_type()
+        if self.type != "array":
+            return self.get_real_type() == other.get_real_type()
+        else:
+            return self.arrayType == other.arrayType and self.get_size() == other.get_size()
+            # 数组需要尺寸和类型都一致
 
     def __ne__(self, other: SyntaxType):
         return not self.__eq__(other)
@@ -524,21 +524,26 @@ class SyntaxType:
     def __lt__(self, other):
         if not isinstance(other, SyntaxType):
             return NotImplemented
-        return self.__le__(other) and not self.__ne__(other)
+        return self.__le__(other) and self.__ne__(other)
 
     def get_real_type(self):
         if self.type == "typevar":
             return self.templateType
+        elif self.type=="path_id":
+            scope=self.scope
+            real_type=scope.check_and_get_type_symbol(self.value)
+            return real_type.syntaxType.type
         else:
             return self.type
 
     def get_size(self):
         '''计算size表达式，得到一个int值'''
-        if not hasattr(self, 'size'):
+        if self._size is None:
             if self.type == "field_decl":
                 size = len(self.fields.keys())
             elif self.type == "array":
-                const_value = const_expression.cal_const_expr(self.sizeExpr)
+                from syntax_tree.scade_const_expression import cal_const_expr
+                const_value = cal_const_expr(self.sizeExpr)
                 if not const_value.type_belong_to(SyntaxType("integer")):
                     raise NotStaticExprException(self.sizeExpr)
                 size = const_value.value
@@ -546,11 +551,23 @@ class SyntaxType:
                 size = len(self.enumList)
             else:
                 size = 1
-            self.size = size
-        return self.size
+            self._size = size
+        return self._size
 
+    def set_size(self,size:int):
+        """直接设定长度，覆盖长度表达式（如有）"""
+        self._size=size
 
+    def set_element_and_size(self,array_type,size):
+        self.arrayType=array_type
+        self.set_size(size)
+        return self
 
+    def get_element_type_for_array(self):
+        """获取数组元素的类型"""
+        if self.type != "array":
+            raise TypeMismatchException(self, "array类型")
+        return self.arrayType
 
 
 class SyntaxTypeSymbol:
@@ -584,7 +601,6 @@ class SyntaxTypeSymbol:
         return s
 
 
-
 class SyntaxConstSymbol:
     """常量，为imported时没有初值"""
 
@@ -605,16 +621,16 @@ class SyntaxConstSymbol:
     此处的表达式必须可在编译时计算出数值！
     '''
 
-    __value:ConstValue
+    __value: ConstValue
     '''具体计算出来的数值，使用get_value方法来访问
     也存储了枚举类型值
     '''
 
-    def __init__(self, name: str, visibility: str = "public",imported=False):
+    def __init__(self, name: str, visibility: str = "public", imported=False):
         self.name = name
         self.visibility = visibility
-        self.__value=None
-        self.isImported=imported
+        self.__value = None
+        self.isImported = imported
 
     def __repr__(self):
         s = ""
@@ -630,10 +646,13 @@ class SyntaxConstSymbol:
     def get_value(self):
         """获取值"""
         if self.__value is None:
-            self.__value = const_expression.cal_const_expr(self.valueExpr).value
+            from syntax_tree.scade_const_expression import cal_const_expr
+            self.__value = cal_const_expr(self.valueExpr).value
         return self.__value
-    def set_value(self,value):
-        self.__value=value
+
+    def set_value(self, value):
+        self.__value = value
+
 
 class SyntaxSensorSymbol:
     name: str
@@ -882,48 +901,53 @@ class SyntaxScope:
         else:
             return self.op_scope
 
-    def get_my_pacakge(self):
+    def get_my_package(self):
         if self.type == "package":
             return self
         return self.get_my_userOp().prevScope
 
-    def resolve_path(self, path: list):
+    def resolve_path(self, path_list: list):
         """解析Path类型，直接返回对应的package,输入数组格式,即split::后的"""
-        if self.type == "package":
-            cur_package = self
-        else:
-            cur_package = self.get_my_userOp().prevScope
+        cur_package=self.get_my_package()
         # 先根据path第一个找到对应package，然后逐层向下找
-        if len(path) == 0:
+        if len(path_list) == 0:
             return cur_package
-        tar_package = cur_package.get_package_InThisAndPreEnv(path[0])
+        tar_package = cur_package.get_package_InThisAndPreEnv(path_list[0])
         if not tar_package:
-            raise UnknownIdentifierException(f"找不到{path[0]}")
-        for package_name in path[1:]:
+            raise UnknownIdentifierException(f"找不到{path_list[0]}")
+        for package_name in path_list[1:]:
             tar_package = tar_package.get_package(package_name)
             if not tar_package:
-                raise UnknownIdentifierException(f"找不到{path[0]}")
+                raise UnknownIdentifierException(f"找不到{path_list[0]}")
         return tar_package
 
-    def check_and_get_constant_param(self, param_name):
+    def resolve_path_id(self,path_id:str):
+        """解析path_id，返回对应package和id"""
+        path_id_list=path_id.split("::")
+        if len(path_id_list)>1:
+            return self.resolve_path(path_id_list[:-1]),path_id_list[-1]
+        else:
+            return self.get_my_package(),path_id
+
+    def check_and_get_userOp(self, path_id: str):
+        """根据路径找到对应的userop，没有则返回None
+         Parameters:
+            path_id: 带::的路径，指向某个userop
+        """
+        target_package,op_name=self.resolve_path_id(path_id)
+        return target_package.get_userOp(op_name)
+    def check_and_get_constant_param(self, param_path_id):
         """检查这个参数是不是一个常数，如果是则返回syntaxconstSymbol，否则返回None"""
-        if isinstance(self, SyntaxPackageScope):
-            package = self
-        else:
-            userOp = self.get_my_userOp()
-            if param_name in userOp.sizeDecl.keys():
-                return userOp.sizeDecl[param_name]
-            package = userOp.prevScope
-        if "::" in param_name:
-            path = param_name.split("::")
-            package_path = path[:-1]
-            tar_package = package.resolve_path(package_path)
-            name = path[-1]
-        else:
-            tar_package = package
-            name = param_name
+        tar_package,name=self.resolve_path_id(param_path_id)
         const_param = tar_package.get_const_symbol(name)
         return const_param
+    def check_and_get_type_symbol(self, type_path_id):
+        """根据路径找到对应的type_decl，没有则返回None
+         Parameters:
+            type_path_id: 指向某个type_decl,可以没有：：
+        """
+        tar_package,name=self.resolve_path_id(type_path_id)
+        return tar_package.get_type_symbol(name)
 
 
 class SyntaxIfBlock:
@@ -1270,30 +1294,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             s += equation.equation2str(depth=depth + 1) + "\n"
         return s
 
-    def find_userOp_by_path(self, path: str):
-        """根据路径找到对应的userop，没有则返回None
-         Parameters:
-            path: 带::的路径，指向某个userop
-        """
-        path_id = path.split("::")
-        userOp = self.get_my_userOp()
-        if len(path_id) > 1:
-            package_path = path_id[:-1]
-            target_package = userOp.resolve_path(package_path)
-        else:
-            target_package = userOp.prevScope
-        return target_package.get_userOp(path_id[-1])
-
-    def get_type_by_path(self, path_str):
-        """根据路径找到对应的type_decl，没有则返回None
-         Parameters:
-            path_str: 指向某个type_decl,可以没有：：
-        """
-        path = path_str.split("::")
-        tar_package = self.get_my_pacakge()
-        if len(path) > 1:
-            tar_package = tar_package.resolve_path(path[:-1])
-        return tar_package.get_type_symbol(path[-1])
 
 
 class SyntaxArrow:
@@ -1302,7 +1302,7 @@ class SyntaxArrow:
 
 class SyntaxArrow:
     '''记录了一条状态机的转移指令,包括了actions，fork'''
-    action: str = None
+    action: str or None = None
     '''一个action就是一个作用域,这里记录了该作用域的ID'''
     type: str
     '''记录此arrow状态
@@ -1317,7 +1317,7 @@ class SyntaxArrow:
     '''
     ifExprList: list
     '''type为if时有效，保存了存有(SyntaxExpr,SyntaxArrow)的列表，对应语法的if和elsif部分'''
-    elseExpr: SyntaxArrow = None
+    elseExpr: SyntaxArrow or None = None
     '''type为if时可能有效，不一定会有else语句，若不为None则存储了else对应的语句'''
 
     def __init__(self, type: str, target: str = None, ifExpr: list = None, elseExpr: SyntaxArrow = None):
@@ -1327,6 +1327,7 @@ class SyntaxArrow:
             self.elseExpr = elseExpr
         else:
             self.target = target
+            self.elseExpr=None
 
     def set_action(self, action: str):
         self.action = action
@@ -1620,7 +1621,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         # 所有的sizeDecl都是正整数，设置成unsigned类型
         for name in sizeDecl:
             const_symbol = SyntaxConstSymbol(name=name)
-            const_symbol.syntaxType = SyntaxType(type="unsigned")
+            const_symbol.syntaxType = SyntaxType(tar_type="unsigned")
             self.sizeDecl[name] = const_symbol
 
     def set_outParams(self, outParams):

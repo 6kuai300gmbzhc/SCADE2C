@@ -139,7 +139,7 @@ def p_type_def(p):
     if len(p) == 2:
         p[0] = p[1]
         return
-    p[0] = SyntaxType(type="enum")
+    p[0] = SyntaxType(tar_type="enum")
     enum_list = list()
     for enum_value in p[3]:
         enum_symbol=SyntaxConstSymbol(name=enum_value)
@@ -172,26 +172,28 @@ def p_type_expr(p):
     | LBPARENTHESE Field_decl Type_expr_1 RBPARENTHESE
     | Type_expr EXPONENT Expr'''
     if p[1].value == "{":
-        p[0] = SyntaxType(type="field_decl")
+        p[0] = SyntaxType(tar_type="field_decl")
         p[0].fields = dict()
         p[0].fields.update(p[2].value)
         p[0].fields.update(p[3].value)
         return
     if len(p) == 4:
-        p[0] = SyntaxType(type="array")
+        p[0] = SyntaxType(tar_type="array")
         p[0].arrayType = p[1]
-        p[0].arrayExpr = p[3]
+        p[0].sizeExpr = p[3]
         return
     if p[1].value == "signed" or p[1].value == "unsigned":
         # signed/unsigned的两个声明，类型为signed unsigned
-        p[0] = SyntaxType(type=p[1].value)
+        p[0] = SyntaxType(tar_type=p[1].value)
         p[0].sizeExpr = p[3]
         return
     # 普通的情况
-    p[0] = SyntaxType(type=p[1].strs)
-    if p[1].strs == "typevar" or p[1].strs == "path_id":
+    p[0] = SyntaxType(tar_type=p[1].strs)
+    if p[1].strs == "typevar":
         p[0].value = p[1].value
-
+    elif p[1].strs == "path_id":
+        p[0].value = p[1].value
+        p[0].scope=cur_scope
 
 def p_field_decl(p):
     '''Field_decl : LV6ID COLON Type_expr'''
@@ -546,7 +548,7 @@ def p_emission_body(p):
         lhs += p[4]
         expr = p[6]
     p[0] = SyntaxEquation(type="emission", lhs=lhs, lineno=p.lineno(1))
-    if expr is not None: p[0].set_expr(expr)
+    p[0].set_expr(expr)
 
 
 def p_emission_body_1(p):
@@ -555,7 +557,8 @@ def p_emission_body_1(p):
     if len(p) != 2:
         p[0] = p[2]
     else:
-        p[0] = None
+        p[0] = SyntaxExpr(type="Atom",subtype="bool_atom",scope=cur_scope)
+        p[0].add_object("true")
 
 
 def p_emission_body_2(p):
@@ -1498,9 +1501,9 @@ def p_iterator(p):
     | MAPFOLDI
     | MAPFOLDI INTEGERNUM'''
     if len(p) == 2:
-        p[0] = [p[1],1]
+        p[0] = [p[1].value,1]
     else:
-        p[0] = [p[1],int(p[2].value)]
+        p[0] = [p[1].value,int(p[2].value)]
 
 
 def p_iterator_mw(p):

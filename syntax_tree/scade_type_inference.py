@@ -1,7 +1,10 @@
 from syntax_tree.SyntaxClass import *
+import functools
+
+from syntax_tree.scade_const_expression import cal_const_expr
 
 
-def type_inference(main_operator:SyntaxUserOp):
+def type_inference(main_operator: SyntaxUserOp):
     """对拓扑排序后，从后向前遍历userOP，进行类型推导
     有主节点的存在，最末端的userOp一定是主节点，且不是模板方法
     进行类型推导，与函数实例化操作
@@ -9,14 +12,47 @@ def type_inference(main_operator:SyntaxUserOp):
     """
     type_inference_userOp(main_operator)
 
-def type_inference_userOp(userOp:SyntaxUserOp):
+
+def type_inference_userOp(userOp: SyntaxUserOp):
     """
     类型推导，如果是模板函数要实例化，遍历的时候靠调用的path来找下一个目标函数
     """
-    for equation in userOp.equations:
-        type_inference_equation(equation,userOp)
+    type_inference_dataDef(userOp)
 
-def type_inference_equation(equation:SyntaxEquation,data_def:SyntaxDataDefScope):
+
+def type_inference_dataDef(data_def: SyntaxDataDefScope):
+    for equation in data_def.equations:
+        if equation.type != "control_block":
+            type_inference_equation(equation, data_def)
+        else:
+            control_block = data_def.get_childScope(equation.controlBlockID)
+            type_inference_control_block(control_block)
+
+
+def type_inference_control_block(control_block):
+    # 目前就automaton
+    # 感觉只是遍历每个state就行了，重点是每个句子，别的不管
+    if control_block.type == "automaton":
+        for state in control_block.stateTable.values():
+            type_inference_dataDef(state)
+            # 然后是状态转移部分
+
+
+def type_inference_arrow(cond_expr, arrow, data_def):
+    if arrow is None: return
+    if cond_expr is not None:
+        type_inference_expr(cond_expr, [SyntaxType("bool")], data_def)
+    if arrow.type == "if":
+        for (sub_cond_expr, sub_arrow) in arrow.ifExprList:
+            type_inference_arrow(sub_cond_expr, sub_arrow, data_def)
+        type_inference_arrow(None, arrow.elseExpr, data_def)
+    else:
+        if arrow.action:
+            action_scope = data_def.get_childScope(arrow.action)
+            type_inference_dataDef(action_scope)
+
+
+def type_inference_equation(equation: SyntaxEquation, data_def: SyntaxDataDefScope):
     """
     根据句子的左值，来分配expr的返回类型值
     """
@@ -26,7 +62,7 @@ def type_inference_equation(equation:SyntaxEquation,data_def:SyntaxDataDefScope)
             raise UnknownIdentifierException(lhs_symbol)
         equation.add_lhs_type(lhs_symbol.syntaxType)
     # 现在获取了句子左值的所有类型变量，然后将他们分配给expr做推理
-    type_inference_expr(equation.expr,equation.lhsTypeList,data_def)
+    type_inference_expr(equation.expr, equation.lhsTypeList, data_def)
 
 
 inference_expr_handlers = {}
@@ -39,7 +75,9 @@ def inference_expr_handler(type_):
 
     return decorator
 
-def type_inference_expr(expr:SyntaxExpr,lhs_type_list:list[SyntaxType],data_def:SyntaxDataDefScope)->list[SyntaxType]:
+
+def type_inference_expr(expr: SyntaxExpr, lhs_type_list: list[SyntaxType], data_def: SyntaxDataDefScope) -> list[
+    SyntaxType]:
     """根据分配的左值类型，确定每个子expr的类型，然后给出自己应该具有的返回类型
     此函数应该做到：
     1.根据输入的左值类型，确定自己的子expr应该是什么类型
@@ -49,93 +87,169 @@ def type_inference_expr(expr:SyntaxExpr,lhs_type_list:list[SyntaxType],data_def:
     并且，如果遇到函数调用，应先对调用的函数进行类型推导
     如果遇到了模板函数，则对模板函数进行实例化，需要实例化的内容包括模板类型，size参数
     """
-    _type=expr.type
-    handler=inference_expr_handlers[_type]
-    return handler(expr,data_def,lhs_type_list)
+    _type = expr.type
+    if _type in inference_expr_handlers.keys():
+        handler = inference_expr_handlers[_type]
+        return handler(expr, lhs_type_list, data_def)
+    else:
+        raise Exception(f"{expr}对应的type没用类型推导，在{data_def.get_global_name()}内")
+
 
 @inference_expr_handler('Id_expr')
-def type_inference_ID(expr:SyntaxExpr,data_def:SyntaxDataDefScope,lhs_type_list:list[SyntaxType]):
+def type_inference_ID(expr: SyntaxExpr, lhs_type_list: list[SyntaxType], data_def: SyntaxDataDefScope):
     # 要求只能提供一个左值类型，所以需要校验
-    if len(lhs_type_list)!=1:
-        raise TypeMismatchException(expr,lhs_type_list,data_def)
-    required_type=lhs_type_list[0]
-    if expr.subType == "ID" :
-        expr_type=SyntaxType(type='ID')# ID 的type是ID
+    if len(lhs_type_list) != 1:
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+    required_type = lhs_type_list[0]
+    if expr.subType == "ID":
+        expr_type = SyntaxType(tar_type='ID')  # ID 的type是ID
     elif expr.subType == "lastSinglequoteLv6id":
-        expr_type=expr.syntaxSymbol.syntaxType
+        expr_type = expr.syntaxSymbol.syntaxType
     elif expr.subType == "Path_id":
-        expr_type=expr.syntaxSymbol.syntaxType
-    else: # SinglequoteLv6id
-        expr_type=SyntaxType("bool")
+        expr_type = expr.syntaxSymbol.syntaxType
+    else:  # SinglequoteLv6id
+        expr_type = SyntaxType("bool")
     if expr_type <= required_type:
         expr.set_lhs_type([expr_type])
     else:
-        raise TypeMismatchException(expr, lhs_type_list, data_def)
+        raise TypeMismatchException(f"{expr}有type{expr_type}", required_type, data_def)
     return lhs_type_list
 
+
 @inference_expr_handler('Atom')
-def type_inference_Atom(expr, lhs_type_list:list[SyntaxType],data_def):
+def type_inference_Atom(expr, lhs_type_list: list[SyntaxType], data_def):
     # 要求只能提供一个左值类型，所以需要校验
-    if len(lhs_type_list)!=1:
-        raise TypeMismatchException(expr,lhs_type_list,data_def)
-    given_type,_=get_type_and_value_for_atom(expr)
-    syntax_type=SyntaxType(given_type)
+    if len(lhs_type_list) != 1:
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+    given_type, _ = expr.get_type_and_value_for_atom()
+    syntax_type = SyntaxType(given_type)
     if syntax_type <= lhs_type_list[0]:
         expr.set_lhs_type([syntax_type])
     else:
         raise TypeMismatchException(expr, lhs_type_list, data_def)
     return [syntax_type]
 
-inference_arith_handlers={}
+
+def type_check_decorator(func):
+    """类型校验装饰器，在这里进行校验，具体的函数只负责给出类型信息
+    接受expr, lhs_type_list: list[SyntaxType], data_def，传递给目标函数
+    收到函数返回的接受左值类型，接受右值类型，子expr列表
+    把右值分给子expr，把左值和lhs_type_list进行对比。
+    然后返回真正的lhs_type_list，即进行推理后得出的更精准的类型
+    返回lhs_type_list
+    """
+
+    def wrapper(expr, actual_lhs_types: list[SyntaxType], data_def):
+        required_lhs_types, required_rhs_types, sub_expr_list = func(expr, actual_lhs_types, data_def)
+        if len(required_lhs_types) != len(actual_lhs_types) or \
+                not all([a < r for a, r in zip(actual_lhs_types, required_lhs_types)]):
+            raise TypeMismatchException(expr, actual_lhs_types, data_def)
+
+        return
+
+    return wrapper
+
+
+binOp_type_table = {
+    "Bool_expr": {
+        "binOp": {
+            "": ["bool", "bool", "bool",False]
+        }
+    }
+}
+def get_required_type_for_binOp(expr_type,expr_sub_type,binOp):
+    sub_table=binOp_type_table.get(expr_type)
+    if sub_table is None: return None
+    op_table=sub_table.get(expr_sub_type)
+    if op_table is None: return None
+    if "" in op_table.keys():
+        return op_table[""]
+    return op_table.get(binOp)
+
+
+def common_inference_binOp(param_list_expr: SyntaxExpr, expr_type, expr_sub_type,
+                           lhs_type_list, data_def, binOp: str = ""):
+    """对二元运算的普遍类型推理
+    Parameters:
+        param_list_expr:有两个返回值的expr，适配prefixOp的情况，其他情况需要手动捏成一个list
+        need_shrink:是否需要根据expr返回值来再次进行类型推理，缩小范围
+    """
+    r=get_required_type_for_binOp(expr_type, expr_sub_type, binOp)
+    require_types=[SyntaxType(t) for t in r[:3]]
+    lhs_type=require_types[0]
+    sub_types=require_types[1:3]
+    if len(lhs_type_list)!=1 or not lhs_type<=lhs_type_list[0]:
+        raise TypeMismatchException([lhs_type],lhs_type_list,data_def)
+    actual_types=type_inference_expr(param_list_expr,sub_types,data_def)
+    need_shrink=r[3]
+    if need_shrink:
+        min_type=min(actual_types)
+        max_type=max(actual_types)
+        if min_type!=max_type:
+            actual_types=type_inference_expr(param_list_expr,[min_type,min_type],data_def)
+        # 按照更小的那个类型进行遍历，缩小范围
+        if actual_types[0] != actual_types[1]:
+            raise TypeMismatchException(param_list_expr,[min_type,min_type] , data_def)
+    return actual_types
+
+
+
+
+inference_arith_handlers = {}
+
+
 def inference_arith_handler(type_):
     def decorator(func):
         inference_arith_handlers[type_] = func
         return func
 
     return decorator
+
+
 @inference_expr_handler('Arith_expr')
-def type_inference_Arith(expr, lhs_type_list:list[SyntaxType],data_def):
-    if len(lhs_type_list)!=1 or not lhs_type_list[0]<=SyntaxType('numeric'):
-        raise TypeMismatchException(expr,lhs_type_list,data_def)
-    subtype=expr.subType
-    return inference_arith_handlers[subtype](expr,lhs_type_list,data_def)
+def type_inference_Arith(expr, lhs_type_list: list[SyntaxType], data_def):
+    subtype = expr.subType
+    return inference_arith_handlers[subtype](expr, lhs_type_list, data_def)
+
 
 @inference_arith_handler('cast')
-def type_inference_arith_cast(expr, lhs_type_list:list[SyntaxType],data_def):
+def type_inference_arith_cast(expr, lhs_type_list: list[SyntaxType], data_def):
     given_type = lhs_type_list[0]
-    cast_type=expr.objects[1]
+    cast_type = expr.objects[1]
     if not (cast_type <= SyntaxType("numeric") or cast_type != given_type):
-        raise TypeMismatchException(expr,lhs_type_list,data_def)
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
     expr.set_lhs_type([cast_type])
 
     # 需要两边均为numeric,这边和输出没关系，只要是numeric就行，别的不管
-    tar_expr=expr.objects[0]
-    tar_type=type_inference_expr(tar_expr,[SyntaxType("numeric")],data_def)
+    tar_expr = expr.objects[0]
+    tar_type = type_inference_expr(tar_expr, [SyntaxType("numeric")], data_def)
 
     return expr.lhsTypeList
 
+
 @inference_arith_handler('unary')
-def type_inference_arith_unary(expr, lhs_type_list:list[SyntaxType],data_def):
-    tar_expr=expr.objects[0]
-    tar_type=type_inference_expr(tar_expr,lhs_type_list,data_def)
+def type_inference_arith_unary(expr, lhs_type_list: list[SyntaxType], data_def):
+    tar_expr = expr.objects[0]
+    tar_type = type_inference_expr(tar_expr, lhs_type_list, data_def)
     expr.set_lhs_type([tar_type])
     # 一元运算符，将目标类型传递下去，然后将实际类型返回，没有需要修改的地方
     return expr.lhsTypeList
 
+
 @inference_arith_handler('binOp')
-def type_inference_arith_binOp(expr, lhs_type_list:list[SyntaxType],data_def):
+def type_inference_arith_binOp(expr, lhs_type_list: list[SyntaxType], data_def):
     # binOp会根据不同的二元运算符给出不同的要求
     # lnot, land, lor, lxor 是两个unsigned，需求且输出unsigned
     # lsl ,lsr 第一个是unsigned，第二个是integer，需求且输出unsigned
     # 其他情况则与输入类型相同
     # 是最宽泛的类型需求，对非移位运算的情况，若子式发现可以更具体的话则要根据具体的类型再遍历一遍
-    bitwiseOp={'lnot','land','lor','lxor'}
-    shiftOp={'lsl','lsr'}
-    op=expr.objects[1]
+    bitwiseOp = {'lnot', 'land', 'lor', 'lxor'}
+    shiftOp = {'lsl', 'lsr'}
+    op = expr.objects[1]
     if op in bitwiseOp:
-        required_given_type=SyntaxType("unsigned")
-        first_type=SyntaxType("unsigned")
-        second_type=SyntaxType("unsigned")
+        required_given_type = SyntaxType("unsigned")
+        first_type = SyntaxType("unsigned")
+        second_type = SyntaxType("unsigned")
     elif op in shiftOp:
         required_given_type = SyntaxType("unsigned")
         first_type = SyntaxType("unsigned")
@@ -146,84 +260,269 @@ def type_inference_arith_binOp(expr, lhs_type_list:list[SyntaxType],data_def):
         second_type = SyntaxType("numeric")
     given_type = lhs_type_list[0]
     if not given_type <= required_given_type:
-        raise TypeMismatchException(expr,lhs_type_list,data_def)
-    given_first_type = type_inference_expr(expr.objects[0],[first_type],data_def)[0]
-    given_second_type = type_inference_expr(expr.objects[2],[second_type],data_def)[0]
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+    given_first_type = type_inference_expr(expr.objects[0], [first_type], data_def)[0]
+    given_second_type = type_inference_expr(expr.objects[2], [second_type], data_def)[0]
     if op not in shiftOp:
         # 非移位运算
-        if given_first_type<given_second_type:
-            given_second_type=type_inference_expr(expr.objects[2],[given_first_type],data_def)
-        elif given_second_type<given_first_type:
-            given_first_type=type_inference_expr(expr.objects[0],[given_second_type],data_def)
+        if given_first_type < given_second_type:
+            given_second_type = type_inference_expr(expr.objects[2], [given_first_type], data_def)
+        elif given_second_type < given_first_type:
+            given_first_type = type_inference_expr(expr.objects[0], [given_second_type], data_def)
         # 按照更小的那个类型进行遍历，缩小范围
-        if given_first_type!=given_second_type:
-            raise TypeMismatchException(expr,required_given_type,data_def)
+        if given_first_type != given_second_type:
+            raise TypeMismatchException(expr, required_given_type, data_def)
     expr.set_lhs_type([given_first_type])
     # 第一个子表达式，即左侧的那个表达式不管是什么操作符都是要返回的那个
     return expr.lhsTypeList
 
+
 @inference_expr_handler('Relation_expr')
-def type_inference_Relation(expr, lhs_type_list:list[SyntaxType],data_def):
+def type_inference_Relation(expr, lhs_type_list: list[SyntaxType], data_def):
     # =与<>不对子类型做限制
     # 其他情况，则限制为numeric
     # 两侧的类型必须一致
     # 返回类型肯定是bool，不用讨论
-    if len(lhs_type_list) != 1 and lhs_type_list[0]!=SyntaxType('bool'):
+    if len(lhs_type_list) != 1 and lhs_type_list[0] != SyntaxType('bool'):
         raise TypeMismatchException(expr, lhs_type_list, data_def)
 
-    op=expr.objects[1]
-    if op=="=" or op=="<>":
-        required_type=SyntaxType("any")
+    op = expr.objects[1]
+    if op == "=" or op == "<>":
+        required_type = SyntaxType("any")
     else:
-        required_type=SyntaxType("numeric")
-    given_first_type = type_inference_expr(expr.objects[0],[required_type],data_def)[0]
-    given_second_type = type_inference_expr(expr.objects[2],[required_type],data_def)[0]
+        required_type = SyntaxType("numeric")
+    given_first_type = type_inference_expr(expr.objects[0], [required_type], data_def)[0]
+    given_second_type = type_inference_expr(expr.objects[2], [required_type], data_def)[0]
     if given_first_type < given_second_type:
         given_second_type = type_inference_expr(expr.objects[2], [given_first_type], data_def)
-    elif given_second_type<given_first_type:
+    elif given_second_type < given_first_type:
         given_first_type = type_inference_expr(expr.objects[0], [given_second_type], data_def)
     # 按照更小的那个类型进行遍历，缩小范围
     if given_first_type != given_second_type:
-        raise TypeMismatchException(expr,given_second_type , data_def)
-    
+        raise TypeMismatchException(expr, given_second_type, data_def)
+
     expr.set_lhs_type([SyntaxType('bool')])
     return expr.lhsTypeList
 
-@inference_expr_handler('List_expr')
-def type_inference_List(expr, lhs_type_list:list[SyntaxType],data_def):
-    #需要每个表达式在后处理哪里先记一下自己返回多少个变量，可恶
-    #↑做好了，比想象的简单很多，大部分expr只接受1一个输出
-    # 然后根据子表达式的返回变量情况，把输入的变量类型发送下去做校验
-    expr_list=expr.objects[0]
-    cur_index=0
-    actual_type_list=list()
-    for sub_expr in expr_list:
-        expect_num=sub_expr.returnNum
-        actual_type=type_inference_expr(sub_expr,lhs_type_list[cur_index:cur_index+expect_num],data_def)
-        actual_type_list.extend(actual_type)
-        cur_index+=expect_num
-    expr.set_lhs_type(actual_type_list)
+
+@inference_expr_handler('Bool_expr')
+def type_inference_Bool(expr, lhs_type_list: list[SyntaxType], data_def):
+    """布尔运算，要求都是bool类型"""
+    # 需求类型bool，子运算类型bool，很简单
+    packed_sub_expr = SyntaxExpr(type="List_expr", subtype="List_expr", scope=data_def,
+                                 objects=[expr.objects[0], expr.objects[2]], returnNum=2)
+    required_type = SyntaxType("bool")
+    if len(lhs_type_list) != 1 and lhs_type_list[0] != required_type:
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+    sub_type = expr.subType
+
+    if sub_type == "NOT":
+        type_inference_expr(expr.objects[0], [required_type], data_def)
+    elif sub_type == "binOp":
+        type_inference_expr(expr.objects[0], [required_type], data_def)
+        type_inference_expr(expr.objects[2], [required_type], data_def)
+    else:  # hashtag
+        for sub_expr in expr.objects[0]:
+            type_inference_expr(sub_expr, [required_type], data_def)
+    expr.set_lhs_type([required_type])
     return expr.lhsTypeList
 
 
-inference_apply_handlers={}
-def inference_apply_handler(type_):
+inference_array_handlers = {}
+
+
+def inference_array_handler(type_):
     def decorator(func):
-        inference_apply_handlers[type_] = func
+        inference_array_handlers[type_] = func
         return func
 
     return decorator
 
-@inference_expr_handler("Apply_expr")
-def type_inference_Apply(expr, lhs_type_list:list[SyntaxType],data_def):
-    #设置这个expr函数调用情况，即对调用函数封装的层次，用于outC中
-    #以一个字典的形式保存，map( map func<<3>>)<<2>> 得到的字典是{func:[2,3]}
-    operator=expr.objects[0]
-    handler=inference_apply_handlers.get(operator.subtype)
+
+@inference_expr_handler("Array_expr")
+def type_inference_array(expr, lhs_type_list: list[SyntaxType], data_def):
+    subtype = expr.subType
+    handler = inference_array_handlers.get(subtype)
+    if handler is None:
+        raise Exception(f"array的{subtype}没实现")
+    handler(expr, lhs_type_list, data_def)
+
+
+@inference_array_handler("construct")
+def type_inference_array_construct(expr, lhs_type_list: list[SyntaxType], data_def):
+    if len(lhs_type_list) != 1:
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+    required_type = lhs_type_list[0]
+    given_element_type = type_inference_expr(expr.objects[0], [required_type.get_element_type_for_array()], data_def)
+    given_array_length = cal_const_expr(expr.objects[1]).value
+    if given_array_length != required_type.get_size():
+        raise TypeMismatchException(expr, f"长度为{given_array_length},但是其真正的长度应该是{required_type.get_size()}", data_def)
+    given_type = SyntaxType(tar_type="array")
+    given_type.set_element_and_size(given_element_type, given_array_length)
+    expr.set_lhs_type([given_type])
+    return expr.lhsTypeList
+
+
+@inference_expr_handler('List_expr')
+def type_inference_List(expr, lhs_type_list: list[SyntaxType], data_def):
+    # 需要每个表达式在后处理哪里先记一下自己返回多少个变量，可恶
+    # ↑做好了，比想象的简单很多，大部分expr只接受一个输出
+    # 然后根据子表达式的返回变量情况，把输入的变量类型发送下去做校验
+    expr_list = expr.objects[0]
+    cur_index = 0
+    actual_type_list = list()
+    for sub_expr in expr_list:
+        expect_num = sub_expr.returnNum
+        actual_type = type_inference_expr(sub_expr, lhs_type_list[cur_index:cur_index + expect_num], data_def)
+        actual_type_list.extend(actual_type)
+        cur_index += expect_num
+    expr.set_lhs_type(actual_type_list)
+    return expr.lhsTypeList
+
+
+inference_operator_handlers = {}
+
+
+def inference_operator_handler(type_):
+    def decorator(func):
+        inference_operator_handlers[type_] = func
+        return func
+
+    return decorator
+
+
+def type_inference_operator(operator, lhs_type_list, param_expr, data_def):
+    """让所有的operator处理函数返回一个列表，涵盖了到目前为止所构建的上下文数组的情况，不用数组就返回空列表
+    让apply_expr那边进行处理
+    比如map (map <<3>>) <<2>> 返回[2,3]
+    直接调用函数就返回[]
+    所以共返回三个参数
+    调用上下文的数组，调用的函数（无则None），和左值列表
+    """
+    handler = inference_operator_handlers.get(operator.subtype)
     if handler is None:
         raise Exception(f"不对,{operator.subtype}还没实现")
-    handler(operator,expr,lhs_type_list,data_def)
 
-@inference_apply_handler("Path_id")
-def type_inference_apply_path_id(operator:SyntaxOperator,expr:SyntaxExpr,lhs_type_list:list[SyntaxType],data_def):
-    tar_userOp=operator.appliedUserOp
+    return handler(operator, lhs_type_list, param_expr, data_def)
+
+
+@inference_expr_handler("Apply_expr")
+def type_inference_Apply(expr, lhs_type_list: list[SyntaxType], data_def):
+    # 设置这个expr函数调用情况，即对调用函数封装的层次，用于outC中
+    # 以一个字典的形式保存，map( map func<<3>>)<<2>> 得到的字典是{func:[2,3]}
+    # 需要根据具体的调用情况，来确认参数的具体类型
+    # 所以不能把参数传给operator，因为是没用的，iterator等会改变参数的格式，考虑到参数内可能有多返回值的情况，无法简单构造函数
+    # 应该对参数进行类型校验，而非对op进行校验
+    # 但是也需要考虑到模板函数实例化的情况，此时operator无法得知具体需求的类型
+
+    # 让operator处理函数返回此op返回的左值，和需求的右值的类型，让apply_expr这边进行校验
+    # 如果为模板函数则单独进行判断
+    param_expr = expr.objects[1]
+    operator = expr.objects[0]
+    context_list, apply_userOp, actual_lhs_type = type_inference_operator(operator, lhs_type_list, param_expr, data_def)
+    if apply_userOp is not None:
+        expr.add_applied_Op(apply_userOp, context_list)
+    expr.set_lhs_type(actual_lhs_type)
+    return expr.lhsTypeList
+
+
+@inference_expr_handler("generalized_get")
+def type_inerence_generalized_get(expr, lhs_type_list: list[SyntaxType], data_def):
+    """给iterator等表达式使用，要求expr为数组，对其进行抽象的取数操作，即int[]变为int，可以对多返回值也生效"""
+    # 组建对下层表达式需要的左值类型,获取lhs作为数组元素的类型
+    sub_lhs_list = []
+    array_size = expr.objects[1]
+    map_index = expr.objects[2]
+    if map_index < 0 or map_index >= len(lhs_type_list):
+        raise Exception(f"不对，{map_index}>{lhs_type_list}的长度了")
+    for i in range(len(lhs_type_list)):
+        lhs = lhs_type_list[i]
+        if i < map_index:
+            sub_lhs_list.append(lhs)
+        else:
+            sub_lhs = SyntaxType(tar_type="array")
+            sub_lhs.set_element_and_size(lhs, array_size)
+            sub_lhs_list.append(sub_lhs)
+
+    actual_type_list = type_inference_expr(expr.objects[0], sub_lhs_list, data_def)
+    expr.set_lhs_type(actual_type_list)
+    return expr.lhsTypeList
+
+
+@inference_operator_handler("iterator")
+def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
+    """
+    map,fold,mapi,foldi,mapfold,mapfoldi
+    """
+    # 先就map和fold，把abc_N做完了再说别的
+    sub_operator = operator.objects[2]
+    required_length = cal_const_expr(operator.objects[3]).value
+    iterator_op = operator.objects[0]
+    if iterator_op == "map":
+        map_index = 0
+    elif iterator_op == "fold":
+        map_index = 1
+    else:
+        print(iterator_op)
+        raise Exception(f"{iterator_op}还没完成没有类型推导呢")
+    # 根据不同算符，进行推理
+    non_map_lhs_list = lhs_type_list[:map_index]
+    map_lhs_list = lhs_type_list[map_index:]
+    for lhs in map_lhs_list:
+        if lhs.get_size() != required_length:
+            raise TypeMismatchException(lhs, f"尺寸为{required_length}的数组", data_def)
+    required_lhs_types = non_map_lhs_list + [lhs.get_element_type_for_array() for lhs in map_lhs_list]
+
+    required_param = SyntaxExpr(type="generalized_get", subtype="", scope=data_def,
+                                objects=[param_expr, required_length, map_index], returnNum=param_expr.returnNum)
+    # 构造一个新的参数expr，给下一层operator使用
+
+    context_list, apply_userOp, given_lhs_list = type_inference_operator(sub_operator, required_lhs_types,
+                                                                         required_param, data_def)
+    if iterator_op == "fold":
+        #只返回第一个
+        actual_lhs_list=[given_lhs_list[0]]
+    else:
+        # 拿到下层推理后的真实类型，再包装后返还
+        given_non_map = given_lhs_list[:map_index]
+        given_map = given_lhs_list[map_index:]
+        actual_lhs_list = given_non_map + [SyntaxType(tar_type="array").set_element_and_size(t, required_length)
+                                           for t in given_map]
+    return context_list.insert(0, required_length), apply_userOp, actual_lhs_list
+
+
+@inference_operator_handler("PREFIXOP")
+def type_inference_apply_prefixOp(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
+    """通过prefixop获取对应的校验格式，与对应的expr是等价的"""
+    corres_typs = None
+    prefixOp = operator.objects[0]
+    for key_set, types in SyntaxOperator.prefix_op_2_expr_dict.items():
+        if prefixOp in key_set:
+            corres_typs = types
+            break
+    equivalent_expr = SyntaxExpr(type=corres_typs[0], subtype=corres_typs[1], scope=data_def)
+    # 然后向equivalent_expr内部填入对应的object
+    # 这里直接让expr那边做校验，开摆了
+    # 最终的目的是对param_expr进行推导
+    if equivalent_expr.subType == "unary":
+        # 单目运算，直接把操作符放进去然后交给对应表达式
+        # 这样就完成了对参数表达式的类型推导工作了
+        equivalent_expr.add_object(prefixOp.replace("$", ""))
+        equivalent_expr.add_object(param_expr)
+        return [], None, type_inference_expr(equivalent_expr, lhs_type_list, data_def)
+    else:
+        return [], None, common_inference_binOp(param_expr,corres_typs[0],corres_typs[1],lhs_type_list,data_def,
+                                                prefixOp.replace("$", ""))
+
+
+@inference_operator_handler("Path_id")
+def type_inference_apply_path_id(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
+    tar_userOp = operator.appliedUserOp
+    # 校验一下，要求的类型是不是和目标op返回的类型一样
+    returned_types = [param.syntaxType for param in tar_userOp.outParams]
+    input_types = [param.syntaxType for param in tar_userOp.inParams]
+    if not all(g <= r for g, r in zip(returned_types, lhs_type_list)):
+        raise TypeMismatchException(tar_userOp.get_global_name(), lhs_type_list, data_def)
+    type_inference_expr(param_expr, input_types, data_def)
+    type_inference_userOp(tar_userOp)
+    return [], tar_userOp, returned_types

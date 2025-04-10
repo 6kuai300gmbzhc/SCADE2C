@@ -64,7 +64,7 @@ class TypeMismatchException(Exception):
         self.data_def=data_def
 
     def __str__(self):
-        if not hasattr(self,"data_def"):
+        if self.data_def is None:
             return repr(f"{self.value}被要求提供{str(self.required_type)}")
         else:
             return repr(f"{self.value}被要求提供{str(self.required_type)},在{self.data_def.get_global_name()}中")

@@ -109,7 +109,7 @@ def build_userOp_dependent_graph(userOp: SyntaxUserOp, userOp_dependent_graph: G
     print(f"{userOp.get_global_name()}的依赖函数路径：{str(userOp.dependentFunctions)}")
     userOp_dependent_graph.addVertex(userOp)  # 先把自己加进去
     for dependent_path in userOp.dependentFunctions:
-        target_userOp = userOp.find_userOp_by_path(dependent_path)
+        target_userOp = userOp.check_and_get_userOp(dependent_path)
         if not target_userOp:
             raise UnknownIdentifierException(f"{userOp.get_global_name()}找不到{dependent_path}")
         userOp_dependent_graph.addEdge(target_userOp, userOp)
@@ -384,13 +384,26 @@ def post_Apply_expr(expr, data_def):
     """遇到函数调用，根据输入，输出参数来确定对应的依赖关系"""
     # 处理一下operator的情况，情况比较复杂，需要分配到每个函数自行解决问题
     operator = expr.objects[0]
-    expr.returnNum,expr.rhsList=post_process_operator(operator,expr,data_def)
-def post_process_operator(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
+    param_expr_list=expr.objects[1].objects[0]
+    param_rhs_list=merge_param_rhs_list(param_expr_list)
+    expr.returnNum,expr.rhsList=post_process_operator(operator,param_rhs_list,expr,data_def)
+def merge_param_rhs_list(params:list[SyntaxExpr])->list[set[str]]:
+    output=list()
+    for param in params:
+        output.extend(param.rhsList)
+    return output
+def merge_rhs_list(rhs_list:list[set[str]])->list[set[str]]:
+    """把指定右值列表汇聚到一个set内并返回"""
+    output=set()
+    for rhs in rhs_list:
+        output.update(rhs)
+    return [output]
+def post_process_operator(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
     """返回两个参数，expr返回参数数量，和右值列表"""
     type_ = operator.subtype
     if type_ in post_process_operator_handlers.keys():
         operator_handler = post_process_operator_handlers[type_]
-        return operator_handler(operator, expr, data_def)
+        return operator_handler(operator,param_rhs_list, expr, data_def)
     else:
         raise Exception(f"{type_}这个operator还没实现后处理")
 
@@ -406,11 +419,11 @@ def post_operator_handler(type_):
 
 
 @post_operator_handler('Path_id')
-def post_operator_Path_id(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
+def post_operator_Path_id(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
     """最常用的，函数调用部分，找到目标函数，然后查看输入输出依赖关系，更新expr的右值"""
     # 找到目标函数
-    tar_userOp: SyntaxUserOp = data_def.find_userOp_by_path(operator.objects[0])
-    params: list[SyntaxExpr] = expr.objects[1].objects[0]
+    tar_userOp: SyntaxUserOp = data_def.check_and_get_userOp(operator.objects[0])
+    params: list[set[str]] = param_rhs_list
     if not tar_userOp:
         raise UnknownIdentifierException(f"{data_def.get_global_name()}找不到{operator.objects[0]}")
     operator.appliedUserOp=tar_userOp
@@ -423,60 +436,53 @@ def post_operator_Path_id(operator: SyntaxOperator, expr: SyntaxExpr, data_def)-
     if not tar_userOp.outParams:
         rhs_set=set()
         for i in tar_userOp.output2inputDependents[0]:
-            rhs_set.add(params[i])
+            rhs_set.update(params[i])
         rhs_list.append(rhs_set)
     else:
         for i in range(len(tar_userOp.output2inputDependents)):
             rhs_set=set()
             out_dependent_list = tar_userOp.output2inputDependents[i]
             for j in out_dependent_list:
-                rhs_set.add(params[j])
+                rhs_set.update(params[j])
             rhs_list.append(rhs_set)
     return len(tar_userOp.outParams),rhs_list
 
 @post_operator_handler('PREFIXOP')
-def post_operator_PREFIXOP(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
-    params: list[SyntaxExpr] = expr.objects[1].objects[0]
+def post_operator_PREFIXOP(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
+    # 全部因果关系，返回1个变量
+    return 1,merge_rhs_list(param_rhs_list)
 
 
 
 @post_operator_handler('flatten')
-def post_operator_flatten(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
-    params: list[SyntaxExpr] = expr.objects[1].objects[0]
+def post_operator_flatten(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
     tar_type_name=operator.objects[0]
-    tar_type=data_def.get_type_by_path(tar_type_name).syntaxType
+    tar_type=data_def.check_and_get_type_symbol(tar_type_name).syntaxType
     if tar_type is None:
         raise UnknownIdentifierException(tar_type_name)
     size=tar_type.get_size()
-    rhs_list=list()
-    for i in range(size):
-        rhs_list.append(set(expr.objects[1]))
     #全部因果关系，返回参数数量为结构体中元素个数
-    return size,rhs_list
+    return size,param_rhs_list
 
 
 @post_operator_handler('make')
-def post_operator_make(operator: SyntaxOperator, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
+def post_operator_make(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
     params: list[SyntaxExpr] = expr.objects[1].objects[0]
     tar_type_name=operator.objects[0]
-    tar_type=data_def.get_type_by_path(tar_type_name).syntaxType
+    tar_type=data_def.check_and_get_type_symbol(tar_type_name).syntaxType
     if tar_type is None:
         raise UnknownIdentifierException(tar_type_name)
-    size=tar_type.get_size()
-    rhs_list=list()
-    for i in range(size):
-        rhs_list.append(set(expr.objects[1]))
     # 全部因果关系，返回1个变量
-    return 1,rhs_list
+    return 1,param_rhs_list
 
 
 @post_operator_handler("iterator")
-def post_operator_map(operator: SyntaxOperator, expr: SyntaxExpr, data_def):
+def post_operator_map(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
     sub_operator=operator.objects[2]
     # 很神奇吧，iterator不修改返回的参数数量
     # 他们会对调用的op有要求
     # 在类型推导里做具体的校验
-    return post_process_operator(sub_operator,expr,data_def)
+    return post_process_operator(sub_operator,param_rhs_list,expr,data_def)
 
 
 

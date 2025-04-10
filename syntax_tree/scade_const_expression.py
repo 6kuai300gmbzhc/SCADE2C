@@ -57,8 +57,8 @@ def const_path_id(expr: SyntaxExpr) -> ConstValue:
 
 @const_expr_handler("Atom")
 def const_integernum(expr: SyntaxExpr) -> ConstValue:
-    given_type, value = get_type_and_value_for_atom(expr)
-    return ConstValue(syntax_type=SyntaxType(given_type), value=value)
+    given_type, value = expr.get_type_and_value_for_atom()
+    return ConstValue(syntax_type=SyntaxType(tar_type=given_type), value=value)
 
 # @const_expr_handler("Arith_expr")
 # def const_unary(expr: SyntaxExpr) -> int:
