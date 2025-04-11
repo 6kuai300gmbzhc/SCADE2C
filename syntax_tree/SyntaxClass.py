@@ -2,6 +2,7 @@ from syntax_tree.Exceptions import *
 from collections import defaultdict, deque
 from graph import *
 
+
 # 拓扑排序和模板实例化操作
 # 实例化还在写，虽然非常不想写，半年前的记忆触发了
 class HasRhs:
@@ -128,7 +129,8 @@ class SyntaxOperator(HasRhs):
 
     appliedUserOp: SyntaxUserOp
     '''为path_id时有效，保存了指向调用的userop的指针'''
-
+    array_length:int
+    '''为map fold等类型时有效，保存了对应数组的长度'''
     prefix_op_2_expr_dict = {
         # 双目
         ("$+$", "$-$", "$*$", "$/$", "$mod$", "$land$", "$lor$", "$lxor$", "$lsr$", "$lsl$"): ["Arith_expr", "binOp"],
@@ -137,7 +139,7 @@ class SyntaxOperator(HasRhs):
         ("$and$", "$or$", "$xor$"): ["Bool_expr", "binOp"],  # ese
         ("$@$"): ["Array_expr", "at"],  # ee
         ("$times$"): ["Tempo_expr", "TIMES"],  # ee
-        #单目
+        # 单目
         ("+$", "-$", "lnot$"): ["Arith_expr", "unary"],  # se
         ("not$"): ["Bool_expr", "NOT"],  # e
         ("reverse$"): ["Array_expr", "reverse"],  # e
@@ -150,6 +152,9 @@ class SyntaxOperator(HasRhs):
 
     def add_object(self, object):
         self.objects.append(object)
+
+    def set_array_length(self, length):
+        self.array_length = length
 
     def __repr__(self):
         s = "operator::"
@@ -222,7 +227,7 @@ class SyntaxExpr(HasRhs):
             self.objects = objects
         self.scope = scope
         self.appliedOpDict = dict()
-        self.returnNum=returnNum
+        self.returnNum = returnNum
 
     def add_object(self, tar_object, index: int = None):
         if index is None:
@@ -234,7 +239,7 @@ class SyntaxExpr(HasRhs):
         self.syntaxSymbol = symbol
 
     def add_applied_Op(self, applied_Op, context_list):
-        self.appliedOpDict[applied_Op]=context_list
+        self.appliedOpDict[applied_Op] = context_list
 
     def __repr__(self):
         s = ""
@@ -247,15 +252,15 @@ class SyntaxExpr(HasRhs):
         if self.lhsTypeList:
             s += " as "
             if len(self.lhsTypeList) == 1:
-                s += self.lhsTypeList[0].type
+                s += self.lhsTypeList[0].get_real_type()
             else:
-                s += f"({','.join([t.type for t in self.lhsTypeList])})"
+                s += f"({','.join([t.get_real_type() for t in self.lhsTypeList])})"
         return s
 
     def get_type_and_value_for_atom(self):
         """以str的格式返回这个atom类型的expr值的具体数据类型到底是什么"""
-        if self.type!="Atom":
-            raise TypeMismatchException(self,"bool")
+        if self.type != "Atom":
+            raise TypeMismatchException(self, "bool")
         subtype = self.subType
         content = self.objects[0]
         if subtype == "bool_atom":
@@ -324,7 +329,7 @@ class SyntaxEquation(HasRhs):
     scope: SyntaxDataDefScope
     '''这个句子所属于的作用域'''
 
-    def __init__(self, type: str, lhs: list, lineno: int):
+    def __init__(self, type: str, lhs: list, lineno: int=-1):
         super().__init__()
         self.type = type
         self.lhs = lhs
@@ -351,7 +356,8 @@ class SyntaxEquation(HasRhs):
         if len(self.lhs) > 0:
             if self.lhsTypeList:
                 s += ",".join(
-                    [f"{str(self.lhs[index])} as {self.lhsTypeList[index].type}" for index in range(len(self.lhs))])
+                    [f"{str(self.lhs[index])} as {self.lhsTypeList[index].get_real_type()}" for index in
+                     range(len(self.lhs))])
             else:
                 s += ",".join([f"{str(self.lhs[index])}" for index in range(len(self.lhs))])
         else:
@@ -398,7 +404,7 @@ class SyntaxType:
     name: str
     '''type_block ，用于重命名之后的str，type表示其真实类型，这个只是记录了在type_block中定义的别名'''
 
-    scope:SyntaxScope or None
+    scope: SyntaxScope or None
     '''这个type所属的scope,在大部分情况下是没用的，但是如果是path_id类型就需要依靠他来找到真实的type
     所以对于path_id来说是必填，其他的随便
     '''
@@ -447,7 +453,7 @@ class SyntaxType:
 
     def __init__(self, tar_type: str) -> None:
         self.type = tar_type
-        self._size=None
+        self._size = None
 
     def __repr__(self):
         s = ""
@@ -529,9 +535,9 @@ class SyntaxType:
     def get_real_type(self):
         if self.type == "typevar":
             return self.templateType
-        elif self.type=="path_id":
-            scope=self.scope
-            real_type=scope.check_and_get_type_symbol(self.value)
+        elif self.type == "path_id":
+            scope = self.scope
+            real_type = scope.check_and_get_type_symbol(self.value)
             return real_type.syntaxType.type
         else:
             return self.type
@@ -554,12 +560,12 @@ class SyntaxType:
             self._size = size
         return self._size
 
-    def set_size(self,size:int):
+    def set_size(self, size: int):
         """直接设定长度，覆盖长度表达式（如有）"""
-        self._size=size
+        self._size = size
 
-    def set_element_and_size(self,array_type,size):
-        self.arrayType=array_type
+    def set_element_and_size(self, array_type, size):
+        self.arrayType = array_type
         self.set_size(size)
         return self
 
@@ -768,6 +774,7 @@ class SyntaxVariableSymbol:
     postExpr: SyntaxExpr = None
     '''pre和init使用，init最好在程序的最后设置为false，pre在程序最后添加上该周期的值
     last也用了
+    这个expr是让此symbol在data_def的最后，添加关于此symbol的一些操作
     '''
 
     def __init__(self, name: str, isClock: bool, isProbe: bool):
@@ -783,7 +790,7 @@ class SyntaxVariableSymbol:
         if self.isProbe: s += "probe "
         s += self.name
         s += " as "
-        s += str(self.syntaxType)
+        s += str(self.syntaxType.get_real_type())
         if self.whenExpr:
             s += "when "
             s += str(self.whenExpr)
@@ -908,7 +915,7 @@ class SyntaxScope:
 
     def resolve_path(self, path_list: list):
         """解析Path类型，直接返回对应的package,输入数组格式,即split::后的"""
-        cur_package=self.get_my_package()
+        cur_package = self.get_my_package()
         # 先根据path第一个找到对应package，然后逐层向下找
         if len(path_list) == 0:
             return cur_package
@@ -921,32 +928,34 @@ class SyntaxScope:
                 raise UnknownIdentifierException(f"找不到{path_list[0]}")
         return tar_package
 
-    def resolve_path_id(self,path_id:str):
+    def resolve_path_id(self, path_id: str):
         """解析path_id，返回对应package和id"""
-        path_id_list=path_id.split("::")
-        if len(path_id_list)>1:
-            return self.resolve_path(path_id_list[:-1]),path_id_list[-1]
+        path_id_list = path_id.split("::")
+        if len(path_id_list) > 1:
+            return self.resolve_path(path_id_list[:-1]), path_id_list[-1]
         else:
-            return self.get_my_package(),path_id
+            return self.get_my_package(), path_id
 
     def check_and_get_userOp(self, path_id: str):
         """根据路径找到对应的userop，没有则返回None
          Parameters:
             path_id: 带::的路径，指向某个userop
         """
-        target_package,op_name=self.resolve_path_id(path_id)
+        target_package, op_name = self.resolve_path_id(path_id)
         return target_package.get_userOp(op_name)
+
     def check_and_get_constant_param(self, param_path_id):
         """检查这个参数是不是一个常数，如果是则返回syntaxconstSymbol，否则返回None"""
-        tar_package,name=self.resolve_path_id(param_path_id)
+        tar_package, name = self.resolve_path_id(param_path_id)
         const_param = tar_package.get_const_symbol(name)
         return const_param
+
     def check_and_get_type_symbol(self, type_path_id):
         """根据路径找到对应的type_decl，没有则返回None
          Parameters:
             type_path_id: 指向某个type_decl,可以没有：：
         """
-        tar_package,name=self.resolve_path_id(type_path_id)
+        tar_package, name = self.resolve_path_id(type_path_id)
         return tar_package.get_type_symbol(name)
 
 
@@ -1295,7 +1304,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         return s
 
 
-
 class SyntaxArrow:
     pass
 
@@ -1327,7 +1335,7 @@ class SyntaxArrow:
             self.elseExpr = elseExpr
         else:
             self.target = target
-            self.elseExpr=None
+            self.elseExpr = None
 
     def set_action(self, action: str):
         self.action = action

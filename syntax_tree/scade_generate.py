@@ -715,7 +715,18 @@ def generate_Apply_expr(syntaxExpr,syntaxUserOp,genEqu):
     # 在文档里给出了详细的描述
     # 先生成operator对应的代码，若函数调用情况则会对结构体进行修改，若make和flatten则直接返回一个对象
     operator = syntaxExpr.objects[0]
-    parameters=syntaxExpr.objects[1].objects
+    parameters=syntaxExpr.objects[1].objects[0]
+    # todo 下面的代码要修改一下，要求把参数表达式拆分成多个单返回值的表达式，这样进行operator处理时候会方便很多
+    # for param in parameters:
+    #     param_lhs_symbols=[]
+    #     param_lhs_names=[]
+    #     for param_lhs in param.lhsTypeList:
+    #         lhs_symbol,lhs_name=generate_tmp_symbol_and_register(data_def,param_lhs,"fold_param")
+    #         param_lhs_symbols.append(lhs_symbol)
+    #         param_lhs_names.append(lhs_name)
+    #     equivalent_equation=SyntaxEquation(type="simple_equation",lhs=param_lhs_names)
+    #     equivalent_equation.set_expr(param)
+    #     sub_param_code+=generate_userOp_simple_equation(equivalent_equation,data_def,None,depth+1)
     return generate_operator(operator,parameters, syntaxUserOp, genEqu)
 generate_operator_handlers = {}
 
@@ -732,8 +743,74 @@ def generate_operator(operator:SyntaxOperator, parameters:list[SyntaxExpr], data
         return generate_operator_handler(operator,parameters, data_def, genEqu)
     else:
         raise ValueError(f"generate_operator , subtype:{subtype_}")
+generate_operator_iterator_handlers = {}
+def register_operator_iterator_handler(type_):
+    def decorator(func):
+        generate_operator_iterator_handlers[type_] = func
+        return func
+    return decorator
+@register_operator_handler("iterator")
+def generate_operator_iterator(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
+    #根据不同的算符，组建新的参数表达式交给下级operator
+    operator_name = operator.objects[0]  # "map"
+    iterator_handler=generate_operator_iterator_handlers.get(operator_name)
+    if iterator_handler is None:
+        raise Exception(f"iterator之{operator_name}没有实现代码生成")
+    return iterator_handler(operator, parameters, data_def, genEqu)
+def generate_tmp_symbol_and_register(data_def,syntaxType:SyntaxType=None,post_fix="tmp"):
+    tmp_name=data_def.generate_name_for_tmp(post_fix)
+    tmp_symbol=SyntaxVariableSymbol(tmp_name,False,False)
+    tmp_symbol.syntaxType=syntaxType
+    data_def.add_tmpSymbol(tmp_symbol)
+    return tmp_symbol,tmp_name
+def symbol2expr(symbol,symbol_name,symbol_type,scope):
+    expr=SyntaxExpr(type="Id_expr",subtype="Path_id",scope=scope,objects=[symbol_name])
+    expr.set_symbol(symbol)
+    expr.set_lhs_type([symbol_type])
+    return expr
+
+@register_operator_iterator_handler("fold")
+def generate_operator_fold(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu:GenEqu):
+    print(parameters)
+    print("eee")
+    depth = genEqu.depth
+    array_length = operator.array_length
+    # 先生成一个临时变量遍历数组
+    tmp_idx_symbol,tmp_idx=generate_tmp_symbol_and_register(data_def,SyntaxType("int32"),"idx")
+    # 然后是一个临时变量用来接住次级operator的返回值
+    tmp_output_symbol,tmp_output_name=generate_tmp_symbol_and_register(data_def,operator.lhsTypeList[0],post_fix="fold_out")
+    # 然后是为所有参数都生成一个变量用来向下传递
+    sub_params = []
+    sub_param_code = ""
+    for i in range(len(parameters)):
+        param=parameters[i]
+        base_type=param.lhsTypeList[0]
+        param_code=SyntaxExpr_generate(param,data_def,genEqu)
+        if i==0:
+            sub_symbol,sub_name=generate_tmp_symbol_and_register(data_def,base_type,f"fold_{i+1}")
+            sub_param_code+=f"{'    '*(depth+1)}{sub_name} = {tmp_idx}==0?{param_code}:{tmp_output_name};\n"
+            # 进行初始化操作
+        else:
+            base_type=base_type.get_element_type_for_array()
+            sub_symbol, sub_name = generate_tmp_symbol_and_register(data_def,base_type , f"fold_{i+1}")
+            sub_param_code+=f"{'    '*(depth+1)}{sub_name} = {param_code}[{tmp_idx}];\n"
+            # 进行取值操作
+        sub_params.append(symbol2expr(sub_symbol,sub_name,base_type,data_def))
+    # 然后构建子
+    sub_gen_equ = GenEqu(depth=depth + 1)
+    sub_operator=operator.objects[2]
+    sub_gen_equ.expr=generate_operator(sub_operator,sub_params,data_def,sub_gen_equ)
+    pre_code=f"{'    '*depth}for ({tmp_idx} = 0; {tmp_idx} < {str(array_length)}; {tmp_idx}++) {{\n" \
+             f"{sub_param_code}" \
+              f"{'    '*(depth+1)}{tmp_output_name}={sub_gen_equ.expr};\n" \
+              f"{'    '*depth}}}\n"
+    genEqu.add_preEquations(pre_code)
+    return tmp_output_name
+@register_operator_iterator_handler("map")
+def generate_operator_map(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope,genEqu):
+    return ""
 @register_operator_handler("Path_id")
-def generate_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
+def generate_operator_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
     # 这里是函数调用语句
     # 生成一个inC结构体，将输入参数填入
     # 生成一个空outC结构体
@@ -747,9 +824,28 @@ def generate_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_
         pass
     return ""
 @register_operator_handler("PREFIXOP")
-def generate_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
-
-    return SyntaxExpr_generate(operator.correspondExpr, data_def, genEqu)
+def generate_operator_PREFIXOP(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
+    corres_typs = None
+    prefixOp = operator.objects[0]
+    for key_set, types in SyntaxOperator.prefix_op_2_expr_dict.items():
+        if prefixOp in key_set:
+            corres_typs = types
+            break
+    equivalent_expr = SyntaxExpr(type=corres_typs[0], subtype=corres_typs[1], scope=data_def)
+    # 然后向equivalent_expr内部填入对应的object
+    # 这里直接让expr那边做校验，开摆了
+    # 最终的目的是对param_expr进行推导
+    if equivalent_expr.subType == "unary":
+        # 单目运算，直接把操作符放进去然后交给对应表达式
+        # 这样就完成了对参数表达式的类型推导工作了
+        equivalent_expr.add_object(prefixOp.replace("$", ""))
+        equivalent_expr.add_object(parameters[0])
+    else:
+        equivalent_expr.add_object(parameters[0])
+        if prefixOp!="$@$" and prefixOp!="$times$":
+            equivalent_expr.add_object(prefixOp.replace("$", ""))
+        equivalent_expr.add_object(parameters[1])
+    return SyntaxExpr_generate(equivalent_expr,data_def,genEqu)
 
 @register_expr_handler('Mixed_constructor')
 def generate_Mixed_constructor(syntaxExpr, syntaxUserOp, genEqu):

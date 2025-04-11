@@ -457,6 +457,7 @@ def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[
     # 先就map和fold，把abc_N做完了再说别的
     sub_operator = operator.objects[2]
     required_length = cal_const_expr(operator.objects[3]).value
+    operator.set_array_length(required_length)
     iterator_op = operator.objects[0]
     if iterator_op == "map":
         map_index = 0
@@ -488,6 +489,7 @@ def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[
         given_map = given_lhs_list[map_index:]
         actual_lhs_list = given_non_map + [SyntaxType(tar_type="array").set_element_and_size(t, required_length)
                                            for t in given_map]
+    operator.set_lhs_type(actual_lhs_list)
     return context_list.insert(0, required_length), apply_userOp, actual_lhs_list
 
 
@@ -509,10 +511,12 @@ def type_inference_apply_prefixOp(operator: SyntaxOperator, lhs_type_list: list[
         # 这样就完成了对参数表达式的类型推导工作了
         equivalent_expr.add_object(prefixOp.replace("$", ""))
         equivalent_expr.add_object(param_expr)
-        return [], None, type_inference_expr(equivalent_expr, lhs_type_list, data_def)
+        actual_lhs_list=type_inference_expr(equivalent_expr, lhs_type_list, data_def)
     else:
-        return [], None, common_inference_binOp(param_expr,corres_typs[0],corres_typs[1],lhs_type_list,data_def,
+        actual_lhs_list=common_inference_binOp(param_expr,corres_typs[0],corres_typs[1],lhs_type_list,data_def,
                                                 prefixOp.replace("$", ""))
+    operator.set_lhs_type(actual_lhs_list)
+    return [],None,actual_lhs_list
 
 
 @inference_operator_handler("Path_id")
@@ -525,4 +529,5 @@ def type_inference_apply_path_id(operator: SyntaxOperator, lhs_type_list: list[S
         raise TypeMismatchException(tar_userOp.get_global_name(), lhs_type_list, data_def)
     type_inference_expr(param_expr, input_types, data_def)
     type_inference_userOp(tar_userOp)
+    operator.set_lhs_type(returned_types)
     return [], tar_userOp, returned_types
