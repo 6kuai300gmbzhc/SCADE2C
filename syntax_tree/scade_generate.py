@@ -752,7 +752,7 @@ def register_operator_iterator_handler(type_):
 @register_operator_handler("iterator")
 def generate_operator_iterator(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
     #根据不同的算符，组建新的参数表达式交给下级operator
-    operator_name = operator.objects[0]  # "map"
+    operator_name = operator.objects[0]  # "map"等
     iterator_handler=generate_operator_iterator_handlers.get(operator_name)
     if iterator_handler is None:
         raise Exception(f"iterator之{operator_name}没有实现代码生成")
@@ -768,11 +768,24 @@ def symbol2expr(symbol,symbol_name,symbol_type,scope):
     expr.set_symbol(symbol)
     expr.set_lhs_type([symbol_type])
     return expr
-
+def assign_lhs_to_rhs_expr(lhs_symbol_name,rhs_expr,depth,data_def,lhs_post_fix=""):
+    code=""
+    # 很蠢的方法，后面一定会改
+    if isinstance(lhs_symbol_name,list):
+        if not isinstance(rhs_expr, list):
+            rhs_exprs=[rhs_expr]
+        else:
+            rhs_exprs=rhs_expr
+        # 如果左值是list那右值也得是
+        if len(rhs_exprs)!=len(lhs_symbol_name):
+            raise Exception(f"不对，左值{lhs_symbol_name}和右值{rhs_expr}对不上")
+        for lhs,rhs in zip(lhs_symbol_name,rhs_exprs):
+            code+=f"{'    '*depth}{data_def.var_change_name(lhs)}{lhs_post_fix} = {rhs};\n"
+    else:
+        code+=f"{'    '*depth}{data_def.var_change_name(lhs_symbol_name)} = {rhs_expr};"
+    return code
 @register_operator_iterator_handler("fold")
 def generate_operator_fold(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu:GenEqu):
-    print(parameters)
-    print("eee")
     depth = genEqu.depth
     array_length = operator.array_length
     # 先生成一个临时变量遍历数组
@@ -796,7 +809,7 @@ def generate_operator_fold(operator:SyntaxOperator, parameters:list[SyntaxExpr],
             sub_param_code+=f"{'    '*(depth+1)}{sub_name} = {param_code}[{tmp_idx}];\n"
             # 进行取值操作
         sub_params.append(symbol2expr(sub_symbol,sub_name,base_type,data_def))
-    # 然后构建子
+    # 然后构建最终产生的代码
     sub_gen_equ = GenEqu(depth=depth + 1)
     sub_operator=operator.objects[2]
     sub_gen_equ.expr=generate_operator(sub_operator,sub_params,data_def,sub_gen_equ)
@@ -804,11 +817,44 @@ def generate_operator_fold(operator:SyntaxOperator, parameters:list[SyntaxExpr],
              f"{sub_param_code}" \
               f"{'    '*(depth+1)}{tmp_output_name}={sub_gen_equ.expr};\n" \
               f"{'    '*depth}}}\n"
+    # fold只返回一个变量，直接用=赋值是安全的
     genEqu.add_preEquations(pre_code)
     return tmp_output_name
 @register_operator_iterator_handler("map")
 def generate_operator_map(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope,genEqu):
-    return ""
+
+    # map可以多返回值，此处应该返回结构体
+    # 但是我做出了一个违背祖宗的决定，返回一个表达式列表，在simple_equation那里挨个进行赋值
+    depth = genEqu.depth
+    array_length = operator.array_length
+    # 先生成一个临时变量遍历数组
+    tmp_idx_symbol,tmp_idx=generate_tmp_symbol_and_register(data_def,SyntaxType("int32"),"idx")
+    # 然后是一些临时变量用来接住次级operator的返回值
+    tmp_output_names=[]
+    for lhs in operator.lhsTypeList:
+        tmp_output_symbol,tmp_output_name=generate_tmp_symbol_and_register(data_def,lhs,post_fix="fold_out")
+        tmp_output_names.append(tmp_output_name)
+    # 然后构建传给次级operator的参数
+    sub_param_code = ""
+    sub_params = []
+    for i in range(len(parameters)):
+        param=parameters[i]
+        param_code = SyntaxExpr_generate(param, data_def, genEqu)
+        base_type = param.lhsTypeList[0].get_element_type_for_array()
+        sub_symbol, sub_name = generate_tmp_symbol_and_register(data_def, base_type, f"map_{i + 1}")
+        sub_param_code += f"{'    ' * (depth + 1)}{sub_name} = {param_code}[{tmp_idx}];\n"
+        sub_params.append(symbol2expr(sub_symbol, sub_name, base_type, data_def))
+    # 然后构建最终产生的代码
+    sub_gen_equ = GenEqu(depth=depth + 1)
+    sub_operator=operator.objects[2]
+    sub_gen_equ.expr=generate_operator(sub_operator,sub_params,data_def,sub_gen_equ)
+    pre_code=f"{'    '*depth}for ({tmp_idx} = 0; {tmp_idx} < {str(array_length)}; {tmp_idx}++) {{\n" \
+             f"{sub_param_code}" \
+              f"{assign_lhs_to_rhs_expr(tmp_output_names,sub_gen_equ.expr,depth+1,data_def,lhs_post_fix=f'[{tmp_idx}]')}" \
+              f"{'    '*depth}}}\n"
+
+    genEqu.add_preEquations(pre_code)
+    return tmp_output_names
 @register_operator_handler("Path_id")
 def generate_operator_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
     # 这里是函数调用语句
@@ -822,7 +868,10 @@ def generate_operator_Path_id(operator:SyntaxOperator, parameters:list[SyntaxExp
     global_name=applied_userOp.get_global_name()
     if applied_userOp.type=="node":
         pass
-    return ""
+    if global_name=="Exists":
+        return "Exists()"
+    else:
+        return [global_name+"()",global_name+"()"]
 @register_operator_handler("PREFIXOP")
 def generate_operator_PREFIXOP(operator:SyntaxOperator, parameters:list[SyntaxExpr], data_def:SyntaxDataDefScope, genEqu):
     corres_typs = None
@@ -884,7 +933,8 @@ def generate_userOp_simple_equation(syntaxEquation, syntaxUserOp, code_generator
     genEqu.expr = SyntaxExpr_generate(syntaxEquation.expr, syntaxUserOp, genEqu)
     code = ""
     code += "".join(genEqu.preEquations)
-    code += f"{'    ' * depth}{syntaxUserOp.var_change_name(syntaxEquation.lhs[0])} = {genEqu.expr};\n"
+    code += assign_lhs_to_rhs_expr(syntaxEquation.lhs,genEqu.expr,depth,syntaxUserOp)
+    # code += f"{'    ' * depth}{syntaxUserOp.var_change_name(syntaxEquation.lhs[0])} = {genEqu.expr};\n"
     code += "".join(genEqu.postEquations)
     return code
 
@@ -1036,9 +1086,9 @@ def generate_syntax_type_list_recursive(syntaxType, rootPackage, symbolName):
         return code_, ""
 
 
-@register_syntax_type_handler(r"^list")
+@register_syntax_type_handler(r"^array")
 def generate_syntax_type_list(typeSymbol, rootPackage):
-    print("this is list ", typeSymbol.name, type(typeSymbol.syntaxType.listExpr), type(typeSymbol.syntaxType.listType),
+    print("this is array ", typeSymbol.name, type(typeSymbol.syntaxType.listExpr), type(typeSymbol.syntaxType.listType),
           typeSymbol.syntaxType.listType)
     type_, code_ = generate_syntax_type_list_recursive(typeSymbol.syntaxType, rootPackage, typeSymbol.name)
     code_ += f"typedef {type_} {typeSymbol.name};\n"
