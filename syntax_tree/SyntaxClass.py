@@ -1152,7 +1152,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:
         '''在当前作用域找局部变量'''
         if name not in self.localSymbolTable.keys():
-            return None
+            return self.get_tmpSymbol(name)
         else:
             return self.localSymbolTable[name]
 
@@ -1202,6 +1202,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             return name
             # raise ValueError(f"var_change_name error , name:{name}")
             # todo 让其无条件通过，考虑到有枚举类型的情况
+
 
     def get_return_symbolTable(self):
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
