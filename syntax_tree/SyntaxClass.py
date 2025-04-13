@@ -1158,10 +1158,11 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
 
     def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
         '''递归的找局部变量'''
-        if name in self.localSymbolTable.keys():
-            return self.localSymbolTable[name]
-        else:
+        local_symbol=self.get_localVariable(name)
+        if local_symbol is None:
             return self.prevScope.get_localVariable_InThisAndPreEnv(name)
+        else:
+            return local_symbol
 
     def have_signal_InThisAndPreEnv(self, name: str) -> bool:
         '''递归的校验有没有这个signal'''

@@ -821,7 +821,7 @@ def assign_lhs_to_rhs_expr(lhs_symbol_name, rhs_expr, depth, data_def, lhs_post_
 
     for lhs, rhs in zip(lhs_names, rhs_exprs):
         lhsType=data_def.get_localVariable_InThisAndPreEnv(lhs).syntaxType
-        if lhsType.type=="array":
+        if lhsType.type=="array" and not lhs_post_fix:# 要改！！
             code+= f"{'    ' * depth}memcpy(&{lhs},&({rhs}),sizeof({lhsType.change_name()}));\n"
         else:
             code += f"{'    ' * depth}{data_def.var_change_name(lhs)}{lhs_post_fix} = {rhs};\n"

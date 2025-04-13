@@ -70,16 +70,14 @@ def get_reset_act(automaton: SyntaxAutomaton) -> str:
     return f"{get_automaton_full_name(automaton)}_reset_act"
 
 
-def generate_expr_for_arrow_conditions(tmp_name, from_state, code_generator, sub_expr, depth) -> str:
+def generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth) -> (str,str):
     """将arrow的判断部分的代码生成出来"""
-    tmp_symbol = SyntaxVariableSymbol(name=tmp_name, isProbe=False, isClock=False)
-    tmp_symbol.syntaxType = SyntaxType(tar_type="bool")
-    from_state.add_tmpSymbol(tmp_symbol)
+    tmp_symbol, tmp_name = scade_generate.generate_tmp_symbol_and_register(from_state, SyntaxType("bool"))
     equation = SyntaxEquation(type="simple_equation", lhs=[tmp_name], lineno=-1)
     equation.set_expr(sub_expr)
     tmp_decls = f"{'    ' * depth}kcg_bool {tmp_name};\n"
     tmp_decls += scade_generate.generate_userOp_simple_equation(equation, from_state, code_generator, depth)
-    return tmp_decls
+    return tmp_decls,tmp_name
 
 
 def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton: SyntaxAutomaton,
@@ -113,9 +111,7 @@ def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton
             sub_expr = arrow.ifExprList[i][0]
             sub_arrow = arrow.ifExprList[i][1]
 
-            tmp_name = from_state.generate_name_for_tmp()
-
-            tmp_decls = generate_expr_for_arrow_conditions(tmp_name, from_state, code_generator, sub_expr, depth)
+            tmp_decls,tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
 
             if i == 0:
                 code += f"{'    ' * depth}if({tmp_name}){{\n"
@@ -161,8 +157,7 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
             sub_expr = arrow.ifExprList[i][0]
             sub_arrow = arrow.ifExprList[i][1]
 
-            tmp_name = from_state.generate_name_for_tmp()
-            tmp_decls = generate_expr_for_arrow_conditions(tmp_name, from_state, code_generator, sub_expr, depth)
+            tmp_decls,tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
 
             if i == 0:
                 code += f"{'    ' * depth}if({tmp_name}){{\n"
