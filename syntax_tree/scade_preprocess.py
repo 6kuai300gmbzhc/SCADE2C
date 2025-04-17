@@ -99,6 +99,8 @@ def p_Type_decl(p):
         p[0].numericKind = p[4]["Numeric_kind"]
         p[0].isImported = True
     else:
+        if p[3].type=="enum":
+            p[3].name=p[0].name
         p[0].syntaxType = p[3]
         p[0].isImported = False
     global cur_scope
@@ -139,10 +141,10 @@ def p_type_def(p):
     if len(p) == 2:
         p[0] = p[1]
         return
-    p[0] = SyntaxType(tar_type="enum")
+    p[0] = SyntaxType(tar_type="enum",scope=cur_scope)
     enum_list = list()
     for enum_value in p[3]:
-        enum_symbol=SyntaxConstSymbol(name=enum_value)
+        enum_symbol=SyntaxConstSymbol(name=enum_value,scope=cur_scope)
         enum_symbol.syntaxType=p[0]
         enum_symbol.set_value(enum_value)
         cur_scope.add_constSymbol(enum_symbol)
@@ -227,19 +229,18 @@ def p_const_block_1(p):
 def p_const_decl(p):
     '''Const_decl : Interface_status LV6ID COLON Type_expr
     | Interface_status LV6ID COLON Type_expr EQU Expr'''
-
+    global cur_scope
     if not "Visibility" in p[1].keys():
         visibility = "public"
     else:
         visibility = p[1]["Visibility"]
-    p[0] = SyntaxConstSymbol(name=p[2].value, visibility=visibility)
+    p[0] = SyntaxConstSymbol(name=p[2].value,scope=cur_scope, visibility=visibility)
     p[0].syntaxType = p[4]
     if "External" in p[1].keys():
         p[0].isImported = True
     else:
         p[0].isImported = False
         p[0].valueExpr = p[6]
-    global cur_scope
     cur_scope.add_constSymbol(p[0])
 
 
@@ -1470,7 +1471,8 @@ def p_prefix(p):
     if p[1].strs == "path_id":
         # 让此句所处的函数级作用域添加此路径作为依赖的函数
         global cur_scope
-        cur_scope.add_dependent_function_to_userOp(p[1].value)
+        user_op=cur_scope.get_my_userOp()
+        user_op.add_dependent_function(p[1].value)
 
 
 def p_operator_1(p):
@@ -1630,12 +1632,12 @@ def p_pattern(p):
     | UNDERLINE'''
     p[0] = dict()
     if len(p) == 3:
-        type = p[2].strs
+        _type = p[2].strs
         value = p[1].value + p[2].value
     else:
         value = p[1].value
-        type = p[1].value
-    p[0] = SyntaxPattern(type=type, value=value)
+        _type = p[1].strs
+    p[0] = SyntaxPattern(type=_type, value=value)
 
 
 def p_pattern_1(p):

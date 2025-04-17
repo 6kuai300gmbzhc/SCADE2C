@@ -585,13 +585,7 @@ def register_id_expr_handler(type_):
 
 @register_id_expr_handler("Path_id")
 def generate_id_expr_path_id(syntax_id_expr_objects, syntaxUserOp, genEqu):
-    # TODO:如果path_id是包含“::”的路径名，生成代码时需要将::替换为_，需要修改路径的顺序
     path_id = syntax_id_expr_objects[0]  # 获取路径标识符，例如 "n"
-
-    const_symbol = syntaxUserOp.check_and_get_constant_param(path_id)
-    if const_symbol is not None:
-        return const_symbol.get_value()
-    # 否则，调用 var_change_name 处理局部变量
     return syntaxUserOp.var_change_name(path_id)
 
 
@@ -1095,15 +1089,16 @@ def generate_syntax_type_typevar(typeSymbol, rootPackage):
 @register_syntax_type_handler(r"^enum")
 def generate_syntax_type_enum(typeSymbol, rootPackage):
     global_name = rootPackage.get_global_name()
-    var_name = typeSymbol.name if len(global_name) == 0 else f"{typeSymbol.name}_{global_name}"
+    var_name = f"{typeSymbol.name}_{global_name}"
     code = f"typedef enum {var_name} {{\n"
     for idx, enum_symbol in enumerate(typeSymbol.syntaxType.enumList):
         if idx != 0:
             code += ",\n"
-        code += f"{enum_symbol.name}" if len(global_name) == 0 else f"{enum_symbol.name}_{global_name}"
+        code += f"{enum_symbol.name}_{global_name}"
     code += f"\n}} {var_name};\n"
     print("=== enum ===")
     print(code)
+    #不对啊不对
     return code
 
 

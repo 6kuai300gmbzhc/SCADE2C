@@ -156,9 +156,8 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
 
             sub_expr = arrow.ifExprList[i][0]
             sub_arrow = arrow.ifExprList[i][1]
-
-            tmp_decls,tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
-
+            tmp_decl,tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
+            tmp_decls+=tmp_decl
             if i == 0:
                 code += f"{'    ' * depth}if({tmp_name}){{\n"
             else:
@@ -298,9 +297,9 @@ def generate_switch_state_body(automaton: SyntaxAutomaton, code_generator: scade
     """生成状态机body中，强转移部分的主体部分，此部分对嵌套与非嵌套的状态机逻辑是一样的"""
     body = ""
     for state_name, state in automaton.stateTable.items():
-        body += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}:\n"
+        body += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}: {{\n"
         body += generate_state_strong_transitions(automaton, state, code_generator, depth + 2)
-        body += f"{'    ' * (depth + 2)}break;\n"
+        body += f"{'    ' * (depth + 2)}break;}}\n"
     body += f"{'    ' * (depth + 1)}default:break;\n{'    ' * depth}}}\n"
     return body
 
@@ -310,7 +309,7 @@ def generate_switch_act(automaton: SyntaxAutomaton, code_generator: scade_genera
     # 行动枚举，执行当前状态下的代码，然后做弱转移
     switch_act = f"{'    ' * (depth)}switch ({get_state_act(automaton)}){{\n"
     for state_name, state in automaton.stateTable.items():
-        switch_act += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}:\n"
+        switch_act += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}:{{\n"
 
         if state.hasInternalState:
             # 如果此状态有内存，则加上一个重置操作,即如果rest_act，则设置init为true，然后重置操作，然后将init为false
@@ -330,7 +329,7 @@ def generate_switch_act(automaton: SyntaxAutomaton, code_generator: scade_genera
                 switch_act += f"{'    ' * (depth + 2)}outC->{initSymbol} = kcg_false;\n"
             switch_act += f"{'    ' * (depth + 2)}outC->{state.initSymbol} = kcg_false;\n"
             # 然后初始化结束
-        switch_act += f"{'    ' * (depth + 2)}break;\n"
+        switch_act += f"{'    ' * (depth + 2)}break;}}\n"
     switch_act += f"{'    ' * (depth + 1)}default:break;\n{'    ' * depth}}}\n"
     return switch_act
 

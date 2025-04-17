@@ -37,10 +37,6 @@ class SyntaxUserOp:
     pass
 
 
-class SyntaxType:
-    pass
-
-
 class ConstValue:
     """在expr间传递值的类，封装类型与值"""
     type: SyntaxType = None
@@ -88,7 +84,10 @@ class HasRhs:
         Parameters:
             rhs:右值列表,str格式
         """
-        self.rhsList = [set(rhs)]
+        if rhs is None or not rhs:
+            self.rhsList=[set()]
+        else:
+            self.rhsList = [set(rhs)]
 
     def add_rhs(self, rhs):
         """添加右值,返回值+1
@@ -402,11 +401,14 @@ class SyntaxEquation(HasRhs):
 class SyntaxType:
     """记录type类型"""
     name: str
-    '''type_block ，用于重命名之后的str，type表示其真实类型，这个只是记录了在type_block中定义的别名'''
+    '''type_block ，用于重命名之后以str格式保存的名字，type表示其真实类型，这个只是记录了在type_block中定义的别名
+    对enum类型，则指具体enum的类型名称
+    '''
 
     scope: SyntaxScope or None
-    '''这个type所属的scope,在大部分情况下是没用的，但是如果是path_id类型就需要依靠他来找到真实的type
-    所以对于path_id来说是必填，其他的随便
+    '''这个type所属的scope,在大部分情况下是没用的，但是如果是path_id类型就需要依靠他来找到真实的type,
+    并且enum类型需要依靠他在代码生成时生成名字
+    所以对于以上两种来说是必填，其他的随便
     '''
 
     type: str
@@ -451,9 +453,11 @@ class SyntaxType:
         'float': {'float32', 'float64'}
     }
 
-    def __init__(self, tar_type: str) -> None:
+    def __init__(self, tar_type: str,scope=None) -> None:
         self.type = tar_type
         self._size = None
+        self.scope=scope
+        self._real_type=None# 给path_id的缓存
 
     def __repr__(self):
         s = ""
@@ -481,9 +485,11 @@ class SyntaxType:
     def change_name(self):
         if self.type == "array":
             return f'array_{self.arrayType.type}_{self.get_size()}'
-        # todo 若为path_id类型，需要找到对应的type
-        else:
-            return f'kcg_{self.type}' if self.type in self.basic_type else self.value
+        if self.type=="path_id":
+            return self.resolve_path_id().change_name()
+        if self.type=="enum":
+            return f"{self.name}_{self.scope.get_global_name()}"
+        return f'kcg_{self.type}' if self.type in self.basic_type else self.value
 
     def generate_init_expr(self):
         '''生成这个类型变量的初始值，给init函数准备的'''
@@ -491,10 +497,17 @@ class SyntaxType:
             return "kcg_true"
         elif self.type in self.basic_type:
             return f"kcg_lit_{self.type}(0)"
-        else:
-            return ""
+        elif self.type=="path_id":
+            return self.resolve_path_id().generate_init_expr()
+        elif self.type=="enum":
+            default_value=self.enumList[0]
+            print(default_value.scope.type)
+            return default_value.change_name()
             # 我也不知道应该生成什么，相信后人的智慧
             # 我恨过去的自己
+            # 未来的我补充了一点
+        else:
+            return ""
 
     def belong_to(self, tar_type):
         """此type是否包含于对应的type？
@@ -536,12 +549,16 @@ class SyntaxType:
         if self.type == "typevar":
             return self.templateType
         elif self.type == "path_id":
-            scope = self.scope
-            real_type = scope.check_and_get_type_symbol(self.value)
-            return real_type.syntaxType.type
+            return self.resolve_path_id().type
         else:
             return self.type
 
+    def resolve_path_id(self):
+        if self.type!="path_id":
+            raise Exception(f"{self}不是pathId")
+        if self._real_type is None:
+            self._real_type=self.scope.check_and_get_type_symbol(self.value).syntaxType
+        return self._real_type
     def get_size(self):
         '''计算size表达式，得到一个int值'''
         if self._size is None:
@@ -619,6 +636,9 @@ class SyntaxConstSymbol:
     isImported: bool
     '''是不是imported'''
 
+    scope:SyntaxScope
+    '''此变量声明时所处于的scope，应该是package'''
+
     syntaxType: SyntaxType
     '''组合的类型类别,一直有效'''
 
@@ -632,9 +652,10 @@ class SyntaxConstSymbol:
     也存储了枚举类型值
     '''
 
-    def __init__(self, name: str, visibility: str = "public", imported=False):
+    def __init__(self, name: str, scope,visibility: str = "public", imported=False):
         self.name = name
         self.visibility = visibility
+        self.scope=scope
         self.__value = None
         self.isImported = imported
 
@@ -658,8 +679,8 @@ class SyntaxConstSymbol:
 
     def set_value(self, value):
         self.__value = value
-
-
+    def change_name(self):
+        return f"{self.name}_{self.scope.get_global_name()}"
 class SyntaxSensorSymbol:
     name: str
     '''自定义变量名字'''
@@ -701,7 +722,7 @@ class SyntaxGroupSymbol:
         return s
 
 
-class SyntaxPattern:
+class SyntaxPattern(HasRhs):
     '''pattern类'''
     type: str
     '''具体的pattern类型
@@ -716,6 +737,7 @@ class SyntaxPattern:
     '''类型对应的内容'''
 
     def __init__(self, type, value):
+        super().__init__()
         self.type = type
         self.value = value
 
@@ -723,7 +745,7 @@ class SyntaxPattern:
         return self.value
 
 
-class SyntaxClockExpr:
+class SyntaxClockExpr(HasRhs):
     ID: str
     '''clockexpr中必须的LV6ID'''
     type: str
@@ -732,9 +754,10 @@ class SyntaxClockExpr:
        pattern:LPARENTHESE LV6ID MATCH Pattern RPARENTHESE
     '''
     pattern: SyntaxPattern = None
-    '''仅type为match时不为none'''
+    '''仅type为pattern时不为none'''
 
     def __init__(self, ID: str, type: str):
+        super().__init__()
         self.ID = ID
         self.type = type
 
@@ -945,7 +968,14 @@ class SyntaxScope:
         return target_package.get_userOp(op_name)
 
     def check_and_get_constant_param(self, param_path_id):
-        """检查这个参数是不是一个常数，如果是则返回syntaxconstSymbol，否则返回None"""
+        """检查这个参数是不是一个常数，如果是则返回syntaxconstSymbol，否则返回None
+        注意常数也可能声明在userop里
+        """
+        if self.type!="package":
+            userOp=self.get_my_userOp()
+            const_param=userOp.get_size_symbol(param_path_id)
+            if const_param is not None:
+                return const_param
         tar_package, name = self.resolve_path_id(param_path_id)
         const_param = tar_package.get_const_symbol(name)
         return const_param
@@ -1200,18 +1230,16 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             else:
                 return symbol.name
         else:
-            return name
-            # raise ValueError(f"var_change_name error , name:{name}")
-            # todo 让其无条件通过，考虑到有枚举类型的情况
+            # raise Exception("???")
+            symbol=self.check_and_get_constant_param(name)
+            if symbol is None:
+                raise ValueError(f"var_change_name error , name:{name}")
+            return symbol.change_name()
 
 
     def get_return_symbolTable(self):
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
         return self.returnSymbolsTable
-
-    def add_dependent_function_to_userOp(self, path):
-        op_scope = self.get_my_userOp()
-        op_scope.add_dependent_function(path)
 
     def generate_init_name_and_check(self) -> str:
         """生成一个用来初始化的名字，将该名字作为此作用域的initsymbol名字。并确保没重名的情况，最高到函数级别不重名即可"""
@@ -1600,7 +1628,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
     # '''中间参数，是一个变量声明列表'''
     numericKind: str = None
     '''如果是模板方法则填入对应类型，不是则为None'''
-    whereDecl: list = None
+    whereDecl: list[str] = None
     '''声明的模板类型'''
     specDecl: str = None
     '''声明的SPECIALIZE类型，存放一个pathID，没有声明则为None'''
@@ -1630,9 +1658,12 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def set_sizeDecl(self, sizeDecl: list):
         # 所有的sizeDecl都是正整数，设置成unsigned类型
         for name in sizeDecl:
-            const_symbol = SyntaxConstSymbol(name=name)
+            const_symbol = SyntaxConstSymbol(name=name,scope=self)
             const_symbol.syntaxType = SyntaxType(tar_type="unsigned")
             self.sizeDecl[name] = const_symbol
+
+    def get_size_symbol(self,name):
+        return self.sizeDecl.get(name)
 
     def set_outParams(self, outParams):
         self.outParams = outParams

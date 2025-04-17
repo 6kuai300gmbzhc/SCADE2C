@@ -1,3 +1,5 @@
+import sys
+
 from syntax_tree.SyntaxClass import *
 import functools
 
@@ -23,7 +25,11 @@ def type_inference_userOp(userOp: SyntaxUserOp):
 def type_inference_dataDef(data_def: SyntaxDataDefScope):
     for equation in data_def.equations:
         if equation.type != "control_block":
-            type_inference_equation(equation, data_def)
+            try:
+                type_inference_equation(equation, data_def)
+            except Exception as e:
+                print(f"发生错误的句子:{equation}",file=sys.stdout)
+                raise e
         else:
             control_block = data_def.get_childScope(equation.controlBlockID)
             type_inference_control_block(control_block)
@@ -123,7 +129,7 @@ def type_inference_Atom(expr, lhs_type_list: list[SyntaxType], data_def):
         raise TypeMismatchException(expr, lhs_type_list, data_def)
     given_type, _ = expr.get_type_and_value_for_atom()
     syntax_type = SyntaxType(given_type)
-    if syntax_type <= lhs_type_list[0]:
+    if lhs_type_list[0] <= syntax_type:
         expr.set_lhs_type([syntax_type])
     else:
         raise TypeMismatchException(expr, lhs_type_list, data_def)
@@ -157,7 +163,7 @@ binOp_type_table = {
         }
     }
 }
-def get_required_type_for_binOp(expr_type,expr_sub_type,binOp):
+def get_required_type_for_binOp(expr_type,expr_sub_type,binOp=""):
     sub_table=binOp_type_table.get(expr_type)
     if sub_table is None: return None
     op_table=sub_table.get(expr_sub_type)
@@ -309,8 +315,8 @@ def type_inference_Relation(expr, lhs_type_list: list[SyntaxType], data_def):
 def type_inference_Bool(expr, lhs_type_list: list[SyntaxType], data_def):
     """布尔运算，要求都是bool类型"""
     # 需求类型bool，子运算类型bool，很简单
-    packed_sub_expr = SyntaxExpr(type="List_expr", subtype="List_expr", scope=data_def,
-                                 objects=[expr.objects[0], expr.objects[2]], returnNum=2)
+    # packed_sub_expr = SyntaxExpr(type="List_expr", subtype="List_expr", scope=data_def,
+    #                              objects=[expr.objects[0], expr.objects[2]], returnNum=2)
     required_type = SyntaxType("bool")
     if len(lhs_type_list) != 1 and lhs_type_list[0] != required_type:
         raise TypeMismatchException(expr, lhs_type_list, data_def)
@@ -326,7 +332,49 @@ def type_inference_Bool(expr, lhs_type_list: list[SyntaxType], data_def):
             type_inference_expr(sub_expr, [required_type], data_def)
     expr.set_lhs_type([required_type])
     return expr.lhsTypeList
+inference_tempo_handlers = {}
 
+def inference_tempo_handler(type_):
+    def decorator(func):
+        inference_tempo_handlers[type_] = func
+        return func
+
+    return decorator
+@inference_expr_handler('Tempo_expr')
+def type_inference_tempo(expr, lhs_type_list: list[SyntaxType], data_def):
+    subtype = expr.subType
+    handler = inference_tempo_handlers.get(subtype)
+    if handler is None:
+        raise Exception(f"tempo的{subtype}没实现")
+    handler(expr, lhs_type_list, data_def)
+
+
+def type_inference_binOp_on_groups(sub_exprs:list[SyntaxExpr],lhs_type_list,data_def):
+    given_type_lists=[type_inference_expr(sub_expr,lhs_type_list,data_def) for sub_expr in sub_exprs]
+    # 他们返回的长度一定相等
+    actual_types=list(map(min, zip(*given_type_lists)))
+    for i,given_types in enumerate(given_type_lists):
+        for g,a in zip(given_types,actual_types):
+            if g<a:
+                type_inference_expr(sub_exprs[i],actual_types,data_def)
+                break
+    return actual_types
+@inference_tempo_handler("ARROW")
+def type_inference_tempo_arrow(expr, lhs_type_list: list[SyntaxType], data_def):
+    # arrow可以同时处理多个变量
+    actual_types=type_inference_binOp_on_groups([expr.objects[0],expr.objects[1]],lhs_type_list,data_def)
+    expr.set_lhs_type(actual_types)
+    return expr.lhsTypeList
+@inference_tempo_handler("FBY")
+def type_inference_tempo_fby(expr, lhs_type_list: list[SyntaxType], data_def):
+    # 和pre预算非常的相似
+    actual_types=type_inference_binOp_on_groups([expr.objects[0],expr.objects[2]],lhs_type_list,data_def)
+    expr.set_lhs_type(actual_types)
+    return expr.lhsTypeList
+@inference_tempo_handler("PRE")
+def type_inference_tempo_pre(expr, lhs_type_list: list[SyntaxType], data_def):
+    expr.set_lhs_type(type_inference_expr(expr.objects[0],lhs_type_list,data_def))
+    return expr.lhsTypeList
 
 inference_array_handlers = {}
 
@@ -523,6 +571,7 @@ def type_inference_apply_prefixOp(operator: SyntaxOperator, lhs_type_list: list[
 def type_inference_apply_path_id(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
     tar_userOp = operator.appliedUserOp
     # 校验一下，要求的类型是不是和目标op返回的类型一样
+    # 这里有可能左值类型并非基本类型，所以仅当可以推断出来一个基本类型时才去进行实例化操作
     returned_types = [param.syntaxType for param in tar_userOp.outParams]
     input_types = [param.syntaxType for param in tar_userOp.inParams]
     if not all(g <= r for g, r in zip(returned_types, lhs_type_list)):

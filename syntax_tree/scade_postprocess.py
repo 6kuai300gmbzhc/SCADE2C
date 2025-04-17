@@ -68,7 +68,7 @@ def post_process(root_scope: SyntaxPackageScope,main_operator_path:str) -> None:
     path=main_operator_path.split("::")
     main_operator=root_scope.resolve_path(path[:-1]).get_userOp(path[-1])
     if not main_operator:
-        raise UnknownIdentifierException(main_operator)
+        raise UnknownIdentifierException(main_operator_path)
     # 从主节点开始建图
     build_userOp_dependent_graph(main_operator,userOp_dependent_graph)
     sorted_userOp = userOp_dependent_graph.topological_sort()
@@ -283,13 +283,32 @@ def post_process_expr(expr, data_def):
         expr_handler(expr, data_def)
     else:
         set_rhs_default(expr)
-
+def post_process_clock_expr(clock_expr,data_def):
+    """时钟表达式后处理"""
+    if clock_expr.type!="pattern":
+        equivalent_expr = SyntaxExpr("Id_expr", "Path_id", data_def, [clock_expr.ID])
+        post_process_expr(equivalent_expr,data_def)
+        clock_expr.rhsList=equivalent_expr.rhsList
+    else:
+        post_process_pattern(clock_expr.pattern,data_def)
+        clock_expr.rhsList=clock_expr.pattern.rhsList
+def post_process_pattern(pattern,data_def):
+    if pattern.type=="Path_id":
+        equivalent_expr = SyntaxExpr("Id_expr", "Path_id", data_def, [pattern.value])
+        post_process_expr(equivalent_expr, data_def)
+        pattern.rhsList=equivalent_expr.rhsList
+    else:
+        pattern.set_rhs(None)
 def process_subexpr_default(expr, data_def):
-    """默认的子expr后处理，就是挨个遍历一下，没有operator"""
+    """默认的子expr后处理，就是挨个遍历一下，没有operator,有clockExpr和pattern"""
     flat_list = flatten_list(expr.objects)
     for sub_expr in flat_list:
         if type(sub_expr) == SyntaxExpr:
             post_process_expr(sub_expr, data_def)
+        elif type(sub_expr) == SyntaxClockExpr:
+            post_process_clock_expr(sub_expr,data_def)
+        elif type(sub_expr) == SyntaxPattern:
+            post_process_pattern(sub_expr,data_def)
 def set_rhs_default(expr):
     # 默认的情况下，expr的rhs是各子expr之和，合并成一个
     # 我一定会处理函数调用的情况，所以这里就没有operator了
@@ -322,7 +341,7 @@ def post_Id_expr(expr: SyntaxExpr, data_def:SyntaxDataDefScope):
         else:
             symbol=data_def.get_localVariable_InThisAndPreEnv(name)
             if symbol is None:
-                raise UnknownIdentifierException(name+" "+str(expr)) #有枚举类型，可恶,把枚举类型给放到常数变量里了
+                raise UnknownIdentifierException(name+" "+str(expr)+f"在{data_def.get_global_name()}") #有枚举类型，可恶,把枚举类型给放到常数变量里了
             expr.set_rhs([name])
         expr.set_symbol(symbol)
     else: # SinglequoteLv6id
@@ -336,17 +355,23 @@ def post_Id_expr(expr: SyntaxExpr, data_def:SyntaxDataDefScope):
 def post_tempo_expr(expr: SyntaxExpr, data_def):
     # 设置一下返回值数量，从输入参数大概估算一个，不需要具体的校验
     if expr.subType == "PRE":
-        expr.set_rhs([])
+        expr.set_rhs(None)
         expr.returnNum=expr.objects[0].returnNum
     elif expr.subType == "FBY":
-        expr.absorb_rhs(expr.objects[2])
+        expr.rhsList=expr.objects[2].rhsList
         expr.returnNum = expr.objects[0].returnNum
-    else:
-        set_rhs_default(expr)
-        if expr.subType == "WHEN" or expr.subType=="ARROW":
-            expr.returnNum = expr.objects[0].returnNum
-        elif expr.subType=="MERGE":
-            expr.returnNum = expr.objects[1][0].returnNum
+    elif expr.subType == "ARROW":
+        expr.returnNum = expr.objects[0].returnNum
+        expr.rhsList = union_rhsLists([expr.objects[0].rhsList, expr.objects[1].rhsList])
+    elif expr.subType == "WHEN":
+        expr.returnNum = expr.objects[0].returnNum
+        expr.rhsList=add_rhs_to_each(expr.objects[1].rhsLst,expr.objects[0].rhsList)
+    elif expr.subType=="MERGE":
+        expr.returnNum = expr.objects[1][0].returnNum
+        expr.rhsList=union_rhsLists([sub_expr.rhsList for sub_expr in expr.objects[1]])
+    elif expr.subType=="TIMES":
+        # 只返回一个值
+        expr.rhsList=expr.objects[1].rhsList
 
 
 
@@ -371,11 +396,33 @@ def post_List_expr(expr: SyntaxExpr, data_def):
             new_object_list.append(sub_expr)
     expr.objects[0] = new_object_list
     expr.returnNum=return_num
-
+def union_rhsLists(rhsList_list:list[list[set[str]]]):
+    """把输入expr列表的右值列表按位取并集"""
+    length=len(rhsList_list[0])
+    out_list=[set()]*length
+    for rhs_list in rhsList_list:
+        if len(rhs_list)!=length:
+            raise Exception(f"在{rhsList_list}中，存在expr的返回长度不一样")
+        for i,rhs in enumerate(rhs_list):
+            out_list[i]|=rhs
+    return out_list
+def add_rhs_to_each(src_list,dst_list):
+    """把src中的所有右值逐个加到dst里面"""
+    if len(src_list)!=1:
+        raise Exception(f"{src_list}长度不是1")
+    tar_rhs=src_list[0]
+    output=dst_list.copy()
+    for rhs in dst_list:
+        output.append(rhs|tar_rhs)
+    return dst_list
 @post_expr_handler('Switch_expr')
 def post_Switch_expr(expr,data_def):
     if expr.subType=="IF":
         expr.returnNum=expr.objects[1].returnNum
+        # 将两个条件分支的因果关系逐个合并起来，然后加上条件语句的因果关系
+        rhs_list=union_rhsLists([expr.objects[1].rhsList,expr.objects[2].rhsList])
+        rhs_list=add_rhs_to_each(expr.objects[0].rhsList,rhs_list)
+        expr.rhsList=rhs_list
     else:
         expr.returnNum=expr.objects[1][1].returnNum
 
@@ -385,12 +432,13 @@ def post_Apply_expr(expr, data_def):
     # 处理一下operator的情况，情况比较复杂，需要分配到每个函数自行解决问题
     operator = expr.objects[0]
     param_expr_list=expr.objects[1].objects[0]
-    param_rhs_list=merge_param_rhs_list(param_expr_list)
+    param_rhs_list=extend_rhs_list([expr.rhsList for expr in param_expr_list])
     expr.returnNum,expr.rhsList=post_process_operator(operator,param_rhs_list,expr,data_def)
-def merge_param_rhs_list(params:list[SyntaxExpr])->list[set[str]]:
+def extend_rhs_list(rhs_list_list:list[list[set[str]]])->list[set[str]]:
+    """把右值列表连接起来"""
     output=list()
-    for param in params:
-        output.extend(param.rhsList)
+    for rhs_list in rhs_list_list:
+        output.extend(rhs_list)
     return output
 def merge_rhs_list(rhs_list:list[set[str]])->list[set[str]]:
     """把指定右值列表汇聚到一个set内并返回"""
@@ -431,7 +479,7 @@ def post_operator_Path_id(operator: SyntaxOperator,param_rhs_list, expr: SyntaxE
     # 如果这个函数没有返回值，就直接返回输入的参数
     # 如果有返回值，就看一眼对应的参数，根据依赖表确定情况
     if len(tar_userOp.inParams) != len(params):
-        raise ParamMismatcheException(f"{expr}在函数调用时参数数量不匹配")
+        raise ParamMismatcheException(f"{expr}在函数调用时参数数量不匹配,在{data_def.get_global_name()}内")
     rhs_list=list()
     if not tar_userOp.outParams:
         rhs_set=set()
@@ -450,6 +498,7 @@ def post_operator_Path_id(operator: SyntaxOperator,param_rhs_list, expr: SyntaxE
 @post_operator_handler('PREFIXOP')
 def post_operator_PREFIXOP(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
     # 全部因果关系，返回1个变量
+    # todo 按照等价的表达式检查一下？似乎也不一定
     return 1,merge_rhs_list(param_rhs_list)
 
 
@@ -462,7 +511,7 @@ def post_operator_flatten(operator: SyntaxOperator,param_rhs_list, expr: SyntaxE
         raise UnknownIdentifierException(tar_type_name)
     size=tar_type.get_size()
     #全部因果关系，返回参数数量为结构体中元素个数
-    return size,param_rhs_list
+    return size,list(merge_rhs_list(param_rhs_list)*size)
 
 
 @post_operator_handler('make')
@@ -473,20 +522,42 @@ def post_operator_make(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr
     if tar_type is None:
         raise UnknownIdentifierException(tar_type_name)
     # 全部因果关系，返回1个变量
-    return 1,param_rhs_list
+    return 1, merge_rhs_list(param_rhs_list)
 
 
 @post_operator_handler("iterator")
-def post_operator_map(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
+def post_operator_map(operator: SyntaxOperator,param_rhs_list:list, expr: SyntaxExpr, data_def):
     sub_operator=operator.objects[2]
     # 很神奇吧，iterator不修改返回的参数数量
     # 他们会对调用的op有要求
     # 在类型推导里做具体的校验
+    # 但是需要改变一下给subOp的参数
+    iterator_op=operator.objects[0]
+    if iterator_op[-1]=="i":
+        # 末尾带i的都要加一个常数
+        sub_param_list=param_rhs_list.copy()
+        sub_param_list.insert(0,set())
+    else:
+        sub_param_list=param_rhs_list
+    return post_process_operator(sub_operator,sub_param_list,expr,data_def)
+
+@post_operator_handler("activate")
+def post_operator_activate(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
+    sub_operator=operator.objects[2]
+    # 只改变时钟
     return post_process_operator(sub_operator,param_rhs_list,expr,data_def)
 
-
-
-
+@post_operator_handler("activateDefault")
+def post_operator_activateDefault(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
+    sub_operator=operator.objects[0]
+    default_expr=operator.objects[2]
+    post_process_expr(default_expr,data_def)
+    cond_expr=operator.objects[1]
+    post_process_expr(cond_expr,data_def)
+    return_num,sub_op_rhs_list=post_process_operator(sub_operator, param_rhs_list, expr, data_def)
+    op_rhs_list=union_rhsLists([sub_op_rhs_list,default_expr.rhsList])
+    op_rhs_list=add_rhs_to_each(cond_expr.rhsList,op_rhs_list)
+    return return_num,op_rhs_list
 
 def flatten_list(input_list: list) -> list:
     """把嵌套列表展开，不是列表的输入也返回一个列表"""
