@@ -1,4 +1,3 @@
-import SymbolClass
 from syntax_tree.SyntaxClass import *
 from syntax_tree.scade_preprocess import *
 from syntax_tree.scade_postprocess import post_process
@@ -9,6 +8,19 @@ lhs_type = ""
 
 import syntax_tree.automaton_generate as automaton_generate
 
+type_global=[]
+cf=0
+
+def find_const_value(scope, const_name):
+    if scope is None:
+        return None
+    # 如果当前作用域有 constSymbolTable，尝试查找常量
+    if hasattr(scope, 'constSymbolTable') and const_name in scope.constSymbolTable:
+        const_symbol = scope.constSymbolTable[const_name]
+        if not const_symbol.isImported:  # 如果不是导入的常量
+            return SyntaxExpr_generate(const_symbol.valueExpr, scope, GenEqu())
+    # 递归查找父作用域
+    return find_const_value(scope.prevScope, const_name)
 
 class GenerateCode:
     def __init__(self, rootNode, mainNode, outputDir):
@@ -907,12 +919,33 @@ def generate_operator_Path_id(operator: SyntaxOperator, parameters: list[SyntaxE
     # 如果是node，则这个outC去当前函数的outC里面取
     # 如果是function，就直接初始化一个，说实话有点恶心
     # 结束调用后，把outC里面的结果拿出来进行进一步赋值操作
-    # 我要玩守望先锋！
+
     applied_userOp = operator.appliedUserOp
     global_name = applied_userOp.get_global_name()
-    if applied_userOp.type == "node":
-        pass
-    return "tem()"
+
+    code = ""
+    tmp_inC_name = data_def.generate_name_for_tmp("inC")
+    tmp_outC_name = data_def.generate_name_for_tmp("outC")
+
+    code += f"{applied_userOp.get_inC_name()} {tmp_inC_name};\n"
+    code += f"{applied_userOp.get_outC_name()} {tmp_outC_name};\n"
+    for idx, param in enumerate(parameters):
+        param_code = SyntaxExpr_generate(param, data_def, genEqu)
+        param_name = applied_userOp.inParams[idx].name
+        code += f"{tmp_inC_name}.{param_name} = {param_code};\n"
+
+
+    code += f"{global_name}(&{tmp_inC_name}, &{tmp_outC_name});\n"
+
+    output_names = []
+    for idx, out_param in enumerate(applied_userOp.outParams):
+        output_name = data_def.generate_name_for_tmp(f"out_{idx}")
+        code += f"{out_param.syntaxType.change_name()} {output_name} = {tmp_outC_name}.{out_param.name};\n"
+        output_names.append(output_name)
+
+    # 添加代码到preEquations中
+    genEqu.add_preEquations(code)
+    return output_names if len(output_names) > 1 else output_names[0]
 
 
 @register_operator_handler("PREFIXOP")
@@ -976,7 +1009,6 @@ def generate_userOp_simple_equation(syntaxEquation, syntaxUserOp, code_generator
     lhs_type = lhs_symbol.syntaxType.type
     genEqu = GenEqu(depth)
     genEqu.expr = SyntaxExpr_generate(syntaxEquation.expr, syntaxUserOp, genEqu)
-    print(genEqu.expr)
     code = ""
     code += "".join(genEqu.preEquations)
     code += assign_lhs_to_rhs_expr(syntaxEquation.lhs, genEqu.expr, depth, syntaxUserOp)
