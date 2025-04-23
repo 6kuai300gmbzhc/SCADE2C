@@ -94,7 +94,7 @@ def p_Type_decl(p):
     else:
         visibility = p[1]["Visibility"]
 
-    p[0] = SyntaxTypeSymbol(name=p[2].value, visibility=visibility)
+    p[0] = SyntaxTypeSymbol(name=p[2].value,syntaxType=None, visibility=visibility)
     if "External" in p[1].keys():
         p[0].numericKind = p[4]["Numeric_kind"]
         p[0].isImported = True
@@ -191,11 +191,9 @@ def p_type_expr(p):
         return
     # 普通的情况
     p[0] = SyntaxType(tar_type=p[1].strs)
-    if p[1].strs == "typevar":
+    if p[1].strs == "typevar" or p[1].strs == "path_id":
         p[0].value = p[1].value
-    elif p[1].strs == "path_id":
-        p[0].value = p[1].value
-        p[0].scope=cur_scope
+        p[0].scope = cur_scope
 
 def p_field_decl(p):
     '''Field_decl : LV6ID COLON Type_expr'''
@@ -333,25 +331,8 @@ def p_pack_lv6id(p):
 def p_user_op_decl(p):
     'User_op_decl : User_op_name User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
     # 遍历结束，换回作用域
-    # 这里，如果userOp是模板函数，就要给所有的模板类型的变量声明设置数据类型
     global cur_scope
-    if cur_scope.isTemplate:
-        templateType = cur_scope.numericKind
-        set_templateType_for_decls(cur_scope.inParams,templateType)
-        set_templateType_for_decls(cur_scope.outParams,templateType)
-        stack=deque([cur_scope])
-        while stack:
-            cur_data_def=stack.pop()
-            if isinstance(cur_data_def,SyntaxDataDefScope):
-                set_templateType_for_decls(list(cur_data_def.localSymbolTable.values()), templateType)
-                # 为什么dict_values和list不是一个数据类型？？？
-            for sub_scope in cur_data_def.childScopeTable.values():
-                stack.append(sub_scope)
     cur_scope = cur_scope.prevScope
-
-def set_templateType_for_decls(var_list:list[SyntaxVariableSymbol],templateType:str):
-    for var in var_list:
-        var.syntaxType.templateType=templateType
 
 def p_user_op_name(p):
     '''User_op_name : Op_kind Interface_status User_op_decl_Lv6id'''
@@ -442,7 +423,9 @@ def p_where_decl(p):
     typevars.append(p[2].value)
     typevars += p[3]
     cur_scope.numericKind = p[4]["Numeric_kind"]
-    cur_scope.whereDecl = typevars  # 更新whereDecl
+    for typevar in typevars:
+        cur_scope.add_type_var(typevar)
+    # 更新whereDecl
 
 
 def p_where_decl_1(p):

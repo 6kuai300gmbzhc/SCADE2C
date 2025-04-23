@@ -1,3 +1,5 @@
+import copy
+
 from syntax_tree.Exceptions import *
 from collections import defaultdict, deque
 from graph import *
@@ -266,7 +268,8 @@ class SyntaxExpr(HasRhs):
             given_type = 'bool'
             given_value = content == "true"
         elif subtype == "integernum":
-            given_type = 'integer'
+            #也可以转为float
+            given_type = 'numeric'
             given_value = int(content, 0)
         elif subtype == "floatnum":
             given_type = 'float'
@@ -406,7 +409,7 @@ class SyntaxType:
     '''
 
     scope: SyntaxScope or None
-    '''这个type所属的scope,在大部分情况下是没用的，但是如果是path_id类型就需要依靠他来找到真实的type,
+    '''这个type所属的scope,在大部分情况下是没用的，但是如果是path_id与typevar类型就需要依靠他来找到真实的type,
     并且enum类型需要依靠他在代码生成时生成名字
     所以对于以上两种来说是必填，其他的随便
     '''
@@ -414,6 +417,7 @@ class SyntaxType:
     type: str
     '''类型，int8，枚举类型等field_decl,array,signed,unsigned,typevar,path_id,enum
     见文档
+    typevar类型应该被当作path_id来对待
     '''
 
     sizeExpr: SyntaxExpr = None
@@ -428,12 +432,9 @@ class SyntaxType:
     '''类型为enum时有效，存储了枚举类型的ID列表'''
 
     value: str = None
-    '''类型为typevar，path_id时有效，存储了具体的名字，比如typevar T
+    '''类型为typevar，path_id时有效，存储了具体的名字，比如typevar 'T
     只是名字而已，而不是具体的类型
     '''
-
-    templateType: str = None
-    '''类型为typevar时有效，存储了模板类型应该具有的类型'''
 
     arrayType: SyntaxType = None
     '''类型为array时有效，存储了数组的类型'''
@@ -480,12 +481,16 @@ class SyntaxType:
             s += "}"
         if self.value:
             s += self.value + " "
+            try:
+                s+=self.get_real_type()
+            except Exception as e:
+                s+=""
         return s
 
     def change_name(self):
         if self.type == "array":
             return f'array_{self.arrayType.type}_{self.get_size()}'
-        if self.type=="path_id":
+        if self.type=="path_id" or self.type=="typevar":
             return self.resolve_path_id().change_name()
         if self.type=="enum":
             return f"{self.name}_{self.scope.get_global_name()}"
@@ -497,11 +502,10 @@ class SyntaxType:
             return "kcg_true"
         elif self.type in self.basic_type:
             return f"kcg_lit_{self.type}(0)"
-        elif self.type=="path_id":
+        elif self.type=="path_id" or self.type=="typevar":
             return self.resolve_path_id().generate_init_expr()
         elif self.type=="enum":
             default_value=self.enumList[0]
-            print(default_value.scope.type)
             return default_value.change_name()
             # 我也不知道应该生成什么，相信后人的智慧
             # 我恨过去的自己
@@ -546,19 +550,21 @@ class SyntaxType:
         return self.__le__(other) and self.__ne__(other)
 
     def get_real_type(self):
-        if self.type == "typevar":
-            return self.templateType
-        elif self.type == "path_id":
+        if self.type == "path_id" or self.type == "typevar":
             return self.resolve_path_id().type
         else:
             return self.type
 
+    def is_basic_type(self):
+        return self.get_real_type() in self.basic_type
+
     def resolve_path_id(self):
-        if self.type!="path_id":
-            raise Exception(f"{self}不是pathId")
-        if self._real_type is None:
-            self._real_type=self.scope.check_and_get_type_symbol(self.value).syntaxType
-        return self._real_type
+        if self.type!="path_id" and self.type!="typevar":
+            raise Exception(f"{self}不是pathId或者typevar,而是{self.type}")
+        type_symbol=self.scope.check_and_get_type_symbol(self.value)
+        if type_symbol is None:
+            raise UnknownIdentifierException(f"找不到{self.value}，在{self.scope.get_global_name()}内")
+        return type_symbol.syntaxType
     def get_size(self):
         '''计算size表达式，得到一个int值'''
         if self._size is None:
@@ -609,8 +615,9 @@ class SyntaxTypeSymbol:
     numericKind: str = None
     '''类型为imported时有效，存储了引用的类型'''
 
-    def __init__(self, name: str, visibility: str):
+    def __init__(self, name: str, syntaxType:SyntaxType or None,visibility: str="public"):
         self.name = name
+        self.syntaxType=syntaxType
         self.visibility = visibility
 
     def __repr__(self):
@@ -813,7 +820,7 @@ class SyntaxVariableSymbol:
         if self.isProbe: s += "probe "
         s += self.name
         s += " as "
-        s += str(self.syntaxType.get_real_type())
+        s += str(self.syntaxType.type)
         if self.whenExpr:
             s += "when "
             s += str(self.whenExpr)
@@ -922,14 +929,10 @@ class SyntaxScope:
     def get_my_userOp(self):
         """返回此作用域对应的userOp作用域"""
         if self.type == "package": raise Exception(f"{self.name}是一个package")
-        if getattr(self, "op_scope", None) is None:
-            op_scope = self
-            while op_scope.type != "function" and op_scope.type != "node":
-                op_scope = op_scope.prevScope
-            self.op_scope = op_scope
-            return op_scope
-        else:
-            return self.op_scope
+        op_scope = self
+        while op_scope.type != "function" and op_scope.type != "node":
+            op_scope = op_scope.prevScope
+        return op_scope
 
     def get_my_package(self):
         if self.type == "package":
@@ -985,6 +988,11 @@ class SyntaxScope:
          Parameters:
             type_path_id: 指向某个type_decl,可以没有：：
         """
+        if self.type!="package":
+            userOp=self.get_my_userOp()
+            type_symbol=userOp.get_type_var_symbol(type_path_id)
+            if type_symbol is not None:
+                return type_symbol
         tar_package, name = self.resolve_path_id(type_path_id)
         return tar_package.get_type_symbol(name)
 
@@ -1628,8 +1636,8 @@ class SyntaxUserOp(SyntaxDataDefScope):
     # '''中间参数，是一个变量声明列表'''
     numericKind: str = None
     '''如果是模板方法则填入对应类型，不是则为None'''
-    whereDecl: list[str] = None
-    '''声明的模板类型'''
+    typeVarSymbolTable: dict[str:SyntaxTypeSymbol]
+    '''声明的模板类型,使用类型变量来记录模板类型，方便查找与替换'''
     specDecl: str = None
     '''声明的SPECIALIZE类型，存放一个pathID，没有声明则为None'''
     dependentFunctions: list
@@ -1647,8 +1655,8 @@ class SyntaxUserOp(SyntaxDataDefScope):
         super().__init__(type, name, prevscope, visibility)
         self.inParams = list()
         self.outParams = list()
+        self.typeVarSymbolTable=dict()
         # self.tmpParams = list()
-        self.whereDecl = list()
         self.sizeDecl = dict()
         self.dependentFunctions = list()
         self.output2inputDependents = list()
@@ -1706,6 +1714,13 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def isTemplate(self):
         return self.numericKind is not None
 
+    def add_type_var(self,type_var_name):
+        self.typeVarSymbolTable[type_var_name]=\
+            SyntaxTypeSymbol(name=type_var_name,syntaxType=SyntaxType(self.numericKind))
+
+    def get_type_var_symbol(self,type_var_name):
+        return self.typeVarSymbolTable.get(type_var_name)
+
     def add_apply_expr(self, expr: SyntaxExpr):
         self.apply_exprs.append(expr)
 
@@ -1747,7 +1762,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         s += ")"
         if self.numericKind:
             s += " where "
-            for decl in self.whereDecl:
+            for decl in self.typeVarSymbolTable.keys():
                 s += decl + ","
             s = s[:-1]
             s += " is " + self.numericKind

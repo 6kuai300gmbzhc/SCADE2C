@@ -912,10 +912,7 @@ def generate_operator_Path_id(operator: SyntaxOperator, parameters: list[SyntaxE
     global_name = applied_userOp.get_global_name()
     if applied_userOp.type == "node":
         pass
-    if global_name == "Exists":
-        return "Exists()"
-    else:
-        return [global_name + "()", global_name + "()"]
+    return "tem()"
 
 
 @register_operator_handler("PREFIXOP")
@@ -979,6 +976,7 @@ def generate_userOp_simple_equation(syntaxEquation, syntaxUserOp, code_generator
     lhs_type = lhs_symbol.syntaxType.type
     genEqu = GenEqu(depth)
     genEqu.expr = SyntaxExpr_generate(syntaxEquation.expr, syntaxUserOp, genEqu)
+    print(genEqu.expr)
     code = ""
     code += "".join(genEqu.preEquations)
     code += assign_lhs_to_rhs_expr(syntaxEquation.lhs, genEqu.expr, depth, syntaxUserOp)
@@ -1112,8 +1110,7 @@ def generate_syntax_type_field_decl(typeSymbol, rootPackage):
         if v.type in v.basic_type:
             code += f"kcg_{v.type} {k};\n"
         else:
-            tmpTypeSymbol = SyntaxTypeSymbol(f"tmp_struct_{k}", "public")
-            tmpTypeSymbol.syntaxType = v
+            tmpTypeSymbol = SyntaxTypeSymbol(f"tmp_struct_{k}", v,"public")
             precode = generate_type_symbol(tmpTypeSymbol, rootPackage)
             tmpName = f"tmp_struct_{k}" if len(global_name) == 0 else f"tmp_struct_{k}_{global_name}"
             code += f"{tmpName} {k};\n"

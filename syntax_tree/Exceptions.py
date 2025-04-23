@@ -83,3 +83,11 @@ class NotStaticExprException(Exception):
     def __str__(self):
         return repr(f"{self.value}不适用于static表达式")
 
+class CanNotInstantiateException(Exception):
+    def __init__(self, userOp,param_expr,reason):
+        self.userOp=userOp
+        self.param_expr=param_expr
+        self.reason=reason
+
+    def __str__(self):
+        return repr(f"{self.userOp.get_global_name()}无法就{self.param_expr}进行模板函数实例化,因为{self.reason}")
