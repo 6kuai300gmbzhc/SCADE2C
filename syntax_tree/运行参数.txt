@@ -1,0 +1,6 @@
+-i
+syntax_tree/test/ABC_N.scade
+-m
+ABC_N
+-o
+syntax_tree/test/out
