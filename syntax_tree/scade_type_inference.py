@@ -6,7 +6,7 @@ import functools
 
 from syntax_tree.scade_const_expression import cal_const_expr
 
-
+inferenced_op=list()
 def type_inference(main_operator: SyntaxUserOp):
     """对拓扑排序后，从后向前遍历userOP，进行类型推导
     有主节点的存在，最末端的userOp一定是主节点，且不是模板方法
@@ -15,15 +15,17 @@ def type_inference(main_operator: SyntaxUserOp):
     """
     print("============type inference Begin============")
     type_inference_userOp(main_operator)
+    inferenced_op.reverse()
+    return inferenced_op
 
-inferenced_op=set()
+
 def type_inference_userOp(userOp: SyntaxUserOp):
     """
     类型推导，如果是模板函数要实例化，遍历的时候靠调用的path来找下一个目标函数
     """
     if userOp in inferenced_op:
         return
-    inferenced_op.add(userOp)
+    inferenced_op.append(userOp)
     print(f"开始进行{userOp.get_global_name()}的类型推导")
     type_inference_dataDef(userOp)
     print(f"{userOp.get_global_name()}的类型推导结束")
@@ -48,11 +50,18 @@ def type_inference_control_block(control_block):
         for state in control_block.stateTable.values():
             type_inference_dataDef(state)
             # 然后是状态转移部分
+            for cond_expr,arrow in state.unlessTransitions:
+                type_inference_arrow(cond_expr,arrow,state)
+            for cond_expr,arrow in state.untilTransitions:
+                type_inference_arrow(cond_expr,arrow,state)
+            if state.synchroArrow is not None:
+                type_inference_arrow(None,state.synchroArrow,state)
 
 
 def type_inference_arrow(cond_expr, arrow, data_def):
     if arrow is None: return
     if cond_expr is not None:
+        print(cond_expr)
         type_inference_expr(cond_expr, [SyntaxType("bool")], data_def)
     if arrow.type == "if":
         for (sub_cond_expr, sub_arrow) in arrow.ifExprList:
@@ -74,8 +83,12 @@ def type_inference_equation(equation: SyntaxEquation, data_def: SyntaxDataDefSco
         else:
             lhs_symbol = data_def.get_localVariable_InThisAndPreEnv(lhs)
             if not lhs_symbol:
-                raise UnknownIdentifierException(lhs)
-            equation.add_lhs_type(lhs_symbol.syntaxType)
+                if equation.type=="emission" and data_def.have_signal_InThisAndPreEnv(lhs):
+                    equation.add_lhs_type(SyntaxType("bool"))
+                else:
+                    raise UnknownIdentifierException(lhs)
+            else:
+                equation.add_lhs_type(lhs_symbol.syntaxType)
     # 现在获取了句子左值的所有类型变量，然后将他们分配给expr做推理
     type_inference_expr(equation.expr, equation.lhsTypeList, data_def)
 
@@ -505,6 +518,7 @@ def type_inference_Apply(expr, lhs_type_list: list[SyntaxType], data_def):
     context_list, apply_userOp, actual_lhs_type = type_inference_operator(operator, lhs_type_list, param_expr, data_def)
     if apply_userOp is not None:
         expr.add_applied_Op(apply_userOp, context_list)
+        data_def.get_my_userOp().add_apply_expr(expr)
     expr.set_lhs_type(actual_lhs_type)
     return expr.lhsTypeList
 
@@ -612,6 +626,7 @@ def type_inference_apply_path_id(operator: SyntaxOperator, lhs_type_list: list[S
     # 检查并进行模板实例化
     if tar_userOp.isTemplate():
         tar_userOp=instantiate_template_function(tar_userOp, param_expr.lhsTypeList, input_types, param_expr)
+        operator.appliedUserOp=tar_userOp
 
     returned_types = [param.syntaxType for param in tar_userOp.outParams]
     if not all(g <= r for g, r in zip(returned_types, lhs_type_list)):

@@ -157,6 +157,19 @@ class SyntaxOperator(HasRhs):
     def set_array_length(self, length):
         self.array_length = length
 
+    def __deepcopy__(self, memodict=None):
+        if memodict is None:
+            memodict=dict()
+        if id(self) in memodict.keys():
+            return memodict[id(self)]
+        tmp_appliedUserOp=self.appliedUserOp
+        self.appliedUserOp=None
+        tar_op=copy.deepcopy(self,memodict)
+        tar_op.appliedUserOp=tmp_appliedUserOp
+        self.appliedUserOp=tmp_appliedUserOp
+        return tar_op
+
+
     def __repr__(self):
         s = "operator::"
         s += self.subtype + "("
@@ -238,7 +251,6 @@ class SyntaxExpr(HasRhs):
 
     def set_symbol(self, symbol):
         self.syntaxSymbol = symbol
-
     def add_applied_Op(self, applied_Op, context_list):
         self.appliedOpDict[applied_Op] = context_list
 
@@ -418,6 +430,7 @@ class SyntaxType:
     '''类型，int8，枚举类型等field_decl,array,signed,unsigned,typevar,path_id,enum
     见文档
     typevar类型应该被当作path_id来对待
+    额外加入other存储不在scade内部的类型，即函数的inc，outc等
     '''
 
     sizeExpr: SyntaxExpr = None

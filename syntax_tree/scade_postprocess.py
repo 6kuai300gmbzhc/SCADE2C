@@ -59,7 +59,7 @@ def dependent_graph_str(graph):
     return out
 
 
-def post_process(root_scope: SyntaxPackageScope,main_operator_path:str) -> None:
+def post_process(root_scope: SyntaxPackageScope,main_operator_path:str):
     """后处理流程，遍历语法树，进行一些修改方便代码生成"""
     print("============postProcess Begin============")
 
@@ -71,22 +71,22 @@ def post_process(root_scope: SyntaxPackageScope,main_operator_path:str) -> None:
         raise UnknownIdentifierException(main_operator_path)
     # 从主节点开始建图
     build_userOp_dependent_graph(main_operator,userOp_dependent_graph)
-    sorted_userOp = userOp_dependent_graph.topological_sort()
-    if not sorted_userOp:
+    sorted_order = userOp_dependent_graph.topological_sort()
+    if not sorted_order:
         raise UserOpDependentException(dependent_graph_str(userOp_dependent_graph))
-    print("函数拓扑排序完成，遍历顺序为:" + str([op.get_global_name() for op in sorted_userOp]))
+    print("函数拓扑排序完成，遍历顺序为:" + str([op.get_global_name() for op in sorted_order]))
 
     post_process_package(root_scope,userOp_dependent_graph)
     # 把没用到的userOp都删了
 
-    for userOp in sorted_userOp:
+    for userOp in sorted_order:
         post_process_userOp(userOp)
         # 按拓扑顺序去遍历各个函数，而非按package的顺序
         # 前面已经处理过open package，所以应该不会出现找不到引用的情况
-    type_inference.type_inference(main_operator) # 主节点在最后一个，是必然的
+    instantiated_op_order=type_inference.type_inference(main_operator) # 主节点在最后一个，是必然的,即进行一个反向的遍历
 
     print("============postProcess END============")
-    print(root_scope)
+    return instantiated_op_order
 
 
 def post_process_package(package: SyntaxPackageScope,userOpGraph:Graph) -> None:

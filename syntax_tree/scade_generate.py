@@ -8,20 +8,6 @@ lhs_type = ""
 
 import syntax_tree.automaton_generate as automaton_generate
 
-type_global=[]
-cf=0
-
-def find_const_value(scope, const_name):
-    if scope is None:
-        return None
-    # 如果当前作用域有 constSymbolTable，尝试查找常量
-    if hasattr(scope, 'constSymbolTable') and const_name in scope.constSymbolTable:
-        const_symbol = scope.constSymbolTable[const_name]
-        if not const_symbol.isImported:  # 如果不是导入的常量
-            return SyntaxExpr_generate(const_symbol.valueExpr, scope, GenEqu())
-    # 递归查找父作用域
-    return find_const_value(scope.prevScope, const_name)
-
 class GenerateCode:
     def __init__(self, rootNode, mainNode, outputDir):
         self.rootNode = rootNode
@@ -97,7 +83,7 @@ class GenerateCode:
         global_name = node.get_global_name()
         code = "typedef struct{\n"
         for para in node.inParams:
-            code += f"{para.syntaxType.change_name()} {para.name};\n"
+            code += f"    {para.syntaxType.change_name()} {para.name};\n"
         code += f"}}{node.get_inC_name()};\n"
         return code
 
@@ -156,7 +142,7 @@ class GenerateCode:
         with open(target_file, "w") as target:
             target.write(head_content)
 
-    def generate_variable_decl(self, symbol, symbol_name):
+    def generate_variable_decl(self, symbol, symbol_name,depth:int=1):
         """生成类型生命代码，并向type.h,.c中添加对应类型的声明"""
         symbol_type = symbol.syntaxType
         c_type_name = symbol_type.change_name()
@@ -169,7 +155,7 @@ class GenerateCode:
         else:
             # todo 加入其他的变量声明
             pass
-        return f"{c_type_name} {symbol_name};\n"
+        return f"{'    '*depth}{c_type_name} {symbol_name};\n"
 
     def generate_src_func_file(self, node, body_content):
         global_name = node.get_global_name()
@@ -180,7 +166,7 @@ class GenerateCode:
         for name, symbol in node.localSymbolTable.items():
             src_content += self.generate_variable_decl(symbol, name)
         for signal in node.signalSymbolSet:
-            src_content += f"kcg_bool {signal};\n"
+            src_content += f"    kcg_bool {signal};\n"
         for paraSymbol in node.tmpParams:
             if paraSymbol.isOutput == False:
                 src_content += self.generate_variable_decl(paraSymbol, paraSymbol.name)
@@ -239,6 +225,13 @@ class GenerateCode:
     def generate_src_file(self, node, body_content):
         global_name = node.get_global_name()
         src_content = f'''#include "kcg_consts.h"\n#include "{global_name}.h"\n'''
+        # 然后include所调用的其他函数的头文件
+        applied_functions=set()
+        for apply_expr in node.apply_exprs:
+            for applied_function in apply_expr.appliedOpDict.keys():
+                if applied_function in applied_functions:continue
+                applied_functions.add(applied_function)
+                src_content+=f'''#include "{applied_function.get_global_name()}.h"\n'''
         src_content += self.generate_src_func_file(node, body_content)
         src_content += self.generate_src_init(node)
         src_content += self.generate_src_reset(node)
@@ -255,6 +248,7 @@ class GenerateCode:
 
 class GenEqu:
     expr: str
+    '''可直接用于赋值的代码'''
     preEquations: list
     '''若需要使用到中间变量，中间变量的定义需要在该equation之前，是一个列表，列表里的元素是一个C语句'''
     postEquations: list
@@ -909,6 +903,22 @@ def generate_operator_map(operator: SyntaxOperator, parameters: list[SyntaxExpr]
     genEqu.add_preEquations(pre_code)
     return tmp_output_names
 
+def generate_inC_and_register(data_def,applied_userOp):
+    """生成一个inc对象并注册,inc肯定是一个临时变量"""
+    inc_type=SyntaxType("other")
+    inc_type.value=applied_userOp.get_inC_name()
+    inc_symbol,inc_name=generate_tmp_symbol_and_register(data_def,inc_type,"inC")
+    return inc_name
+def get_or_generate_outc(data_def,applied_userOp):
+    if applied_userOp.hasInternalState:
+        # 有内存，在被调用函数的outc里面
+        outC_name=f"outC->{applied_userOp.get_outC_name()}"
+    else:
+        # 没内存，就要自己生成一个临时变量outC
+        inc_type = SyntaxType("other")
+        inc_type.value = applied_userOp.get_inC_name()
+        outc_symbol, outC_name = generate_tmp_symbol_and_register(data_def, inc_type, "outC")
+    return outC_name
 
 @register_operator_handler("Path_id")
 def generate_operator_Path_id(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope,
@@ -924,10 +934,10 @@ def generate_operator_Path_id(operator: SyntaxOperator, parameters: list[SyntaxE
     global_name = applied_userOp.get_global_name()
 
     code = ""
-    tmp_inC_name = data_def.generate_name_for_tmp("inC")
-    tmp_outC_name = data_def.generate_name_for_tmp("outC")
+    # inC需要自己进行构造，outC可能出现在此函数的outC中
+    tmp_inC_name = generate_inC_and_register(data_def,applied_userOp)
+    tmp_outC_name = get_or_generate_outc(data_def, applied_userOp)
 
-    code += f"{applied_userOp.get_inC_name()} {tmp_inC_name};\n"
     code += f"{applied_userOp.get_outC_name()} {tmp_outC_name};\n"
     for idx, param in enumerate(parameters):
         param_code = SyntaxExpr_generate(param, data_def, genEqu)
@@ -1031,7 +1041,7 @@ def generate_userOp_guarantee(syntaxEquation, syntaxUserOp, code_generator: Gene
 def generate_userOp_emission(syntaxEquation, syntaxUserOp, code_generator: GenerateCode, depth=1):
     code = ""
     for signal in syntaxEquation.lhs:
-        code += f"{signal} = kcg_true;\n"
+        code += f"{'    '*depth}{signal} = kcg_true;\n"
     return code
 
 
@@ -1252,12 +1262,12 @@ def generate_data_def(data_def: SyntaxDataDefScope, code_generator: GenerateCode
         else:
             raise ValueError(f"syntaxUserOp_generate error , type : {type_}")
     for name, symbol in data_def.localSymbolTable.items():
-        decl_content += code_generator.generate_variable_decl(symbol, name)
+        decl_content += code_generator.generate_variable_decl(symbol, name,depth)
     for signal in data_def.signalSymbolSet:
         decl_content += f"{'    ' * depth}kcg_bool {signal};\n"
     for paraSymbol in data_def.tmpParams:
         if paraSymbol.isOutput == False:
-            decl_content += code_generator.generate_variable_decl(paraSymbol, paraSymbol.name)
+            decl_content += code_generator.generate_variable_decl(paraSymbol, paraSymbol.name,depth)
         if paraSymbol.postExpr != None:
             genEqu = GenEqu()
             if len(genEqu.preEquations) != 0: post_content += f"{'    ' * depth}"
@@ -1289,22 +1299,19 @@ def scade_parse(input_path: str, main_operator: str, output_path: str):
     scade_lexer.set_tokens(string_tokens)
     nodes = parser.parse(strs, lexer=scade_lexer)
 
-    post_process(root_scope, main_operator)
+    userOp_order=post_process(root_scope, main_operator)
+    print("最终进行代码生成的op:")
+    print([op for op in userOp_order])
+    print("有最终的遍历顺序为:")
+    print([op.get_global_name() for op in userOp_order])
     # 后处理流程，在这里进行拓扑排序，类型校验，模板函数实例化等问题，会对语法树进行更新
 
     gen = GenerateCode(root_scope, main_operator, output_path)
     gen.generate_const_file()
     # gen.generate_main_file()
     gen.generate_types_file()
-    stack = deque([root_scope])
-    while stack:
-        tar_package = stack.pop()
-        for k, v in tar_package.userOpTable.items():
-            gen.generate_node_file(v)
-            # gen.generate_head_file(v)
-            # gen.generate_src_file(v)
-        for k, sub_package in tar_package.childScopeTable.items():
-            stack.append(sub_package)
+    for op in userOp_order:
+        gen.generate_node_file(op)
 
     gen.add_code_to_types_file("#endif\n")  # 结束
 

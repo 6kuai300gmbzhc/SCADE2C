@@ -27,11 +27,31 @@ def post_process_state(state: SyntaxState):
     scade_postprocess.post_process_data_def(state)
     dependent_dict = dict()  # key 输出名字，value输入名字
     dependent_dict.update(update_state_dependent_dict(state))
+
+    for cond_expr, arrow in state.unlessTransitions:
+        post_process_arrow(cond_expr, arrow, state)
+    for cond_expr, arrow in state.untilTransitions:
+        post_process_arrow(cond_expr, arrow, state)
+    if state.synchroArrow is not None:
+        post_process_arrow(None, state.synchroArrow, state)
+
     for action in state.actionChildScopeList:
-        scade_postprocess.post_process_data_def(action)
         dependent_dict.update(update_state_dependent_dict(action))
     return dependent_dict
 
+def post_process_arrow(cond_expr,arrow,data_def):
+
+    if arrow is None: return
+    if cond_expr is not None:
+        scade_postprocess.post_process_expr(cond_expr, data_def)
+    if arrow.type == "if":
+        for (sub_cond_expr, sub_arrow) in arrow.ifExprList:
+            post_process_arrow(sub_cond_expr, sub_arrow, data_def)
+        post_process_arrow(None, arrow.elseExpr, data_def)
+    else:
+        if arrow.action:
+            action_scope = data_def.get_childScope(arrow.action)
+            scade_postprocess.post_process_data_def(action_scope)
 
 def update_state_dependent_dict(data_def: SyntaxDataDefScope) -> dict:
     """更新state中输入输出参数的依赖列表，更新存储于dict中"""
