@@ -61,7 +61,6 @@ def type_inference_control_block(control_block):
 def type_inference_arrow(cond_expr, arrow, data_def):
     if arrow is None: return
     if cond_expr is not None:
-        print(cond_expr)
         type_inference_expr(cond_expr, [SyntaxType("bool")], data_def)
     if arrow.type == "if":
         for (sub_cond_expr, sub_arrow) in arrow.ifExprList:
@@ -261,7 +260,7 @@ def type_inference_arith_cast(expr, lhs_type_list: list[SyntaxType], data_def):
 def type_inference_arith_unary(expr, lhs_type_list: list[SyntaxType], data_def):
     tar_expr = expr.objects[1]
     tar_type = type_inference_expr(tar_expr, lhs_type_list, data_def)
-    expr.set_lhs_type([tar_type])
+    expr.set_lhs_type(tar_type)
     # 一元运算符，将目标类型传递下去，然后将实际类型返回，没有需要修改的地方
     return expr.lhsTypeList
 
@@ -375,7 +374,7 @@ def type_inference_tempo(expr, lhs_type_list: list[SyntaxType], data_def):
     handler = inference_tempo_handlers.get(subtype)
     if handler is None:
         raise Exception(f"tempo的{subtype}没实现")
-    handler(expr, lhs_type_list, data_def)
+    return handler(expr, lhs_type_list, data_def)
 
 
 def type_inference_on_groups(sub_exprs: list[SyntaxExpr], lhs_type_list, data_def):
@@ -443,7 +442,7 @@ def type_inference_array_construct(expr, lhs_type_list: list[SyntaxType], data_d
     if given_array_length != required_type.get_size():
         raise TypeMismatchException(expr, f"长度为{given_array_length},但是其真正的长度应该是{required_type.get_size()}", data_def)
     given_type = SyntaxType(tar_type="array")
-    given_type.set_element_and_size(given_element_type, given_array_length)
+    given_type.set_element_and_size(required_type.get_element_type_for_array(), given_array_length)
     expr.set_lhs_type([given_type])
     return expr.lhsTypeList
 
@@ -516,11 +515,20 @@ def type_inference_Apply(expr, lhs_type_list: list[SyntaxType], data_def):
     param_expr = expr.objects[1]
     operator = expr.objects[0]
     context_list, apply_userOp, actual_lhs_type = type_inference_operator(operator, lhs_type_list, param_expr, data_def)
+
     if apply_userOp is not None:
         expr.add_applied_Op(apply_userOp, context_list)
-        data_def.get_my_userOp().add_apply_expr(expr)
+        add_apply_expr_to_state_and_op(data_def,expr)
     expr.set_lhs_type(actual_lhs_type)
     return expr.lhsTypeList
+
+def add_apply_expr_to_state_and_op(data_def:SyntaxDataDefScope,expr):
+    """向这个作用域上层的state与op作用域添加这个函数调用表达式"""
+    cur_scope=data_def
+    while cur_scope.type!="package":
+        if isinstance(cur_scope,SyntaxUserOp) or isinstance(cur_scope,SyntaxState):
+            cur_scope.apply_exprs.append(expr)
+        cur_scope=cur_scope.prevScope
 
 
 @inference_expr_handler("generalized_get")
@@ -586,7 +594,8 @@ def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[
         actual_lhs_list = given_non_map + [SyntaxType(tar_type="array").set_element_and_size(t, required_length)
                                            for t in given_map]
     operator.set_lhs_type(actual_lhs_list)
-    return context_list.insert(0, required_length), apply_userOp, actual_lhs_list
+    context_list.insert(0, required_length)
+    return context_list, apply_userOp, actual_lhs_list
 
 
 @inference_operator_handler("PREFIXOP")

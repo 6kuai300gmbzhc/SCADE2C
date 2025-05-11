@@ -47,6 +47,9 @@ data_def包含equation包含control_block包含状态机/clocked_block包含deta
 
 def p_program(p):
     'Program : Decls_zero_or_more'
+    print("统计")
+    for k,v in d.items():
+        print(f"{k},{v}")
     print("======符号表======")
     print(root_scope)
 
@@ -925,7 +928,7 @@ def p_before_if_block(p):  # 切换作用域
 
 def p_if_block(p):
     'If_block : IF Expr THEN If_block_1 ELSE If_block_1'
-    p[0] = SyntaxIfBlock(expr=p[2], thenBlock=p[4], elseBlock=p[6])
+    p[0] = SyntaxIfBlock(expr=p[2], thenBlock=p[4], elseBlock=p[6],scope=cur_scope)
 
 
 def p_if_block_1(p):
@@ -1002,7 +1005,7 @@ def p_scope(p):
 def p_eqs(p):
     'Eqs : LET Equation_zero_or_more_with_semicolon TEL'
 
-
+d=dict()
 # expr，表达式的右值，返回Syntaxexpr
 def p_expr(p):
     '''Expr : Id_expr
@@ -1018,6 +1021,11 @@ def p_expr(p):
     | Apply_expr
     | Mixed_constructor'''
     p[0] = p[1]
+    _type=p[0].type+"_"+p[0].subType
+    if d.get(_type) is None:
+        d[_type]=1
+    else:
+        d[_type]+=1
 
 
 def p_id_expr(p):
@@ -1034,6 +1042,7 @@ def p_id_expr(p):
         p[0] = SyntaxExpr(type="Id_expr", subtype="lastSinglequoteLv6id",scope=cur_scope)
         p[0].add_object(p[2].value + p[3].value)
         # 为什么我要在这里把'加上？？现在删不掉了
+        cur_scope.hasInternalState_InThisAndPreEnv()
 
 def p_atom(p):
     '''Atom : Bool_atom

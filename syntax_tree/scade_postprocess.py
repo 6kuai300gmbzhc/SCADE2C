@@ -1,8 +1,10 @@
 from syntax_tree.SyntaxClass import *
 import syntax_tree.graph
 import itertools
-import syntax_tree.automaton_post_process as Post_automaton
+import syntax_tree.control_block_post_process as control_block_post_process
 import scade_type_inference as type_inference
+from syntax_tree.scade_const_expression import cal_const_expr
+
 """
 后处理流程，在预处理过程完成对语法树的构建后，进行这个流程来进行排序，与其他相关的处理
 代码生成过程应该只生成代码，而不对语法树结构有任何过多的修改，所以后处理流程负责将语法树的结构修正为可以直接逐句生成代码的方式
@@ -225,6 +227,7 @@ def post_process_equation(equation: SyntaxEquation, data_def) -> None:
         equation.rhsList = equation.expr.rhsList
         # 将equation的返回值与expr的返回值相对应
     else:
+        # controlblock要
         control_block = data_def.get_childScope(equation.controlBlockID)
         rhs_dict=post_process_control_block(control_block)
         for lhs in equation.lhs:
@@ -236,6 +239,7 @@ def post_process_equation(equation: SyntaxEquation, data_def) -> None:
         print(equation.lhs)
         print(equation.rhsList)
         print(equation.lhs2RhsDict)
+        raise Exception(f"equation{equation}的左右值长度不一样")
     for i in range(len(equation.lhs)):
         equation.lhs2RhsDict[equation.lhs[i]] = equation.rhsList[i]
 
@@ -259,8 +263,13 @@ def post_process_control_block(control_block):
 
 @post_control_block_handler('automaton')
 def post_automaton(automaton: SyntaxAutomaton):
-    return Post_automaton.post_process(automaton)
+    #返回一个字典{左值变量名字->[依赖的右值变量名字]}
+    return control_block_post_process.post_process_automaton(automaton)
 
+@post_control_block_handler('if_block')
+def post_if_block(if_block: SyntaxIfBlock):
+    #返回一个字典{左值变量名字->[依赖的右值变量名字]}
+    return control_block_post_process.post_process_if_block(if_block)
 
 post_process_expr_handlers = {}
 
@@ -360,6 +369,13 @@ def post_tempo_expr(expr: SyntaxExpr, data_def):
     elif expr.subType == "FBY":
         expr.rhsList=expr.objects[2].rhsList
         expr.returnNum = expr.objects[0].returnNum
+        # 这里加一个优化，受不了了，如果fby(a;1;b)则转为b->pre a
+        if cal_const_expr(expr.objects[1]).value==1:
+            pre_sub_expr=SyntaxExpr("List_expr","List_expr",data_def,
+                                    objects=[[SyntaxExpr("Tempo_expr","PRE",data_def,[expr.objects[0]])]])
+            post_tempo_expr(pre_sub_expr,data_def)
+            expr.subType="ARROW"
+            expr.objects=[expr.objects[2],pre_sub_expr]
     elif expr.subType == "ARROW":
         expr.returnNum = expr.objects[0].returnNum
         expr.rhsList = union_rhsLists([expr.objects[0].rhsList, expr.objects[1].rhsList])
@@ -396,7 +412,7 @@ def post_List_expr(expr: SyntaxExpr, data_def):
             new_object_list.append(sub_expr)
     expr.objects[0] = new_object_list
     expr.returnNum=return_num
-def union_rhsLists(rhsList_list:list[list[set[str]]]):
+def union_rhsLists(rhsList_list:list[list[set[str]]])->list[set[str]]:
     """把输入expr列表的右值列表按位取并集"""
     length=len(rhsList_list[0])
     out_list=[set()]*length
@@ -408,13 +424,11 @@ def union_rhsLists(rhsList_list:list[list[set[str]]]):
     return out_list
 def add_rhs_to_each(src_list,dst_list):
     """把src中的所有右值逐个加到dst里面"""
-    if len(src_list)!=1:
-        raise Exception(f"{src_list}长度不是1")
-    tar_rhs=src_list[0]
-    output=dst_list.copy()
+    tar_rhs=set().union(*src_list)
+    output=list()
     for rhs in dst_list:
         output.append(rhs|tar_rhs)
-    return dst_list
+    return output
 @post_expr_handler('Switch_expr')
 def post_Switch_expr(expr,data_def):
     if expr.subType=="IF":
@@ -425,6 +439,7 @@ def post_Switch_expr(expr,data_def):
         expr.rhsList=rhs_list
     else:
         expr.returnNum=expr.objects[1][1].returnNum
+        raise Exception("case这里后处理没做呢")
 
 @post_expr_handler('Apply_expr')
 def post_Apply_expr(expr, data_def):

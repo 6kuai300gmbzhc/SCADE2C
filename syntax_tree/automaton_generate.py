@@ -309,19 +309,29 @@ def generate_switch_act(automaton: SyntaxAutomaton, code_generator: scade_genera
     # 行动枚举，执行当前状态下的代码，然后做弱转移
     switch_act = f"{'    ' * (depth)}switch ({get_state_act(automaton)}){{\n"
     for state_name, state in automaton.stateTable.items():
+        data_def_code=scade_generate.generate_data_def(state, code_generator, depth + 2)
         switch_act += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}:{{\n"
 
-        if state.hasInternalState:
+        if state.hasInternalState or\
+            any([applied_expr.appliedOp.hasInternalState for applied_expr in state.apply_exprs]):
             # 如果此状态有内存，则加上一个重置操作,即如果rest_act，则设置init为true，然后重置操作，然后将init为false
             switch_act += f"{'    ' * (depth + 2)}if({get_reset_act(automaton)}){{\n"
+
+            for applied_expr in state.apply_exprs:
+                if not applied_expr.appliedOp.hasInternalState: continue
+                depth = 1
+                # todo 调用函数情况为数组的reset过程，参考array初始化
+                switch_act += f"{'    ' * (depth + 3)}{applied_expr.appliedOp.get_global_name()}_reset(&(outC->{applied_expr.appliedOpOutCName}));\n"
+
             for initSymbol in state.initSymbolSet:
                 switch_act += f"{'    ' * (depth + 3)}outC->{initSymbol} = kcg_true;\n"
-            switch_act += f"{'    ' * (depth + 3)}outC->{state.initSymbol} = kcg_true;\n"
+            if state.initSymbol:
+                switch_act += f"{'    ' * (depth + 3)}outC->{state.initSymbol} = kcg_true;\n"
             switch_act += f"{'    ' * (depth + 2)}}}\n"
             # 这里接如果为init则进行的初始化操作
 
         # 这里添加代码，调用data_def的代码生成逻辑
-        switch_act += scade_generate.generate_data_def(state, code_generator, depth + 2)
+        switch_act += data_def_code
         # 然后是弱转移部分
         switch_act += generate_state_weak_transitions(automaton, state, code_generator, depth + 2)
         if state.hasInternalState:
@@ -341,7 +351,7 @@ def generate_reset(automaton: SyntaxAutomaton) -> str:
     """生成对应的reset函数
     只有第一层的状态机有它的rest函数，嵌套的情况则不一样
     """
-    return f"outC->{get_state_nxt(automaton)} = {get_state_enum_name(automaton.get_init_state())};"
+    return f"outC->{get_state_nxt(automaton)} = {get_state_enum_name(automaton.get_init_state())};\n"
 
 
 def generate_state_nxt_for_head(automaton: SyntaxAutomaton) -> str:

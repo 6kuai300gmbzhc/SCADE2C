@@ -39,6 +39,37 @@ class SyntaxUserOp:
     pass
 
 
+def exclude_from_deepcopy(*exclude_attributes):
+    """
+    在类中添加一个特殊属性 _exclude_from_deepcopy，
+    并重写 __deepcopy__ 方法以排除指定的成员变量。
+    """
+
+    def decorator(cls):
+        # 添加一个特殊属性来存储需要排除的成员变量名称
+        cls._exclude_from_deepcopy = exclude_attributes
+
+        # 重写 __deepcopy__ 方法
+        def __deepcopy__(self, memo=None):
+            if memo is None:
+                memo = dict()
+            # 创建一个新实例
+            new_instance = cls.__new__(cls)
+            memo[id(self)] = new_instance
+
+            # 遍历实例的 __dict__，深拷贝所有属性，但排除指定的属性
+            for attr_name, attr_value in self.__dict__.items():
+                if attr_name not in cls._exclude_from_deepcopy:
+                    setattr(new_instance, attr_name, copy.deepcopy(attr_value, memo))
+            return new_instance
+
+        # 将重写的 __deepcopy__ 方法绑定到类上
+        cls.__deepcopy__ = __deepcopy__
+        return cls
+
+    return decorator
+
+
 class ConstValue:
     """在expr间传递值的类，封装类型与值"""
     type: SyntaxType = None
@@ -87,7 +118,7 @@ class HasRhs:
             rhs:右值列表,str格式
         """
         if rhs is None or not rhs:
-            self.rhsList=[set()]
+            self.rhsList = [set()]
         else:
             self.rhsList = [set(rhs)]
 
@@ -120,7 +151,7 @@ class HasRhs:
         """
         self.lhsTypeList = type_list
 
-
+@exclude_from_deepcopy("appliedUserOp")
 class SyntaxOperator(HasRhs):
     '''在Expr中的Apply_expr中的调用头部分，可以嵌套自己'''
     subtype: str
@@ -130,7 +161,7 @@ class SyntaxOperator(HasRhs):
 
     appliedUserOp: SyntaxUserOp
     '''为path_id时有效，保存了指向调用的userop的指针'''
-    array_length:int
+    array_length: int
     '''为map fold等类型时有效，保存了对应数组的长度'''
     prefix_op_2_expr_dict = {
         # 双目
@@ -157,19 +188,6 @@ class SyntaxOperator(HasRhs):
     def set_array_length(self, length):
         self.array_length = length
 
-    def __deepcopy__(self, memodict=None):
-        if memodict is None:
-            memodict=dict()
-        if id(self) in memodict.keys():
-            return memodict[id(self)]
-        tmp_appliedUserOp=self.appliedUserOp
-        self.appliedUserOp=None
-        tar_op=copy.deepcopy(self,memodict)
-        tar_op.appliedUserOp=tmp_appliedUserOp
-        self.appliedUserOp=tmp_appliedUserOp
-        return tar_op
-
-
     def __repr__(self):
         s = "operator::"
         s += self.subtype + "("
@@ -179,7 +197,7 @@ class SyntaxOperator(HasRhs):
         s += ")"
         return s
 
-
+@exclude_from_deepcopy("appliedOp")
 class SyntaxExpr(HasRhs):
     """保存expr，右值表达式，可以递归的自己包含自己"""
     type: str
@@ -207,12 +225,25 @@ class SyntaxExpr(HasRhs):
     syntaxSymbol = None
     '''Id_expr时，存储的对应symbol，会用到它的,ID没有，很合理'''
 
-    appliedOpDict: dict[SyntaxUserOp:list[int]]
-    """需要统计每个userOP调用其他函数的数量,仅在为Apply_expr,且调用了某个函数时有效
-    让operator返回他调用的函数情况！一个字典，key为userOp,value为list，逐层保存，比如map (map func<<2>>)<<3>>
-    会得到一个字典：{func:[3,2]}
-    一个expr只会调用一个op，所以这个字典肯定只有一对key-value
+    appliedOp: SyntaxUserOp = None
+    """
+    仅在为Apply_expr,且调用了某个函数时有效
+    让operator返回他调用的函数情况，保存了被调用的目标函数是什么
     在类型推导环节填写
+    """
+    appliedOpContextList: list[int]
+    """
+    仅在为Apply_expr,且调用了某个函数时有效
+    让operator返回他调用的函数情况，比如map (map func<<2>>)<<3>>
+    会得到[3,2]
+    在类型推导环节填写
+    """
+    appliedOpOutCName: str
+    """
+    很蠢，但是又想不到别的方法
+    仅在为Apply_expr,且调用了某个node类型的op时有效
+    这个变量存储被调用的函数在outC内的名字,为了防止重名
+    若调用了function，则现场生成临时变量，不需要这个结构
     """
     returnNum: int = 1
     """这个表达式返回的值的数量，默认为1
@@ -240,8 +271,8 @@ class SyntaxExpr(HasRhs):
         else:
             self.objects = objects
         self.scope = scope
-        self.appliedOpDict = dict()
         self.returnNum = returnNum
+        self.appliedOpContextList=list()
 
     def add_object(self, tar_object, index: int = None):
         if index is None:
@@ -251,8 +282,10 @@ class SyntaxExpr(HasRhs):
 
     def set_symbol(self, symbol):
         self.syntaxSymbol = symbol
+
     def add_applied_Op(self, applied_Op, context_list):
-        self.appliedOpDict[applied_Op] = context_list
+        self.appliedOp = applied_Op
+        self.appliedOpContextList = context_list
 
     def __repr__(self):
         s = ""
@@ -280,7 +313,7 @@ class SyntaxExpr(HasRhs):
             given_type = 'bool'
             given_value = content == "true"
         elif subtype == "integernum":
-            #也可以转为float
+            # 也可以转为float
             given_type = 'numeric'
             given_value = int(content, 0)
         elif subtype == "floatnum":
@@ -343,7 +376,7 @@ class SyntaxEquation(HasRhs):
     scope: SyntaxDataDefScope
     '''这个句子所属于的作用域'''
 
-    def __init__(self, type: str, lhs: list, lineno: int=-1):
+    def __init__(self, type: str, lhs: list, lineno: int = -1):
         super().__init__()
         self.type = type
         self.lhs = lhs
@@ -467,11 +500,11 @@ class SyntaxType:
         'float': {'float32', 'float64'}
     }
 
-    def __init__(self, tar_type: str,scope=None) -> None:
+    def __init__(self, tar_type: str, scope=None) -> None:
         self.type = tar_type
         self._size = None
-        self.scope=scope
-        self._real_type=None# 给path_id的缓存
+        self.scope = scope
+        self._real_type = None  # 给path_id的缓存
 
     def __repr__(self):
         s = ""
@@ -495,19 +528,28 @@ class SyntaxType:
         if self.value:
             s += self.value + " "
             try:
-                s+=self.get_real_type()
+                s += self.get_real_type()
             except Exception as e:
-                s+=""
+                s += ""
         return s
 
     def change_name(self):
         if self.type == "array":
-            return f'array_{self.arrayType.type}_{self.get_size()}'
-        if self.type=="path_id" or self.type=="typevar":
+            return f'array_{self.arrayType.change_name()}_{self.get_size()}'
+        if self.type == "path_id" or self.type == "typevar":
             return self.resolve_path_id().change_name()
-        if self.type=="enum":
+        if self.type == "enum":
             return f"{self.name}_{self.scope.get_global_name()}"
         return f'kcg_{self.type}' if self.type in self.basic_type else self.value
+
+    def change_name_cast(self):
+        if self.type == "array":
+            raise Exception("array不适应于cast操作")
+        if self.type == "path_id" or self.type == "typevar":
+            return self.resolve_path_id().change_name_cast()
+        if self.type == "enum":
+            return f"{self.name}_{self.scope.get_global_name()}"
+        return f'kcg_lit_{self.type}' if self.type in self.basic_type else self.value
 
     def generate_init_expr(self):
         '''生成这个类型变量的初始值，给init函数准备的'''
@@ -515,10 +557,10 @@ class SyntaxType:
             return "kcg_true"
         elif self.type in self.basic_type:
             return f"kcg_lit_{self.type}(0)"
-        elif self.type=="path_id" or self.type=="typevar":
+        elif self.type == "path_id" or self.type == "typevar":
             return self.resolve_path_id().generate_init_expr()
-        elif self.type=="enum":
-            default_value=self.enumList[0]
+        elif self.type == "enum":
+            default_value = self.enumList[0]
             return default_value.change_name()
             # 我也不知道应该生成什么，相信后人的智慧
             # 我恨过去的自己
@@ -534,7 +576,6 @@ class SyntaxType:
         if tar_type.type == "any": return True
         cur_type = self.get_real_type()
         dst_type = tar_type.get_real_type()
-
         if dst_type in self.extend_type:
             return cur_type in self.hierarchy_dict[dst_type]
         else:
@@ -564,7 +605,7 @@ class SyntaxType:
 
     def get_real_type(self):
         if self.type == "path_id" or self.type == "typevar":
-            return self.resolve_path_id().type
+            return self.resolve_path_id().get_real_type()
         else:
             return self.type
 
@@ -572,12 +613,13 @@ class SyntaxType:
         return self.get_real_type() in self.basic_type
 
     def resolve_path_id(self):
-        if self.type!="path_id" and self.type!="typevar":
+        if self.type != "path_id" and self.type != "typevar":
             raise Exception(f"{self}不是pathId或者typevar,而是{self.type}")
-        type_symbol=self.scope.check_and_get_type_symbol(self.value)
+        type_symbol = self.scope.check_and_get_type_symbol(self.value)
         if type_symbol is None:
             raise UnknownIdentifierException(f"找不到{self.value}，在{self.scope.get_global_name()}内")
         return type_symbol.syntaxType
+
     def get_size(self):
         '''计算size表达式，得到一个int值'''
         if self._size is None:
@@ -586,7 +628,7 @@ class SyntaxType:
             elif self.type == "array":
                 from syntax_tree.scade_const_expression import cal_const_expr
                 const_value = cal_const_expr(self.sizeExpr)
-                if not const_value.type_belong_to(SyntaxType("integer")):
+                if const_value.type_belong_to(SyntaxType("numeric")) and const_value.type_belong_to(SyntaxType("float")):
                     raise NotStaticExprException(self.sizeExpr)
                 size = const_value.value
             elif self.type == "enum":
@@ -628,9 +670,9 @@ class SyntaxTypeSymbol:
     numericKind: str = None
     '''类型为imported时有效，存储了引用的类型'''
 
-    def __init__(self, name: str, syntaxType:SyntaxType or None,visibility: str="public"):
+    def __init__(self, name: str, syntaxType: SyntaxType or None, visibility: str = "public"):
         self.name = name
-        self.syntaxType=syntaxType
+        self.syntaxType = syntaxType
         self.visibility = visibility
 
     def __repr__(self):
@@ -656,7 +698,7 @@ class SyntaxConstSymbol:
     isImported: bool
     '''是不是imported'''
 
-    scope:SyntaxScope
+    scope: SyntaxScope
     '''此变量声明时所处于的scope，应该是package'''
 
     syntaxType: SyntaxType
@@ -672,10 +714,15 @@ class SyntaxConstSymbol:
     也存储了枚举类型值
     '''
 
-    def __init__(self, name: str, scope,visibility: str = "public", imported=False):
+    used: bool=False
+    '''
+    这个变量有没有被用过，没用过的不会参与生成
+    '''
+
+    def __init__(self, name: str, scope, visibility: str = "public", imported=False):
         self.name = name
         self.visibility = visibility
-        self.scope=scope
+        self.scope = scope
         self.__value = None
         self.isImported = imported
 
@@ -699,8 +746,11 @@ class SyntaxConstSymbol:
 
     def set_value(self, value):
         self.__value = value
+
     def change_name(self):
         return f"{self.name}_{self.scope.get_global_name()}"
+
+
 class SyntaxSensorSymbol:
     name: str
     '''自定义变量名字'''
@@ -885,7 +935,7 @@ class SyntaxScope:
     def add_childScope(self, childScope: SyntaxScope) -> None:
         self.childScopeTable[childScope.name] = childScope
 
-    def get_childScope(self, scopeName) -> SyntaxScope:
+    def get_childScope(self, scopeName) -> SyntaxScope or None:
         if scopeName in self.childScopeTable.keys():
             return self.childScopeTable[scopeName]
         else:
@@ -919,9 +969,9 @@ class SyntaxScope:
             self.initVar = SyntaxVariableSymbol(f"{self.initSymbol}", False, False)
             self.initVar.isOutput = True
             self.initVar.syntaxType = SyntaxType("bool")
-            postExpr = SyntaxExpr(type="Atom", subtype="bool_atom", scope=self)
-            postExpr.add_object("true")
-            self.initVar.postExpr = postExpr
+            # postExpr = SyntaxExpr(type="Atom", subtype="bool_atom", scope=self)
+            # postExpr.add_object("false")
+            # self.initVar.postExpr = postExpr
             self.add_tmpSymbol(self.initVar)
         return self.initVar
 
@@ -981,15 +1031,19 @@ class SyntaxScope:
             path_id: 带::的路径，指向某个userop
         """
         target_package, op_name = self.resolve_path_id(path_id)
-        return target_package.get_userOp(op_name)
+        tar_op = target_package.get_userOp(op_name)
+        while tar_op is None or target_package is None:
+            target_package = target_package.prevScope
+            tar_op = target_package.get_userOp(op_name)
+        return tar_op
 
     def check_and_get_constant_param(self, param_path_id):
         """检查这个参数是不是一个常数，如果是则返回syntaxconstSymbol，否则返回None
         注意常数也可能声明在userop里
         """
-        if self.type!="package":
-            userOp=self.get_my_userOp()
-            const_param=userOp.get_size_symbol(param_path_id)
+        if self.type != "package":
+            userOp = self.get_my_userOp()
+            const_param = userOp.get_size_symbol(param_path_id)
             if const_param is not None:
                 return const_param
         tar_package, name = self.resolve_path_id(param_path_id)
@@ -1001,27 +1055,33 @@ class SyntaxScope:
          Parameters:
             type_path_id: 指向某个type_decl,可以没有：：
         """
-        if self.type!="package":
-            userOp=self.get_my_userOp()
-            type_symbol=userOp.get_type_var_symbol(type_path_id)
+        if self.type != "package":
+            userOp = self.get_my_userOp()
+            type_symbol = userOp.get_type_var_symbol(type_path_id)
             if type_symbol is not None:
                 return type_symbol
         tar_package, name = self.resolve_path_id(type_path_id)
         return tar_package.get_type_symbol(name)
 
+    def var_change_name(self, name):
+        return self.get_my_userOp().var_change_name(name)
+
 
 class SyntaxIfBlock:
     conditionExpr: SyntaxExpr
     '''条件语句'''
+    scope: SyntaxDataDefScope
+    '''此block所处scope'''
     thenBlock: object
     '''为str存data_def的ID，或者存一个IfBlock对象'''
     elseBlock: object
     '''为str存data_def的ID，或者存一个IfBlock对象'''
 
-    def __init__(self, expr: SyntaxExpr, thenBlock, elseBlock):
+    def __init__(self, expr: SyntaxExpr, thenBlock, elseBlock,scope):
         self.conditionExpr = expr
         self.thenBlock = thenBlock
         self.elseBlock = elseBlock
+        self.scope=scope
 
     def __repr__(self):
         return self.block2str(0)
@@ -1209,7 +1269,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
 
     def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
         '''递归的找局部变量'''
-        local_symbol=self.get_localVariable(name)
+        local_symbol = self.get_localVariable(name)
         if local_symbol is None:
             return self.prevScope.get_localVariable_InThisAndPreEnv(name)
         else:
@@ -1231,12 +1291,11 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
 
     def generate_name_for_tmp(self, postfix="tmp"):
         '''生成一个没有被用过的变量名，用来代码生成'''
-        count = 1
-
-        name = f"{self.get_global_name()}_{postfix}_{str(count)}"
+        count = 0
+        name = f"{postfix}"
         while self.get_localVariable_InThisAndPreEnv(name) is not None:
             count += 1
-            name = f"{self.get_global_name()}_{postfix}_{str(count)}"
+            name = f"{postfix}_{str(count)}"
         return name
 
     def var_change_name(self, name):
@@ -1251,12 +1310,10 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             else:
                 return symbol.name
         else:
-            # raise Exception("???")
-            symbol=self.check_and_get_constant_param(name)
+            symbol = self.check_and_get_constant_param(name)
             if symbol is None:
                 raise ValueError(f"var_change_name error , name:{name}")
             return symbol.change_name()
-
 
     def get_return_symbolTable(self):
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
@@ -1450,12 +1507,16 @@ class SyntaxState(SyntaxDataDefScope):
     '''同步转移，可为None'''
     actionChildScopeList: list[SyntaxDataDefScope]
     '''该状态下所有arrow中action对应的datadef'''
+    apply_exprs: list[SyntaxExpr]
+    '''记录了这个state下所有函数调用的情况，用来进行reset
+    '''
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
         self.untilTransitions = list()
         self.unlessTransitions = list()
         self.actionChildScopeList = list()
+        self.apply_exprs=list()
 
     def set_synchroArrow(self, synchroArrow: SyntaxArrow):
         self.synchroArrow = synchroArrow
@@ -1668,7 +1729,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         super().__init__(type, name, prevscope, visibility)
         self.inParams = list()
         self.outParams = list()
-        self.typeVarSymbolTable=dict()
+        self.typeVarSymbolTable = dict()
         # self.tmpParams = list()
         self.sizeDecl = dict()
         self.dependentFunctions = list()
@@ -1679,11 +1740,11 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def set_sizeDecl(self, sizeDecl: list):
         # 所有的sizeDecl都是正整数，设置成unsigned类型
         for name in sizeDecl:
-            const_symbol = SyntaxConstSymbol(name=name,scope=self)
+            const_symbol = SyntaxConstSymbol(name=name, scope=self)
             const_symbol.syntaxType = SyntaxType(tar_type="unsigned")
             self.sizeDecl[name] = const_symbol
 
-    def get_size_symbol(self,name):
+    def get_size_symbol(self, name):
         return self.sizeDecl.get(name)
 
     def set_outParams(self, outParams):
@@ -1727,15 +1788,12 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def isTemplate(self):
         return self.numericKind is not None
 
-    def add_type_var(self,type_var_name):
-        self.typeVarSymbolTable[type_var_name]=\
-            SyntaxTypeSymbol(name=type_var_name,syntaxType=SyntaxType(self.numericKind))
+    def add_type_var(self, type_var_name):
+        self.typeVarSymbolTable[type_var_name] = \
+            SyntaxTypeSymbol(name=type_var_name, syntaxType=SyntaxType(self.numericKind))
 
-    def get_type_var_symbol(self,type_var_name):
+    def get_type_var_symbol(self, type_var_name):
         return self.typeVarSymbolTable.get(type_var_name)
-
-    def add_apply_expr(self, expr: SyntaxExpr):
-        self.apply_exprs.append(expr)
 
     def get_inC_name(self):
         return f"inC_{self.get_global_name()}"
@@ -1928,7 +1986,10 @@ class SyntaxPackageScope(SyntaxScope):
         self.groupSymbolTable |= tar_package.groupSymbolTable
 
     def get_const_symbol(self, symbol_name):
-        return self.constSymbolTable.get(symbol_name)
+        const_symbol=self.constSymbolTable.get(symbol_name)
+        if const_symbol is not None:
+            const_symbol.used=True
+        return const_symbol
 
     def get_type_symbol(self, type_name):
         return self.typeSymbolTable.get(type_name)
