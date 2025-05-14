@@ -997,6 +997,14 @@ class SyntaxScope:
             op_scope = op_scope.prevScope
         return op_scope
 
+    def get_my_op_or_state(self):
+        """返回此作用域对应的op或者状态机state的作用域，选取语法树上最近的那个"""
+        if self.type == "package": raise Exception(f"{self.name}是一个package")
+        op_scope = self
+        while op_scope.type != "function" and op_scope.type != "node" and op_scope.type != "state":
+            op_scope = op_scope.prevScope
+        return op_scope
+
     def get_my_package(self):
         if self.type == "package":
             return self

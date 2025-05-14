@@ -87,7 +87,7 @@ def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton
     # 生成arrow中action部分的代码
     if arrow.action is not None:
         data_def_scope = from_state.get_childScope(arrow.action)
-        code += scade_generate.generate_data_def(data_def_scope, code_generator, depth)
+        code +=  code_generator.generate_data_def(data_def_scope, depth)
     if arrow.type != "if":
         # 这里停止递归
         target_state = automaton.get_childScope(arrow.target)
@@ -134,7 +134,7 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
     # 生成arrow中action部分的代码
     if arrow.action is not None:
         data_def_scope = from_state.get_childScope(arrow.action)
-        code += scade_generate.generate_data_def(data_def_scope, code_generator, depth)
+        code +=  code_generator.generate_data_def(data_def_scope, depth)
     if arrow.type != "if":
         # 这里停止递归
         target_state = automaton.get_childScope(arrow.target)
@@ -309,7 +309,7 @@ def generate_switch_act(automaton: SyntaxAutomaton, code_generator: scade_genera
     # 行动枚举，执行当前状态下的代码，然后做弱转移
     switch_act = f"{'    ' * (depth)}switch ({get_state_act(automaton)}){{\n"
     for state_name, state in automaton.stateTable.items():
-        data_def_code=scade_generate.generate_data_def(state, code_generator, depth + 2)
+        data_def_code= code_generator.generate_data_def(state, depth + 2)
         switch_act += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}:{{\n"
 
         if state.hasInternalState or\

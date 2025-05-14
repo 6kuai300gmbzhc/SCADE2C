@@ -174,44 +174,84 @@ class GenerateCode:
             # todo 加入其他的变量声明
             pass
 
-    def generate_src_func_file(self, node, body_content):
-        global_name = node.get_global_name()
-        post_content = ""
-        src_content = ""
-        src_content += f"void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC){{\n"
+    def generate_data_def(self,data_def:SyntaxDataDefScope,depth=0)->str:
+        """对data_def的代码生成
+        应只有最基础的功能，即data_def只作为某个代码块出现
+        包括了变量声明，一般的语句生成，init过程
+        有变量声明就需要有init，因为需要在
+        """
         # localVariable + tmpVariable
-        for name, symbol in node.localSymbolTable.items():
-            src_content += self.generate_variable_decl(symbol, name)
+        decl_content = ""
+        src_content = ""
+        post_content = ""
+        body_content = SyntaxUserOp_generate(data_def, self)
+        # 加入init判断
+        if data_def.initVar and any(tmpSymbol.lastExpr and tmpSymbol.isOutput for tmpSymbol in data_def.tmpParams):
+            src_content += f"{'    ' * depth}if (outC->{data_def.initSymbol}){{\n"
+            for tmpSymbol in data_def.tmpParams:
+                if tmpSymbol.lastExpr and tmpSymbol.isOutput:
+                    src_content += f"{'    ' * (depth + 1)}outC->{tmpSymbol.name} = {SyntaxExpr_generate(tmpSymbol.lastExpr, data_def, GenEqu())};\n"
+            src_content += f"{'    ' * depth}}}\n"
+        src_content += body_content
+        if data_def.initVar:
+            src_content += f"{'    ' * depth}outC->{data_def.initSymbol} = kcg_false;\n"
+        for name, symbol in data_def.localSymbolTable.items():
             self.check_and_add_special_types(symbol.syntaxType)
-        for signal in node.signalSymbolSet:
-            src_content += f"    kcg_bool {signal};\n"
-        for paraSymbol in node.tmpParams:
+            decl_content += self.generate_variable_decl(symbol, name, depth)
+        for signal in data_def.signalSymbolSet:
+            decl_content += f"{'    ' * depth}kcg_bool {signal};\n"
+        for paraSymbol in data_def.tmpParams:
             self.check_and_add_special_types(paraSymbol.syntaxType)
             if paraSymbol.isOutput == False:
-                src_content += self.generate_variable_decl(paraSymbol, paraSymbol.name)
+                decl_content += self.generate_variable_decl(paraSymbol, paraSymbol.name, depth)
             if paraSymbol.postExpr != None:
                 genEqu = GenEqu()
-                post_content += "".join(genEqu.preEquations)
-                post_content += f"{node.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, node, genEqu)};\n"
-                post_content += "".join(genEqu.postEquations)
-        # 加入init判断
-        if node.initVar and any(tmpSymbol.lastExpr and tmpSymbol.isOutput for tmpSymbol in node.tmpParams):
-            src_content += f"    if (outC->{node.initSymbol}){{\n"
-            for tmpSymbol in node.tmpParams:
-                if tmpSymbol.lastExpr and tmpSymbol.isOutput:
-                    src_content += f"        outC->{tmpSymbol.name} = {SyntaxExpr_generate(tmpSymbol.lastExpr,node,GenEqu())};\n"
-            src_content += f"    }}\n"
-        # body
-        src_content += body_content
-        # init,pre等的后处理语句
-        src_content += post_content
-        if node.initVar:
-            src_content += f"        outC->{node.initSymbol} = kcg_false;\n"
+                if len(genEqu.preEquations) != 0: post_content += f"{'    ' * depth}"
+                post_content += f"{'    ' * depth}".join(genEqu.preEquations)
+                post_content += f"{'    ' * depth}{data_def.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, data_def, genEqu)};\n"
+                if len(genEqu.postEquations) != 0: post_content += f"{'    ' * depth}"
+                post_content += f"{'    ' * depth}".join(genEqu.postEquations)
+        content = decl_content + src_content + post_content
+        return content
+
+    def generate_src_func_file(self, node):
+        global_name = node.get_global_name()
+        src_content = f"void {global_name}(inC_{global_name} *inC,outC_{global_name} *outC){{\n"
+        src_content += self.generate_data_def(node,1)
         src_content += f"}}\n"
         print("==== src_content ====\n")
         print(src_content)
         print("======================")
         return src_content
+        # # localVariable + tmpVariable
+        # for name, symbol in node.localSymbolTable.items():
+        #     src_content += self.generate_variable_decl(symbol, name)
+        #     self.check_and_add_special_types(symbol.syntaxType)
+        # for signal in node.signalSymbolSet:
+        #     src_content += f"    kcg_bool {signal};\n"
+        # for paraSymbol in node.tmpParams:
+        #     self.check_and_add_special_types(paraSymbol.syntaxType)
+        #     if paraSymbol.isOutput == False:
+        #         src_content += self.generate_variable_decl(paraSymbol, paraSymbol.name)
+        #     if paraSymbol.postExpr != None:
+        #         genEqu = GenEqu()
+        #         post_content += "".join(genEqu.preEquations)
+        #         post_content += f"{node.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, node, genEqu)};\n"
+        #         post_content += "".join(genEqu.postEquations)
+        # # 加入init判断
+        # if node.initVar and any(tmpSymbol.lastExpr and tmpSymbol.isOutput for tmpSymbol in node.tmpParams):
+        #     src_content += f"    if (outC->{node.initSymbol}){{\n"
+        #     for tmpSymbol in node.tmpParams:
+        #         if tmpSymbol.lastExpr and tmpSymbol.isOutput:
+        #             src_content += f"        outC->{tmpSymbol.name} = {SyntaxExpr_generate(tmpSymbol.lastExpr,node,GenEqu())};\n"
+        #     src_content += f"    }}\n"
+        # # body
+        # src_content += body_content
+        # # init,pre等的后处理语句
+        # src_content += post_content
+        # if node.initVar:
+        #     src_content += f"        outC->{node.initSymbol} = kcg_false;\n"
+
 
     def generate_src_init(self, node):
         # 如果是数组情况，就需要加循环
@@ -302,17 +342,17 @@ class GenerateCode:
                 "#endif\n"
         return code
 
-    def generate_src_file(self, node, body_content):
+    def generate_src_file(self, node):
         global_name = node.get_global_name()
-        src_content = f'''#include "kcg_consts.h"\n#include "{global_name}.h"\n'''
+        src_content = f'''#include "kcg_consts.c"\n#include "{global_name}.h"\n'''
         # 然后include所调用的其他函数的头文件
         applied_functions=set()
         for apply_expr in node.apply_exprs:
             applied_op = apply_expr.appliedOp
             if applied_op in applied_functions:continue
             applied_functions.add(applied_op)
-            src_content+=f'''#include "{applied_op.get_global_name()}.h"\n'''
-        src_content += self.generate_src_func_file(node, body_content)
+            src_content+=f'''#include "{applied_op.get_global_name()}.c"\n'''
+        src_content += self.generate_src_func_file(node)
         src_content += self.generate_src_init(node)
         src_content += self.generate_src_reset(node)
 
@@ -321,8 +361,7 @@ class GenerateCode:
             target.write(src_content)
 
     def generate_node_file(self, node):
-        body_content = SyntaxUserOp_generate(node, self)
-        self.generate_src_file(node, body_content)
+        self.generate_src_file(node)
         self.generate_head_file(node)
 
 
@@ -332,7 +371,9 @@ class GenEqu:
     preEquations: list
     '''若需要使用到中间变量，中间变量的定义需要在该equation之前，是一个列表，列表里的元素是一个C语句'''
     postEquations: list
-    '''fby生成的C代码需要在该equation之后'''
+    '''在某些情况比如a=pre b情况下，需要声明局部变量pre_b来对b进行更新
+    这里以列表形式存储了这种更新所对应的语句，在b所在的作用域的最后部分添加来实现更新
+    '''
 
     depth: int
     '''这个语句所需要的缩进，默认是0'''
@@ -685,8 +726,8 @@ def generate_id_expr_last_single_quote_lv6id(syntax_id_expr_objects, syntaxUserO
     if not target_var:
         raise UnknownIdentifierException(f"在{syntaxUserOp.get_global_name()}中找不到{target_name}")
 
-    syntaxUserOp.get_my_userOp().set_init_var()
-    tmp_var,tmp_var_name = generate_tmp_symbol_and_register(syntaxUserOp.get_my_userOp(),target_var.syntaxType,f"{target_name}_mem_last")
+    syntaxUserOp.get_my_op_or_state().set_init_var()
+    tmp_var,tmp_var_name = generate_tmp_symbol_and_register(syntaxUserOp.get_my_op_or_state(),target_var.syntaxType,f"{target_name}_mem_last")
     tmp_var.isOutput = True
     tmp_var.postExpr = SyntaxExpr(type="Id_expr", subtype="Path_id", scope=syntaxUserOp)
     tmp_var.postExpr.add_object(target_name)
@@ -1186,7 +1227,7 @@ def generate_if_block(block:SyntaxIfBlock, code_generator, depth)->str:
     def generate_if_sub_block(sub_block:str or SyntaxIfBlock)->str:
         if isinstance(sub_block,str):
             sub_data_def:SyntaxDataDefScope=scope.get_childScope(sub_block)
-            return generate_data_def(sub_data_def,code_generator,depth+1)
+            return code_generator.generate_data_def(sub_data_def,depth+1)
         else:
             return generate_if_block(sub_block,code_generator,depth+1)
     then_code=generate_if_sub_block(block.thenBlock)
@@ -1389,48 +1430,6 @@ def generate_type_block(rootPackage):
     for _, typeSymbol in rootPackage.typeSymbolTable.items():
         h_content += generate_type_symbol(typeSymbol, rootPackage)
     return h_content
-
-
-def generate_data_def(data_def: SyntaxDataDefScope, code_generator: GenerateCode, depth=0) -> str:
-    """给所有继承了data_def类的作用域生成代码，user_op除外，用genrateCode里面的函数"""
-    # localVariable + tmpVariable
-    decl_content = ""
-    src_content = ""
-    post_content = ""
-    # 加入init判断
-    body_content=""
-    for elem in data_def.equations:
-        type_ = elem.type
-        generate_userOp_handler = generate_userOp_handlers.get(type_)
-        if generate_userOp_handler:
-            body_content += generate_userOp_handler(elem, data_def, code_generator, depth)
-        else:
-            raise ValueError(f"syntaxUserOp_generate error , type : {type_}")
-    # if data_def.initVar:
-    #     src_content += f"{'    ' * depth}if (outC->{data_def.initSymbol}){{\n"
-    #     for tmpSymbol in data_def.tmpParams:
-    #         if tmpSymbol.lastExpr and tmpSymbol.isOutput:
-    #             src_content += f"{'    ' * (depth+1)}outC->{tmpSymbol.name} = {SyntaxExpr_generate(tmpSymbol.lastExpr, data_def, GenEqu())};\n"
-    #     src_content += f"{'    ' * depth}}}\n"
-    src_content+=body_content
-    # if data_def.initVar:
-    #     src_content += f"{'    ' * depth}outC->{data_def.initSymbol} = kcg_false;\n"
-    for name, symbol in data_def.localSymbolTable.items():
-        decl_content += code_generator.generate_variable_decl(symbol, name,depth)
-    for signal in data_def.signalSymbolSet:
-        decl_content += f"{'    ' * depth}kcg_bool {signal};\n"
-    for paraSymbol in data_def.tmpParams:
-        if paraSymbol.isOutput == False:
-            decl_content += code_generator.generate_variable_decl(paraSymbol, paraSymbol.name,depth)
-        if paraSymbol.postExpr != None:
-            genEqu = GenEqu()
-            if len(genEqu.preEquations) != 0: post_content += f"{'    ' * depth}"
-            post_content += f"{'    ' * depth}".join(genEqu.preEquations)
-            post_content += f"{'    ' * depth}{data_def.var_change_name(paraSymbol.name)} = {SyntaxExpr_generate(paraSymbol.postExpr, data_def, genEqu)};\n"
-            if len(genEqu.postEquations) != 0: post_content += f"{'    ' * depth}"
-            post_content += f"{'    ' * depth}".join(genEqu.postEquations)
-    content = decl_content + src_content + post_content
-    return content
 
 
 def scade_parse(input_path: str, main_operator: str, output_path: str):

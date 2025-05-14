@@ -369,7 +369,7 @@ def post_tempo_expr(expr: SyntaxExpr, data_def):
     elif expr.subType == "FBY":
         expr.rhsList=expr.objects[2].rhsList
         expr.returnNum = expr.objects[0].returnNum
-        # 这里加一个优化，受不了了，如果fby(a;1;b)则转为b->pre a
+        # 这里加一个优化，如果fby(a;1;b)则转为b->pre a
         if cal_const_expr(expr.objects[1]).value==1:
             pre_sub_expr=SyntaxExpr("List_expr","List_expr",data_def,
                                     objects=[[SyntaxExpr("Tempo_expr","PRE",data_def,[expr.objects[0]])]])
