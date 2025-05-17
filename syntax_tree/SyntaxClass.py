@@ -1,43 +1,12 @@
 import copy
 
 from syntax_tree.Exceptions import *
-from collections import defaultdict, deque
 from graph import *
 
 
 # 拓扑排序和模板实例化操作
 # 实例化还在写，虽然非常不想写，半年前的记忆触发了
-class HasRhs:
-    pass
-
-
-class SyntaxType:
-    pass
-
-
-class SyntaxDataDefScope:
-    pass
-
-
-class ConstValue:
-    pass
-
-
-class SyntaxVariableSymbol:
-    pass
-
-
-class SyntaxScope:
-    pass
-
-
-class SyntaxExpr(HasRhs):
-    pass
-
-
-class SyntaxUserOp:
-    pass
-
+# 实例化似乎写完了！
 
 def exclude_from_deepcopy(*exclude_attributes):
     """
@@ -72,14 +41,14 @@ def exclude_from_deepcopy(*exclude_attributes):
 
 class ConstValue:
     """在expr间传递值的类，封装类型与值"""
-    type: SyntaxType = None
-    value: int or float or bool or str or list[ConstValue] or dict[str:ConstValue]
+    type: 'SyntaxType' = None
+    value: int or float or bool or str or list['ConstValue'] or dict[str:'ConstValue']
 
     def __init__(self, syntax_type, value):
         self.type = syntax_type
         self.value = value
 
-    def type_belong_to(self, syntaxType: SyntaxType):
+    def type_belong_to(self, syntaxType: 'SyntaxType'):
         return self.type <= syntaxType
 
     def get_size(self):
@@ -107,10 +76,6 @@ class HasRhs:
         """
         for rhs in tar.rhsList:
             self.rhsList.append(rhs)
-
-    def add_empty_rhs(self):
-        """添加一个空的右值列表"""
-        self.rhsList.append(set())
 
     def set_rhs(self, rhs):
         """设置右值
@@ -159,7 +124,7 @@ class SyntaxOperator(HasRhs):
     objects: list
     '''按顺序保存了具体的内容，具体看文档'''
 
-    appliedUserOp: SyntaxUserOp
+    appliedUserOp: 'SyntaxUserOp'
     '''为path_id时有效，保存了指向调用的userop的指针'''
     array_length: int
     '''为map fold等类型时有效，保存了对应数组的长度'''
@@ -219,13 +184,13 @@ class SyntaxExpr(HasRhs):
     '''上面大类中对应的每个小类（很多），具体看共享文档'''
     objects: list
     '''按顺序保存了具体的内容，具体看文档'''
-    scope: SyntaxScope
+    scope: 'SyntaxScope'
     '''这个expr所处作用域'''
 
     syntaxSymbol = None
     '''Id_expr时，存储的对应symbol，会用到它的,ID没有，很合理'''
 
-    appliedOp: SyntaxUserOp = None
+    appliedOp: 'SyntaxUserOp' = None
     """
     仅在为Apply_expr,且调用了某个函数时有效
     让operator返回他调用的函数情况，保存了被调用的目标函数是什么
@@ -262,7 +227,7 @@ class SyntaxExpr(HasRhs):
     other = {"reverse", "times", "@"}
 
     # apply_Expr中的prefixOP接受以上所有类型的运算，除了#，且运算规则也是完全相同的
-    def __init__(self, type: str, subtype: str, scope: SyntaxScope, objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
         super().__init__()
         self.type = type
         self.subType = subtype
@@ -373,7 +338,7 @@ class SyntaxEquation(HasRhs):
     vertex: Vertex = None
     '''这个句子所对应的图节点'''
 
-    scope: SyntaxDataDefScope
+    scope: 'SyntaxDataDefScope'
     '''这个句子所属于的作用域'''
 
     def __init__(self, type: str, lhs: list, lineno: int = -1):
@@ -389,7 +354,7 @@ class SyntaxEquation(HasRhs):
     def set_vertex(self, vertex):
         self.vertex = vertex
 
-    def set_scope(self, scope: SyntaxDataDefScope):
+    def set_scope(self, scope: 'SyntaxDataDefScope'):
         self.scope = scope
 
     def equation2str(self, depth=0):
@@ -453,7 +418,7 @@ class SyntaxType:
     对enum类型，则指具体enum的类型名称
     '''
 
-    scope: SyntaxScope or None
+    scope: 'SyntaxScope' or None
     '''这个type所属的scope,在大部分情况下是没用的，但是如果是path_id与typevar类型就需要依靠他来找到真实的type,
     并且enum类型需要依靠他在代码生成时生成名字
     所以对于以上两种来说是必填，其他的随便
@@ -474,7 +439,7 @@ class SyntaxType:
     fields: dict = None
     '''类型为field_decl时有效，存储了ID:SyntaxTypeSymbol的键值对'''
 
-    enumList: list = None
+    enumList: list['SyntaxConstSymbol'] = None
     '''类型为enum时有效，存储了枚举类型的ID列表'''
 
     value: str = None
@@ -482,8 +447,10 @@ class SyntaxType:
     只是名字而已，而不是具体的类型
     '''
 
-    arrayType: SyntaxType = None
+    arrayType: 'SyntaxType' = None
     '''类型为array时有效，存储了数组的类型'''
+
+    _size: int
 
     basic_type = ['bool', 'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64', 'float32',
                   'float64', 'char', 'ID']
@@ -505,6 +472,7 @@ class SyntaxType:
         self._size = None
         self.scope = scope
         self._real_type = None  # 给path_id的缓存
+        self.enumList=list()
 
     def __repr__(self):
         s = ""
@@ -581,7 +549,7 @@ class SyntaxType:
         else:
             return cur_type == dst_type
 
-    def __eq__(self, other: SyntaxType):
+    def __eq__(self, other: 'SyntaxType'):
         if not isinstance(other, SyntaxType):
             return NotImplemented
         if self.type != "array":
@@ -590,7 +558,7 @@ class SyntaxType:
             return self.arrayType == other.arrayType and self.get_size() == other.get_size()
             # 数组需要尺寸和类型都一致
 
-    def __ne__(self, other: SyntaxType):
+    def __ne__(self, other: 'SyntaxType'):
         return not self.__eq__(other)
 
     def __le__(self, other):
@@ -698,7 +666,7 @@ class SyntaxConstSymbol:
     isImported: bool
     '''是不是imported'''
 
-    scope: SyntaxScope
+    scope: 'SyntaxScope'
     '''此变量声明时所处于的scope，应该是package'''
 
     syntaxType: SyntaxType
@@ -864,7 +832,7 @@ class SyntaxVariableSymbol:
     '''对应default的值，可以为none'''
     lastExpr: SyntaxExpr = None
     '''对应last的值，可以为none'''
-    postExpr: SyntaxExpr = None
+    postExpr: list[str] or str = None
     '''pre和init使用，init最好在程序的最后设置为false，pre在程序最后添加上该周期的值
     last也用了
     这个expr是让此symbol在data_def的最后，添加关于此symbol的一些操作
@@ -903,7 +871,7 @@ class SyntaxScope:
     '''为data_def,function,node,package,if_block,match_block,automaton,automaton_state'''
     name: str
     '''名字'''
-    prevScope: SyntaxScope
+    prevScope: 'SyntaxScope'
     '''父作用域'''
     childScopeTable: dict
     '''子作用域'''
@@ -913,11 +881,7 @@ class SyntaxScope:
     '''匿名scope计数器，给匿名的block生成名字'''
     annoymousTmpCount: int = 0
     '''创建中间变量使用的init'''
-    initVar: SyntaxVariableSymbol
-    '''时态算子使用的init,每个作用域只有一个init'''
-    hasInternalState: bool = False
-    '''该作用域内是否存在内存，例如control_block与一些时态算子等'''
-    initSymbolSet: set
+    initSymbolSet: set[SyntaxVariableSymbol]
     '''其子作用域内的所有init变量集合,在userop范围内不能重名，userop以上为空集合'''
     tmpParams: list
 
@@ -932,10 +896,15 @@ class SyntaxScope:
         self.tmpParams = list()
         self.initSymbolSet = set()
 
-    def add_childScope(self, childScope: SyntaxScope) -> None:
+    @property
+    def hasInternalState(self)->bool:
+        '''该作用域内是否存在内存，例如control_block与一些时态算子等'''
+        return len(self.initSymbolSet)>0
+
+    def add_childScope(self, childScope: 'SyntaxScope') -> None:
         self.childScopeTable[childScope.name] = childScope
 
-    def get_childScope(self, scopeName) -> SyntaxScope or None:
+    def get_childScope(self, scopeName) -> 'SyntaxScope' or None:
         if scopeName in self.childScopeTable.keys():
             return self.childScopeTable[scopeName]
         else:
@@ -964,17 +933,6 @@ class SyntaxScope:
         else:
             return self.prevScope.get_global_name() + "_" + self.name
 
-    def set_init_var(self):
-        if self.initVar == None:
-            self.initVar = SyntaxVariableSymbol(f"{self.initSymbol}", False, False)
-            self.initVar.isOutput = True
-            self.initVar.syntaxType = SyntaxType("bool")
-            # postExpr = SyntaxExpr(type="Atom", subtype="bool_atom", scope=self)
-            # postExpr.add_object("false")
-            # self.initVar.postExpr = postExpr
-            self.add_tmpSymbol(self.initVar)
-        return self.initVar
-
     def add_tmpSymbol(self, tmpSymbol):
         self.tmpParams.append(tmpSymbol)
 
@@ -983,12 +941,11 @@ class SyntaxScope:
             if symbol.name == tmpSymbolName: return symbol
         return None
 
-    def hasInternalState_InThisAndPreEnv(self):
-        '''迭代的设置这个与其上层的作用域，标记其为有内存'''
-        self.hasInternalState = True
-        if self.prevScope is not None:
-            self.prevScope.hasInternalState_InThisAndPreEnv()
-
+    def get_localVariable_InThisAndPreEnv(self,name)->SyntaxVariableSymbol or None:
+        if isinstance(self,SyntaxPackageScope):
+            raise Exception(f"{self.get_global_name()}是package")
+        if not isinstance(self,SyntaxDataDefScope):
+            return self.prevScope.get_localVariable_InThisAndPreEnv(name)
     def get_my_userOp(self):
         """返回此作用域对应的userOp作用域"""
         if self.type == "package": raise Exception(f"{self.name}是一个package")
@@ -1025,7 +982,7 @@ class SyntaxScope:
                 raise UnknownIdentifierException(f"找不到{path_list[0]}")
         return tar_package
 
-    def resolve_path_id(self, path_id: str):
+    def resolve_path_id(self, path_id: str)->('SyntaxPackageScope',str):
         """解析path_id，返回对应package和id"""
         path_id_list = path_id.split("::")
         if len(path_id_list) > 1:
@@ -1040,7 +997,7 @@ class SyntaxScope:
         """
         target_package, op_name = self.resolve_path_id(path_id)
         tar_op = target_package.get_userOp(op_name)
-        while tar_op is None or target_package is None:
+        while tar_op is None and target_package is not None:
             target_package = target_package.prevScope
             tar_op = target_package.get_userOp(op_name)
         return tar_op
@@ -1078,7 +1035,7 @@ class SyntaxScope:
 class SyntaxIfBlock:
     conditionExpr: SyntaxExpr
     '''条件语句'''
-    scope: SyntaxDataDefScope
+    scope: 'SyntaxDataDefScope'
     '''此block所处scope'''
     thenBlock: object
     '''为str存data_def的ID，或者存一个IfBlock对象'''
@@ -1140,7 +1097,7 @@ class SyntaxClockedScope(SyntaxScope):
     '''为if_block或者match_block'''
     name: str
     '''名字'''
-    prevScope: SyntaxScope
+    prevScope: 'SyntaxDataDefScope'
     '''父作用域'''
     childScopeTable: dict
     '''子作用域'''
@@ -1154,9 +1111,6 @@ class SyntaxClockedScope(SyntaxScope):
 
     def __repr__(self):
         return self.scope2str(0)
-
-    def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
-        return self.prevScope.get_localVariable_InThisAndPreEnv(name)
 
     def get_return_symbolTable(self):
         '''汇聚子block的返回值集合，合并起来
@@ -1217,9 +1171,8 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     '''存放局部变量，变量名字->SyntaxVariableSymbol,signal不属于这个集合'''
     returnSymbolsTable: dict
     '''存放了当前及下级作用域修改的，外部作用域的变量，变量名字->SyntaxVariableSymbol'''
-    initSymbol: str = ""
-    '''这个作用域内专用的init变量，每个data_def拥有自己的init变量'''
-
+    initVar: SyntaxVariableSymbol
+    '''时态算子使用的init,每个作用域只有一个init'''
     equationDependentGraph: Graph
     """标识语句依赖关系的单向图"""
     lhs2EquationDict: dict
@@ -1306,6 +1259,22 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             name = f"{postfix}_{str(count)}"
         return name
 
+    def set_init_var(self):
+        if self.initVar == None:
+            init_name=self.generate_name_for_tmp("init")
+            self.initVar = SyntaxVariableSymbol(init_name, False, False)
+            self.initVar.isOutput = True
+            self.initVar.syntaxType = SyntaxType("bool")
+            self.add_tmpSymbol(self.initVar)
+            cur_scope=self
+            # 逐层向上添加进入initSymbolSet
+            while True:
+                if isinstance(cur_scope,SyntaxPackageScope):
+                    break
+                cur_scope.initSymbolSet.add(self.initVar)
+                cur_scope = cur_scope.prevScope
+        return self.initVar
+
     def var_change_name(self, name):
         symbol = self.get_localVariable_InThisAndPreEnv(name)
         if symbol is None:
@@ -1327,41 +1296,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
         return self.returnSymbolsTable
 
-    def generate_init_name_and_check(self) -> str:
-        """生成一个用来初始化的名字，将该名字作为此作用域的initsymbol名字。并确保没重名的情况，最高到函数级别不重名即可"""
-        name = "init"
-        num = 1
-        op_scope = self.get_my_userOp()
-        # 函数级别
-        init_name = name + str(num)
-        while not (self.get_localVariable_InThisAndPreEnv(init_name) is None and
-                   not self.have_signal_InThisAndPreEnv(init_name) and
-                   not init_name in op_scope.initSymbolSet):
-            num += 1
-            init_name = name + str(num)
-        # 保证最上层没有，然后逐层向上更新initSymbolSet，考虑到状态机嵌入的情况，不同的data_def都保存一份
-        cur_scope = self
-        while cur_scope.type != "function" and cur_scope.type != "node":
-            cur_scope = cur_scope.prevScope
-            cur_scope.initSymbolSet.add(init_name)
-        self.initSymbol = init_name
-        return init_name
-        # return一下吧，万一有用呢
-
-    def hasInternalState_InThisAndPreEnv(self):
-        """对data_def的情况，要重写逻辑
-        每个作用域都要有自己的init变量，在子作用域里的语句需要依赖此init变量来进行操作
-        在官方的scade代码生成里情况是这样的
-        在创建此作用域内的变量后，还需向上更新，让上层作用域持有其下所有子作用域的init变量列表，在init与reset函数内会用到
-        """
-        if self.hasInternalState: return
-        self.hasInternalState = True
-        # 添加init变量，更新变量列表
-        self.generate_init_name_and_check()
-
-        if self.prevScope is not None and not self.prevScope.hasInternalState:
-            self.prevScope.hasInternalState_InThisAndPreEnv()
-
     def set_signalSymbolList(self, signalSymbolList: list):
         self.signalSymbolSet = set(signalSymbolList)
 
@@ -1381,8 +1315,8 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             s += prev_scope + "::"
         s += self.name
         if self.hasInternalState:
-            s += " initSymbol as "
-            s += self.initSymbol + " "
+            s += " initVar as "
+            s += self.initVar.name + " "
         s += "\033[0m"
         s += "\n"
         s += self.signalSymbolSet2str(depth=depth)
@@ -1419,11 +1353,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             s += equation.equation2str(depth=depth + 1) + "\n"
         return s
 
-
-class SyntaxArrow:
-    pass
-
-
 class SyntaxArrow:
     '''记录了一条状态机的转移指令,包括了actions，fork'''
     action: str or None = None
@@ -1441,10 +1370,10 @@ class SyntaxArrow:
     '''
     ifExprList: list
     '''type为if时有效，保存了存有(SyntaxExpr,SyntaxArrow)的列表，对应语法的if和elsif部分'''
-    elseExpr: SyntaxArrow or None = None
+    elseExpr: 'SyntaxArrow' or None = None
     '''type为if时可能有效，不一定会有else语句，若不为None则存储了else对应的语句'''
 
-    def __init__(self, type: str, target: str = None, ifExpr: list = None, elseExpr: SyntaxArrow = None):
+    def __init__(self, type: str, target: str = None, ifExpr: list = None, elseExpr: 'SyntaxArrow'= None):
         self.type = type
         if type == "if":
             self.ifExprList = ifExpr
@@ -1456,7 +1385,7 @@ class SyntaxArrow:
     def set_action(self, action: str):
         self.action = action
 
-    def get_transfer_arrows(self) -> list[SyntaxArrow]:
+    def get_transfer_arrows(self) -> list['SyntaxArrow']:
         """递归的从arrow里面找目标转移状态"""
         if self.type != "if":
             return [self]
@@ -1502,6 +1431,7 @@ class SyntaxArrow:
 
 class SyntaxState(SyntaxDataDefScope):
     '''状态机的状态类'''
+    prevScope: 'SyntaxAutomaton'
     isInitial: bool = False
     isFinal: bool = False
     type: str
@@ -1592,9 +1522,9 @@ class SyntaxAutomaton(SyntaxScope):
     '''automaton'''
     name: str
     '''名字'''
-    prevScope: SyntaxScope
+    prevScope: SyntaxDataDefScope
     '''父作用域'''
-    childScopeTable: dict
+    childScopeTable: dict[SyntaxDataDefScope]
     '''子作用域'''
     visibility: str = "public"
     '''可见性，默认为public'''
@@ -1630,9 +1560,6 @@ class SyntaxAutomaton(SyntaxScope):
             raise NoInitialStateException(self.name + "没有初始状态")
         else:
             return init_state
-
-    def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
-        return self.prevScope.get_localVariable_InThisAndPreEnv(name)
 
     def get_return_symbolTable(self):
         '''汇聚子block的返回值集合，合并起来
@@ -1868,7 +1795,7 @@ class SyntaxPackageScope(SyntaxScope):
     '''为package'''
     name: str
     '''名字'''
-    prevScope: SyntaxScope
+    prevScope: 'SyntaxPackageScope' or None
     '''父作用域'''
     childScopeTable: dict
     '''子作用域,这里只保存了子package'''

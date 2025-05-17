@@ -245,9 +245,9 @@ def generate_body_nest(automaton: SyntaxAutomaton, code_generator: scade_generat
     目前来看是将init的部分挪到这里来进行，然后在生成非嵌套的代码
     state内加入，若reset_act则outcinit为true
     然后对内存执行重置
-    然后让init为false
     """
-    initSymbol = automaton.prevScope.initSymbol
+    initSymbol = automaton.prevScope.set_init_var()
+    initSymbol_name=initSymbol.name
     state_enum = get_state_act(automaton)
     transfer_enum = get_fired_strong(automaton)
     decls = ""
@@ -256,7 +256,7 @@ def generate_body_nest(automaton: SyntaxAutomaton, code_generator: scade_generat
     decls += f"{'    ' * depth}kcg_bool {get_reset_act(automaton)};\n"
     decls += f"{'    ' * depth}{get_automaton_state_type_name(automaton)} {get_state_sel(automaton)};\n"
 
-    decls += f"{'    ' * depth}if (outC->{initSymbol}) {{\n" \
+    decls += f"{'    ' * depth}if (outC->{initSymbol_name}) {{\n" \
              f"{'    ' * (depth + 1)}{get_state_sel(automaton)} = {get_state_enum_name(automaton.get_init_state())};\n" \
              f"{'    ' * depth}}}\n" \
              f"{'    ' * depth}else{{\n" \
@@ -324,9 +324,9 @@ def generate_switch_act(automaton: SyntaxAutomaton, code_generator: scade_genera
                 switch_act += f"{'    ' * (depth + 3)}{applied_expr.appliedOp.get_global_name()}_reset(&(outC->{applied_expr.appliedOpOutCName}));\n"
 
             for initSymbol in state.initSymbolSet:
-                switch_act += f"{'    ' * (depth + 3)}outC->{initSymbol} = kcg_true;\n"
-            if state.initSymbol:
-                switch_act += f"{'    ' * (depth + 3)}outC->{state.initSymbol} = kcg_true;\n"
+                switch_act += f"{'    ' * (depth + 3)}outC->{initSymbol.name} = kcg_true;\n"
+            if state.initVar:
+                switch_act += f"{'    ' * (depth + 3)}outC->{state.initVar.name} = kcg_true;\n"
             switch_act += f"{'    ' * (depth + 2)}}}\n"
             # 这里接如果为init则进行的初始化操作
 
@@ -336,22 +336,12 @@ def generate_switch_act(automaton: SyntaxAutomaton, code_generator: scade_genera
         switch_act += generate_state_weak_transitions(automaton, state, code_generator, depth + 2)
         if state.hasInternalState:
             for initSymbol in state.initSymbolSet:
-                switch_act += f"{'    ' * (depth + 2)}outC->{initSymbol} = kcg_false;\n"
-            switch_act += f"{'    ' * (depth + 2)}outC->{state.initSymbol} = kcg_false;\n"
+                switch_act += f"{'    ' * (depth + 2)}outC->{initSymbol.name} = kcg_false;\n"
+            switch_act += f"{'    ' * (depth + 2)}outC->{state.initVar.name} = kcg_false;\n"
             # 然后初始化结束
         switch_act += f"{'    ' * (depth + 2)}break;}}\n"
     switch_act += f"{'    ' * (depth + 1)}default:break;\n{'    ' * depth}}}\n"
     return switch_act
-
-
-
-
-
-def generate_reset(automaton: SyntaxAutomaton) -> str:
-    """生成对应的reset函数
-    只有第一层的状态机有它的rest函数，嵌套的情况则不一样
-    """
-    return f"outC->{get_state_nxt(automaton)} = {get_state_enum_name(automaton.get_init_state())};\n"
 
 
 def generate_state_nxt_for_head(automaton: SyntaxAutomaton) -> str:
@@ -359,13 +349,6 @@ def generate_state_nxt_for_head(automaton: SyntaxAutomaton) -> str:
     code = f"    {get_automaton_state_type_name(automaton)}    {get_state_nxt(automaton)};\n"
     return code
 
-
-def generate_init_symbol_for_head(automaton: SyntaxAutomaton) -> str:
-    """生成头文件，记录状态机的及其下层的所有initSymbol"""
-    code = ""
-    for initSymbol in automaton.initSymbolSet:
-        code += f"    kcg_bool {initSymbol};\n"
-    return code
 
 
 def generate_state_nxt_for_init(automaton: SyntaxAutomaton) -> str:
@@ -375,16 +358,6 @@ def generate_state_nxt_for_init(automaton: SyntaxAutomaton) -> str:
     """
     code = f"    outC->{get_state_nxt(automaton)} = {get_state_enum_name(automaton.get_init_state())};\n"
 
-    return code
-
-
-def generate_init_symbol_for_init(automaton: SyntaxAutomaton) -> str:
-    """
-    初始化init信息
-    """
-    code=""
-    for initSymbol in automaton.initSymbolSet:
-        code += f"    outC->{initSymbol} = kcg_true;\n"
     return code
 
 

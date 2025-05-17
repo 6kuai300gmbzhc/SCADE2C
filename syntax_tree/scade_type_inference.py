@@ -688,8 +688,12 @@ def instantiate_template_function(userOp: SyntaxUserOp, lhs_type_list: list[Synt
 
 def generate_instantiate_name(userOp,instantiate_dict):
     """不能重名，生成func_int32之类的名字"""
-    post_fix="_".join(t.get_real_type() for t in instantiate_dict.values())
-    instant_name=f"{userOp.name}_{post_fix}"
+
+    post_fix = "_".join(t.get_real_type() for t in instantiate_dict.values())
+    if userOp.isImported:
+        instant_name = f"{userOp.name}{post_fix[-2:]}"
+    else:
+        instant_name=f"{userOp.name}_{post_fix}"
     package=userOp.get_my_package()
     if package.get_userOp(instant_name) is None:
         return instant_name

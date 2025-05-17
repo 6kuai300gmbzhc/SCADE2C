@@ -590,7 +590,6 @@ def p_control_block(p):
     '''Control_block : Clocked_block Return
      | State_machine Return'''
     global cur_scope
-    cur_scope.hasInternalState_InThisAndPreEnv()
     lhs = cur_scope.get_childScope(p[1]).get_return_symbolTable()
     # 检查ruturn的变量是否符合要求，即显示返回的变量里面有没有lhs以外的东西
     for symbol_name in p[2]:
@@ -1042,7 +1041,6 @@ def p_id_expr(p):
         p[0] = SyntaxExpr(type="Id_expr", subtype="lastSinglequoteLv6id",scope=cur_scope)
         p[0].add_object(p[2].value + p[3].value)
         # 为什么我要在这里把'加上？？现在删不掉了
-        cur_scope.hasInternalState_InThisAndPreEnv()
 
 def p_atom(p):
     '''Atom : Bool_atom
@@ -1066,7 +1064,6 @@ def p_tempo_expr(p):
     | Expr WHEN Clock_expr
     | MERGE LPARENTHESE Expr SEMICOLON List Tempo_expr_1 RPARENTHESE'''
     global cur_scope
-    cur_scope.hasInternalState_InThisAndPreEnv()
     if len(p) == 3:
         p[0] = SyntaxExpr(type="Tempo_expr", subtype="PRE",scope=cur_scope)
         p[0].add_object(p[2])
