@@ -156,7 +156,7 @@ def type_inference_Atom(expr, lhs_type_list: list[SyntaxType], data_def):
         expr.set_lhs_type([syntax_type])
     else:
         raise TypeMismatchException(f"{expr}有type为{syntax_type}", lhs_type_list, data_def)
-    return [syntax_type]
+    return expr.lhsTypeList
 
 
 def type_check_decorator(func):
@@ -275,31 +275,35 @@ def type_inference_arith_binOp(expr, lhs_type_list: list[SyntaxType], data_def):
     bitwiseOp = {'lnot', 'land', 'lor', 'lxor'}
     shiftOp = {'lsl', 'lsr'}
     op = expr.objects[1]
+    given_type = lhs_type_list[0]
+
     if op in bitwiseOp:
         required_given_type = SyntaxType("unsigned")
-        first_type = SyntaxType("unsigned")
-        second_type = SyntaxType("unsigned")
+        min_type = min([required_given_type, given_type])
+        first_type = min_type
+        second_type = min_type
     elif op in shiftOp:
         required_given_type = SyntaxType("unsigned")
-        first_type = SyntaxType("unsigned")
+        min_type = min([required_given_type, given_type])
+        first_type = min_type
         second_type = SyntaxType("integer")
     else:
         required_given_type = SyntaxType("numeric")
-        first_type = SyntaxType("numeric")
-        second_type = SyntaxType("numeric")
-    given_type = lhs_type_list[0]
-    if not given_type <= required_given_type:
-        raise TypeMismatchException(expr, lhs_type_list, data_def)
+        min_type = min([required_given_type, given_type])
+        first_type = min_type
+        second_type = min_type
+    # if not required_given_type<=given_type:
+    #     raise TypeMismatchException(expr, lhs_type_list, data_def)
     given_first_type = type_inference_expr(expr.objects[0], [first_type], data_def)[0]
     given_second_type = type_inference_expr(expr.objects[2], [second_type], data_def)[0]
     if op not in shiftOp:
         # 非移位运算
         if given_first_type < given_second_type:
-            given_second_type = type_inference_expr(expr.objects[2], [given_first_type], data_def)
+            given_second_type = type_inference_expr(expr.objects[2], [given_first_type], data_def)[0]
         elif given_second_type < given_first_type:
-            given_first_type = type_inference_expr(expr.objects[0], [given_second_type], data_def)
+            given_first_type = type_inference_expr(expr.objects[0], [given_second_type], data_def)[0]
         # 按照更小的那个类型进行遍历，缩小范围
-        if given_first_type != given_second_type:
+        if not given_first_type == given_second_type:
             raise TypeMismatchException(expr, required_given_type, data_def)
     expr.set_lhs_type([given_first_type])
     # 第一个子表达式，即左侧的那个表达式不管是什么操作符都是要返回的那个
