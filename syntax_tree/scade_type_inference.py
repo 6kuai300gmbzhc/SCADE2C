@@ -381,9 +381,9 @@ def type_inference_tempo(expr, lhs_type_list: list[SyntaxType], data_def):
     return handler(expr, lhs_type_list, data_def)
 
 
-def type_inference_on_groups(sub_exprs: list[SyntaxExpr], lhs_type_list, data_def):
+def type_inference_on_groups(sub_exprs: list[SyntaxExpr], lhs_type_list_on_each, data_def):
     # 处理可以多返回的操作符
-    given_type_lists = [type_inference_expr(sub_expr, lhs_type_list, data_def) for sub_expr in sub_exprs]
+    given_type_lists = [type_inference_expr(sub_expr, lhs_type_list_on_each, data_def) for sub_expr in sub_exprs]
     # 他们返回的长度一定相等
     actual_types = list(map(min, zip(*given_type_lists)))
     for i, given_types in enumerate(given_type_lists):
@@ -416,6 +416,18 @@ def type_inference_tempo_pre(expr, lhs_type_list: list[SyntaxType], data_def):
     return expr.lhsTypeList
 
 
+@inference_tempo_handler("TIMES")
+def type_inference_tempo_times(expr, lhs_type_list: list[SyntaxType], data_def):
+    # 需要bool类型，子类型分别是signed和bool
+    # 不支持列表
+    if len(lhs_type_list) != 1 or lhs_type_list[0]!=SyntaxType("bool"):
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+    type_inference_expr(expr.objects[0],[SyntaxType("signed")],data_def)
+    type_inference_expr(expr.objects[1],[SyntaxType("bool")],data_def)
+    expr.set_lhs_type(lhs_type_list)
+    return expr.lhsTypeList
+
+
 inference_array_handlers = {}
 
 
@@ -441,14 +453,129 @@ def type_inference_array_construct(expr, lhs_type_list: list[SyntaxType], data_d
     if len(lhs_type_list) != 1:
         raise TypeMismatchException(expr, lhs_type_list, data_def)
     required_type = lhs_type_list[0]
-    given_element_type = type_inference_expr(expr.objects[0], [required_type.get_element_type_for_array()], data_def)
+    given_element_type = type_inference_expr(expr.objects[0], [required_type.get_element_type_for_array()], data_def)[0]
     given_array_length = cal_const_expr(expr.objects[1]).value
-    if given_array_length != required_type.get_size():
-        raise TypeMismatchException(expr, f"长度为{given_array_length},但是其真正的长度应该是{required_type.get_size()}", data_def)
+    # 也有可能数组长度只有最小值限制
+    if not (given_array_length == required_type.get_size() or given_array_length>required_type.min_size):
+        raise UnsatisfiableSizeException(expr, given_array_length,f"{required_type.get_size()}或最小值{required_type.min_size}")
+
     given_type = SyntaxType(tar_type="array")
-    given_type.set_element_and_size(required_type.get_element_type_for_array(), given_array_length)
+    given_type.set_element_and_size(given_element_type, given_array_length)
     expr.set_lhs_type([given_type])
     return expr.lhsTypeList
+@inference_array_handler("get")
+def type_inference_array_get(expr, lhs_type_list: list[SyntaxType], data_def):
+    if len(lhs_type_list) != 1:
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+    idx_symbol=cal_const_expr(expr.objects[1])
+    # if idx_symbol.type!=SyntaxType("integer"):
+    #     raise TypeMismatchException(expr.objects[1], idx_symbol.type, data_def)
+    required_type=lhs_type_list[0]
+    idx_value=idx_symbol.value
+    expr.idx_list.append(idx_value)
+
+    required_arr_type=SyntaxType("array").set_element_and_size(required_type,0)
+    required_arr_type.min_size=idx_value
+    given_arr_type:SyntaxType=type_inference_expr(expr.objects[0],[required_arr_type],data_def)[0]
+
+    expr.set_lhs_type([given_arr_type.arrayType])
+    return expr.lhsTypeList
+
+@inference_array_handler("slice")
+def type_inference_array_slice(expr, lhs_type_list: list[SyntaxType], data_def):
+    if len(lhs_type_list) != 1:
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+
+    idx_symbols=[cal_const_expr(expr.objects[1]),cal_const_expr(expr.objects[2])]
+    for i,idx_symbol in enumerate(idx_symbols):
+        # if idx_symbol.type!=SyntaxType("integer"):
+        #     raise TypeMismatchException(expr.objects[i], idx_symbol.type, data_def)
+        idx_value = idx_symbol.value
+        expr.idx_list.append(idx_value)
+
+    required_arr_type=SyntaxType("array").set_element_and_size(lhs_type_list[0],0)
+    required_arr_type.min_size=idx_symbols[1].value
+    given_arr_type: SyntaxType = type_inference_expr(expr.objects[0], [required_arr_type], data_def)[0]
+
+    actual_returned_type=SyntaxType("array").set_element_and_size(given_arr_type.arrayType,
+                                                                  idx_symbols[1].value-idx_symbols[0].value)
+    expr.set_lhs_type([actual_returned_type])
+    return expr.lhsTypeList
+@inference_array_handler("getdefault")
+def type_inference_array_get_default(expr, lhs_type_list: list[SyntaxType], data_def):
+    # 是一个动态取数的操作，所以不用静态获取下标
+    if len(lhs_type_list) != 1:
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+    required_type=lhs_type_list[0]
+
+    # 先校验一下下标部分的表达式
+    idx_exprs=expr.objects[1]
+    required_arr_type=required_type
+    for idx_expr in idx_exprs:
+        type_inference_expr(idx_expr,[SyntaxType("integer")],data_def)
+        # 逐层去构建一个给被取数表达式的对应类型
+        # 对大小完全没要求，因为不知道到底是一个什么情况
+        required_arr_type=SyntaxType("array").set_element_and_size(required_arr_type,0)
+        required_arr_type.min_size=0
+
+    def get_element_type_recursive(arr_type:SyntaxType,depth):
+        """递归获取元素类型"""
+        cur_type=arr_type
+        for i in range(depth):
+            cur_type=cur_type.arrayType
+        return cur_type
+
+    def build_arr_type(element_type:SyntaxType,depth):
+        """再根据元素类型填充成数组,对长度没有要求"""
+        output:SyntaxType=element_type
+        for i in range(depth):
+            output=SyntaxType("array").set_element_and_size(output,0)
+            output.min_size=0
+        return output
+
+    # 然后拿这个新得到的类型去推断被取数表达式
+    given_arr_type=type_inference_expr(expr.objects[0],[required_arr_type],data_def)[0]
+    given_element_type=get_element_type_recursive(given_arr_type,len(idx_exprs))
+    # 用提供的类型去推断默认表达式
+    given_default_type=type_inference_expr(expr.objects[2],[required_type],data_def)[0]
+
+    if given_element_type<given_default_type:
+        given_default_type=type_inference_expr(expr.objects[2],[given_element_type],data_def)[0]
+    elif given_default_type<given_element_type:
+        given_arr_type=type_inference_expr(expr.objects[0],[build_arr_type(given_default_type,len(idx_exprs))],data_def)
+
+    expr.set_lhs_type([given_default_type])
+    return expr.lhsTypeList
+
+@inference_expr_handler("list")
+def type_inference_array_list(expr, lhs_type_list: list[SyntaxType], data_def):
+    # 构造函数，允许output:int32^4;然后output=[(1,2),(3,4)];实在是太抽象了
+    # 还好准备了returnNum属性用来处理list的情况
+    if len(lhs_type_list) != 1:
+        raise TypeMismatchException(expr, lhs_type_list, data_def)
+    required_type=lhs_type_list[0]
+    elements:list[SyntaxExpr]=expr.objects[0].objects
+    return_sum=sum([element.returnNum for element in elements])
+    if not (required_type.get_size()==return_sum or required_type.min_size<return_sum):
+        UnsatisfiableSizeException(expr,required_type.get_size(), f"{required_type.get_size()}或最小值{required_type.min_size}")
+
+    # 然后把子类型都分发下去
+    # 为什么我之前不这么做？？？？太愚蠢了，明明直接把list_expr拆开就好了
+    # 不过无需考虑list_expr的嵌套格式还是不错的
+    element_exprs=list()
+    for element in elements:
+        if element.type=="List_expr":
+            element_exprs.extend(element.objects)
+        else:
+            element_exprs.append(element)
+    actual_element_type=type_inference_on_groups(element_exprs,[required_type.get_element_type_for_array()],data_def)[0]
+    expr.set_lhs_type([SyntaxType("array").set_element_and_size(actual_element_type,required_type.get_size())])
+    return expr.lhsTypeList
+
+
+
+
+
 
 @inference_expr_handler("Switch_expr")
 def type_inference_switch(expr, lhs_type_list: list[SyntaxType], data_def):

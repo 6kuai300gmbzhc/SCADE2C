@@ -1464,9 +1464,10 @@ def scade_parse(input_path: str, main_operator: str, output_path: str):
     gen.generate_const_file()
     # gen.generate_main_file()
     gen.generate_types_file()
+
     for op in userOp_order:
         gen.generate_node_file(op)
-
+    gen.generate_imported_functions_file()
     gen.add_code_to_types_file("#endif\n")  # 结束
 
 

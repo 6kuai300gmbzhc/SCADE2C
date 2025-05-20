@@ -21,3 +21,12 @@ syntax_tree/test/cruise_control.scade
 System::SystemSimul
 -o
 syntax_tree/test/out
+
+
+flight_control
+-i
+syntax_tree/test/flight_control.scade
+-m
+FlightControlSimulation::World
+-o
+syntax_tree/test/out

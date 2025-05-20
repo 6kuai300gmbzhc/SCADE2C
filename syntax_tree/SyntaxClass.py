@@ -1,4 +1,5 @@
 import copy
+import sys
 
 from syntax_tree.Exceptions import *
 from graph import *
@@ -26,10 +27,13 @@ def exclude_from_deepcopy(*exclude_attributes):
             new_instance = cls.__new__(cls)
             memo[id(self)] = new_instance
 
-            # 遍历实例的 __dict__，深拷贝所有属性，但排除指定的属性
+            # 遍历实例的 __dict__，深拷贝所有属性
             for attr_name, attr_value in self.__dict__.items():
+                # 豁免的属性不需要deepcopy而直接共享
                 if attr_name not in cls._exclude_from_deepcopy:
                     setattr(new_instance, attr_name, copy.deepcopy(attr_value, memo))
+                else:
+                    setattr(new_instance, attr_name, attr_value)
             return new_instance
 
         # 将重写的 __deepcopy__ 方法绑定到类上
@@ -124,7 +128,7 @@ class SyntaxOperator(HasRhs):
     objects: list
     '''按顺序保存了具体的内容，具体看文档'''
 
-    appliedUserOp: 'SyntaxUserOp'
+    appliedUserOp: 'SyntaxUserOp' or None = None
     '''为path_id时有效，保存了指向调用的userop的指针'''
     array_length: int
     '''为map fold等类型时有效，保存了对应数组的长度'''
@@ -190,6 +194,9 @@ class SyntaxExpr(HasRhs):
     syntaxSymbol = None
     '''Id_expr时，存储的对应symbol，会用到它的,ID没有，很合理'''
 
+    idx_list: list[int]
+    '''array_expr时存储的下标列表适用于get,get_default,slice'''
+
     appliedOp: 'SyntaxUserOp' = None
     """
     仅在为Apply_expr,且调用了某个函数时有效
@@ -238,6 +245,7 @@ class SyntaxExpr(HasRhs):
         self.scope = scope
         self.returnNum = returnNum
         self.appliedOpContextList=list()
+        self.idx_list=list()
 
     def add_object(self, tar_object, index: int = None):
         if index is None:
@@ -450,7 +458,10 @@ class SyntaxType:
     arrayType: 'SyntaxType' = None
     '''类型为array时有效，存储了数组的类型'''
 
-    _size: int
+    _size: int or None
+
+    min_size:int = sys.maxsize
+    '''作为类型推导的参数传递时，表达了可以允许的最低数组长度'''
 
     basic_type = ['bool', 'int8', 'int16', 'int32', 'int64', 'uint8', 'uint16', 'uint32', 'uint64', 'float32',
                   'float64', 'char', 'ID']
@@ -559,6 +570,8 @@ class SyntaxType:
             # 数组需要尺寸和类型都一致
 
     def __ne__(self, other: 'SyntaxType'):
+        if not isinstance(other, SyntaxType):
+            return NotImplemented
         return not self.__eq__(other)
 
     def __le__(self, other):
@@ -677,7 +690,7 @@ class SyntaxConstSymbol:
     此处的表达式必须可在编译时计算出数值！
     '''
 
-    __value: ConstValue
+    __value: ConstValue or None
     '''具体计算出来的数值，使用get_value方法来访问
     也存储了枚举类型值
     '''
@@ -996,9 +1009,9 @@ class SyntaxScope:
             path_id: 带::的路径，指向某个userop
         """
         target_package, op_name = self.resolve_path_id(path_id)
-        tar_op = target_package.get_userOp(op_name)
+        tar_op:SyntaxUserOp = target_package.get_userOp(op_name)
         while tar_op is None and target_package is not None:
-            target_package = target_package.prevScope
+            target_package:SyntaxPackageScope = target_package.prevScope
             tar_op = target_package.get_userOp(op_name)
         return tar_op
 
@@ -1030,6 +1043,10 @@ class SyntaxScope:
 
     def var_change_name(self, name):
         return self.get_my_userOp().var_change_name(name)
+
+    def scope2str(self)->str:
+        """一个抽象方法"""
+        ...
 
 
 class SyntaxIfBlock:
@@ -1492,9 +1509,9 @@ class SyntaxState(SyntaxDataDefScope):
         return f"SSM_st_{self.get_global_name()}"
 
     def __repr__(self):
-        return self.state2str(0)
+        return self.scope2str(0)
 
-    def state2str(self, depth=0):
+    def scope2str(self, depth=0):
         s = "    " * depth + "\033[32m"
         if self.isInitial: s += "init "
         if self.isFinal: s += "final "
@@ -1596,7 +1613,7 @@ class SyntaxAutomaton(SyntaxScope):
         s += self.graph2str(depth + 1)
 
         for name, state in self.stateTable.items():
-            s += state.state2str(depth=depth + 1)
+            s += state.scope2str(depth=depth + 1)
         s += self.childScope2str(depth=depth)
         return s
 
@@ -1625,7 +1642,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''分为function和node两种'''
     name: str
     '''名字'''
-    prevScope: SyntaxScope
+    prevScope: 'SyntaxPackageScope'
     '''父作用域，指向一个package'''
     childScopeTable: dict
     '''子作用域'''
@@ -1736,7 +1753,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def get_outC_name(self):
         return f"outC_{self.get_global_name()}"
 
-    def userOp2str(self, depth=0):
+    def scope2str(self, depth=0):
         s = "    " * depth
         s += "\033[31m"
         if self.isImported:
@@ -1783,7 +1800,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         return s
 
     def __repr__(self):
-        return self.userOp2str()
+        return self.scope2str()
 
 
 class SyntaxPackageScope(SyntaxScope):
@@ -1827,7 +1844,7 @@ class SyntaxPackageScope(SyntaxScope):
         self.userOpTable = dict()
         self.openPackageList = list()
 
-    def package2str(self, depth=0):
+    def scope2str(self, depth=0):
         s = "    " * depth
         s += "\033[31mscope "
         prev_list = list()
@@ -1864,15 +1881,15 @@ class SyntaxPackageScope(SyntaxScope):
         if self.userOpTable:
             s += "    " * depth + "\033[32muserOpTable:\033[0m\n"
             for ID, symbol in self.userOpTable.items():
-                s += symbol.userOp2str(depth=depth + 1)
+                s += symbol.scope2str(depth=depth + 1)
         if self.childScopeTable:
             s += "    " * depth + "\033[32mchildScope:\033[0m\n"
             for _, scope in self.childScopeTable.items():
-                if scope.type == "package": s += scope.package2str(depth=depth + 1)
+                if scope.type == "package": s += scope.scope2str(depth=depth + 1)
         return s
 
     def __repr__(self):
-        return self.package2str()
+        return self.scope2str()
 
     def add_typeSymbol(self, typeSymbol: SyntaxTypeSymbol) -> None:
         self.typeSymbolTable[typeSymbol.name] = typeSymbol

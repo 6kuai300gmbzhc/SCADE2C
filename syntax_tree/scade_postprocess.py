@@ -1,6 +1,7 @@
+from collections import deque
+
 from syntax_tree.SyntaxClass import *
-import syntax_tree.graph
-import itertools
+from syntax_tree.graph import Graph
 import syntax_tree.control_block_post_process as control_block_post_process
 import scade_type_inference as type_inference
 from syntax_tree.scade_const_expression import cal_const_expr

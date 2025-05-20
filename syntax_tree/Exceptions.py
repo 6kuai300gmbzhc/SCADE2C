@@ -91,3 +91,10 @@ class CanNotInstantiateException(Exception):
 
     def __str__(self):
         return repr(f"{self.userOp.get_global_name()}无法就{self.param_expr}进行模板函数实例化,因为{self.reason}")
+class UnsatisfiableSizeException(Exception):
+    def __init__(self,obj,required_size,given_size):
+        self.obj=obj
+        self.required_size=required_size
+        self.given_size=given_size
+    def __str__(self):
+        return repr(f"{self.obj}有size{self.required_size},但是却访问了下标为{self.given_size}处的数据")

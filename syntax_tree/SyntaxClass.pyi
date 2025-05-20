@@ -43,6 +43,7 @@ class SyntaxExpr(HasRhs):
     objects: List[Any]
     scope: SyntaxScope
     syntaxSymbol: Optional[SyntaxVariableSymbol]
+    idx_list: Optional[list[int]]
     appliedOp: Optional[SyntaxUserOp]
     appliedOpContextList: List[int]
     appliedOpOutCName: str
@@ -92,7 +93,8 @@ class SyntaxType:
     basic_type: list[str]
     extend_type: list[str]
     hierarchy_dict: dict[str:str]
-    _size: int
+    _size: int or None
+    min_size: Optional[int]
     def __init__(self, tar_type: str, scope: Optional[SyntaxScope] = None):...
     def __repr__(self) -> str:...
     def change_name(self) -> str:...
@@ -405,7 +407,7 @@ class SyntaxState(SyntaxDataDefScope):
     def __repr__(self) -> str:
         ...
 
-    def state2str(self, depth: int = 0) -> str:
+    def scope2str(self, depth: int = 0) -> str:
         ...
 
 
@@ -501,7 +503,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def get_outC_name(self) -> str:
         ...
 
-    def userOp2str(self, depth: int = 0) -> str:
+    def scope2str(self, depth: int = 0) -> str:
         ...
 
     def __repr__(self) -> str:
@@ -525,7 +527,7 @@ class SyntaxPackageScope(SyntaxScope):
     def __init__(self, type: str, name:str, prevscope: SyntaxScope, visibility: str):
         ...
 
-    def package2str(self, depth: int = 0) -> str:
+    def scope2str(self, depth: int = 0) -> str:
         ...
 
     def __repr__(self) -> str:
