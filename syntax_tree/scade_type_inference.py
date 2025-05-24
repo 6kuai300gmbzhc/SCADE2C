@@ -617,7 +617,7 @@ def inference_operator_handler(type_):
     return decorator
 
 
-def type_inference_operator(operator, lhs_type_list, param_expr, data_def):
+def type_inference_operator(operator, lhs_type_list, param_expr, data_def)->(list[int],SyntaxUserOp or None,list[SyntaxType]):
     """让所有的operator处理函数返回一个列表，涵盖了到目前为止所构建的上下文数组的情况，不用数组就返回空列表
     让apply_expr那边进行处理
     比如map (map <<3>>) <<2>> 返回[2,3]
@@ -684,6 +684,54 @@ def type_inerence_generalized_get(expr, lhs_type_list: list[SyntaxType], data_de
     expr.set_lhs_type(actual_type_list)
     return expr.lhsTypeList
 
+@inference_operator_handler("activateDefault")
+def type_inference_apply_activateDefault(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
+    # 三个组件，一个op，一个bool表达式，一个默认表达式
+    type_inference_expr(operator.objects[1],[SyntaxType("bool")],data_def)
+    default_types=type_inference_expr(operator.objects[2],lhs_type_list,data_def)
+    op_context_list, apply_userOp, op_types = type_inference_operator(operator.objects[0],lhs_type_list,param_expr,data_def)
+    min_types=[min(a,b) for a,b in zip(default_types,op_types)]
+
+    if not all([a==b for a,b in zip(default_types,min_types)]):
+        type_inference_expr(operator.objects[2], min_types, data_def)
+    if not all([a==b for a,b in zip(op_types,min_types)]):
+        op_context_list, apply_userOp, op_types=type_inference_operator(operator.objects[0],min_types,param_expr,data_def)
+
+    operator.set_lhs_type(op_types)
+    return op_context_list, apply_userOp, operator.lhsTypeList
+@inference_operator_handler("make")
+def type_inference_apply_make(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def:SyntaxDataDefScope):
+    # 先找到对应的结构体，然后再进行校验
+    struct_type:SyntaxType=data_def.check_and_get_type_symbol(operator.objects[0]).syntaxType
+    required_type=lhs_type_list[0]
+
+    if len(lhs_type_list) != 1 or required_type!=struct_type or struct_type.get_real_type().type!="field_decl":
+        raise TypeMismatchException(operator, lhs_type_list, data_def)
+
+    fields=struct_type.get_real_type().fields
+    given_types:list[SyntaxType]=[field[1] for field in fields]
+    type_inference_expr(param_expr,given_types,data_def)
+
+    operator.set_lhs_type([struct_type])
+    return [],None,operator.lhsTypeList
+
+
+@inference_operator_handler("flatten")
+def type_inference_apply_flatten(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
+    # 参数表达式为operator明确给出的类型
+    struct_type:SyntaxType=data_def.check_and_get_type_symbol(operator.objects[0]).syntaxType
+    type_inference_expr(param_expr, [struct_type], data_def)
+
+    fields = struct_type.get_real_type().fields
+    given_types: list[SyntaxType] = [field[1] for field in fields]
+    # 返回的左值类型为对给出的类型进行解包
+    # 然后比较给出的左值类型和参数中要求的左值类型
+
+    if len(given_types) != len(lhs_type_list) or not all(g<=r for g,r in zip(given_types,lhs_type_list)):
+        raise TypeMismatchException(operator,lhs_type_list,data_def)
+
+    operator.set_lhs_type(given_types)
+    return [],None,operator.lhsTypeList
 
 @inference_operator_handler("iterator")
 def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
@@ -691,16 +739,18 @@ def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[
     map,fold,mapi,foldi,mapfold,mapfoldi
     """
     # 先就map和fold，把abc_N做完了再说别的
+    # 加入带i的情况，需要给下层operator的最前面塞一个int32类型的参数
     sub_operator = operator.objects[2]
     required_length = cal_const_expr(operator.objects[3]).value
     operator.set_array_length(required_length)
-    iterator_op = operator.objects[0]
-    if iterator_op == "map":
+    iterator_op:str = operator.objects[0]
+    if iterator_op.startswith("mapfold"):
+        map_index=operator.objects[1]
+    elif iterator_op.startswith("map"):
         map_index = 0
-    elif iterator_op == "fold":
-        map_index = 1
     else:
-        raise Exception(f"{iterator_op}还没完成没有类型推导呢")
+        # iterator_op.startswith("fold")
+        map_index = 1
     # 根据不同算符，进行推理
     non_map_lhs_list = lhs_type_list[:map_index]
     map_lhs_list = lhs_type_list[map_index:]
@@ -712,10 +762,17 @@ def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[
     required_param = SyntaxExpr(type="generalized_get", subtype="", scope=data_def,
                                 objects=[param_expr, required_length, map_index], returnNum=param_expr.returnNum)
     # 构造一个新的参数expr，给下一层operator使用
+    if iterator_op.endswith("i"):
+        # 如果带了i要塞参数
+        required_lhs_types.insert(0,SyntaxType("int32"))# 文档没说要啥类型，就int32了
+        tmp_idx_expr=SyntaxExpr(type="Atom",subtype="integernum",scope=data_def,objects=["1"])
+        required_param= SyntaxExpr(type="List_expr",subtype="List_expr",scope=data_def,
+                                   objects=[tmp_idx_expr,required_param],returnNum=required_param.returnNum+1)
+
 
     context_list, apply_userOp, given_lhs_list = type_inference_operator(sub_operator, required_lhs_types,
                                                                          required_param, data_def)
-    if iterator_op == "fold":
+    if iterator_op.startswith("fold"):
         # 只返回第一个
         actual_lhs_list = [given_lhs_list[0]]
     else:
@@ -820,7 +877,7 @@ def instantiate_template_function(userOp: SyntaxUserOp, lhs_type_list: list[Synt
 def generate_instantiate_name(userOp,instantiate_dict):
     """不能重名，生成func_int32之类的名字"""
 
-    post_fix = "_".join(t.get_real_type() for t in instantiate_dict.values())
+    post_fix = "_".join(t.get_real_type().type for t in instantiate_dict.values())
     if userOp.isImported:
         instant_name = f"{userOp.name}{post_fix[-2:]}"
     else:

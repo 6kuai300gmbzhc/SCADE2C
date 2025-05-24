@@ -196,7 +196,7 @@ class GenerateCode:
     def check_and_add_special_types(self, syntaxType: SyntaxType):
         """向types文件中添加特殊类型定义"""
         c_type_name = syntaxType.change_name()
-        if syntaxType.get_real_type() == "array":
+        if syntaxType.get_real_type().type == "array":
             if c_type_name not in self.specialTypes:
                 self.specialTypes.add(c_type_name)
                 type_decl_code = f"typedef " \
@@ -1332,7 +1332,9 @@ def generate_syntax_type_field_decl(typeSymbol, rootPackage):
     var_name = typeSymbol.name if len(global_name) == 0 else f"{typeSymbol.name}_{global_name}"
     precode = ""
     code = f"typedef struct {var_name} {{\n"
-    for k, v in typeSymbol.syntaxType.fields.items():
+    for field in typeSymbol.syntaxType.fields:
+        k=field[0]
+        v=field[1]
         if v.type in v.basic_type:
             code += f"kcg_{v.type} {k};\n"
         else:

@@ -86,9 +86,11 @@ def post_process(root_scope: SyntaxPackageScope,main_operator_path:str):
         post_process_userOp(userOp)
         # 按拓扑顺序去遍历各个函数，而非按package的顺序
         # 前面已经处理过open package，所以应该不会出现找不到引用的情况
+    print("============postProcess END============")
     instantiated_op_order=type_inference.type_inference(main_operator) # 主节点在最后一个，是必然的,即进行一个反向的遍历
 
-    print("============postProcess END============")
+
+
     return instantiated_op_order
 
 
@@ -462,6 +464,7 @@ def merge_rhs_list(rhs_list:list[set[str]])->list[set[str]]:
     for rhs in rhs_list:
         output.update(rhs)
     return [output]
+
 def post_process_operator(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
     """返回两个参数，expr返回参数数量，和右值列表"""
     type_ = operator.subtype

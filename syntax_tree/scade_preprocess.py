@@ -178,9 +178,9 @@ def p_type_expr(p):
     | Type_expr EXPONENT Expr'''
     if p[1].value == "{":
         p[0] = SyntaxType(tar_type="field_decl")
-        p[0].fields = dict()
-        p[0].fields.update(p[2].value)
-        p[0].fields.update(p[3].value)
+        p[0].fields = list()
+        p[0].fields.append(p[2].value)
+        p[0].fields.extend(p[3].value)
         return
     if len(p) == 4:
         p[0] = SyntaxType(tar_type="array")
@@ -202,8 +202,7 @@ def p_field_decl(p):
     '''Field_decl : LV6ID COLON Type_expr'''
     p[0] = lex_value("field_decl")
     p[0].type = p[1].value
-    p[0].value = dict()
-    p[0].value[p[1].value] = p[3]
+    p[0].value = [p[1].value,p[3]]
 
 
 def p_type_expr_1(p):
@@ -211,10 +210,10 @@ def p_type_expr_1(p):
     | empty'''
     p[0] = lex_value("type_expr_1")
     p[0].type = "type_expr_1"
-    p[0].value = dict()
+    p[0].value = list()
     if len(p) != 2:
-        p[0].value.update(p[2].value)
-        p[0].value.update(p[3].value)
+        p[0].value.append(p[2].value)
+        p[0].value.extend(p[3].value)
 
 
 # 常数声明，在const_decl中加入到对应scope中

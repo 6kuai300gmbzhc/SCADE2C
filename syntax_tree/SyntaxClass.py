@@ -271,13 +271,13 @@ class SyntaxExpr(HasRhs):
         if self.lhsTypeList:
             s += " as "
             if len(self.lhsTypeList) == 1:
-                s += self.lhsTypeList[0].get_real_type()
+                s += self.lhsTypeList[0].get_real_type().type
             else:
-                s += f"({','.join([t.get_real_type() for t in self.lhsTypeList])})"
+                s += f"({','.join([t.get_real_type().type for t in self.lhsTypeList])})"
         return s
 
     def get_type_and_value_for_atom(self):
-        """以str的格式返回这个atom类型的expr值的具体数据类型到底是什么"""
+        """以str的格式返回这个atom类型的expr值的具体数据类型到底是什么,然后也返回了对应的值"""
         if self.type != "Atom":
             raise TypeMismatchException(self, "bool")
         subtype = self.subType
@@ -376,7 +376,7 @@ class SyntaxEquation(HasRhs):
         if len(self.lhs) > 0:
             if self.lhsTypeList:
                 s += ",".join(
-                    [f"{str(self.lhs[index])} as {self.lhsTypeList[index].get_real_type()}" for index in
+                    [f"{str(self.lhs[index])} as {self.lhsTypeList[index].get_real_type().type}" for index in
                      range(len(self.lhs))])
             else:
                 s += ",".join([f"{str(self.lhs[index])}" for index in range(len(self.lhs))])
@@ -444,7 +444,7 @@ class SyntaxType:
     必须在编译时可知，并且是严格大于0
     '''
 
-    fields: dict = None
+    fields:  list[list[str or 'SyntaxTypeSymbol']] or None
     '''类型为field_decl时有效，存储了ID:SyntaxTypeSymbol的键值对'''
 
     enumList: list['SyntaxConstSymbol'] = None
@@ -483,6 +483,7 @@ class SyntaxType:
         self._size = None
         self.scope = scope
         self._real_type = None  # 给path_id的缓存
+        self.fields=None
         self.enumList=list()
 
     def __repr__(self):
@@ -494,8 +495,10 @@ class SyntaxType:
             s += "sizeExpr:" + str(self.sizeExpr) + " "
         if self.fields:
             s += "Fields:{"
-            for ID, field in self.fields.items():
-                s += ID + ":" + str(field) + ","
+            for field in self.fields:
+                ID=field[0]
+                symbol=field[1]
+                s += ID + ":" + str(symbol.get_real_type()) + ","
             s = s[:-1]
             s += "}"
         if self.enumList:
@@ -507,7 +510,7 @@ class SyntaxType:
         if self.value:
             s += self.value + " "
             try:
-                s += self.get_real_type()
+                s += self.get_real_type().type
             except Exception as e:
                 s += ""
         return s
@@ -553,8 +556,8 @@ class SyntaxType:
             tar_type: 一个SyntaxType
         """
         if tar_type.type == "any": return True
-        cur_type = self.get_real_type()
-        dst_type = tar_type.get_real_type()
+        cur_type = self.get_real_type().type
+        dst_type = tar_type.get_real_type().type
         if dst_type in self.extend_type:
             return cur_type in self.hierarchy_dict[dst_type]
         else:
@@ -563,11 +566,21 @@ class SyntaxType:
     def __eq__(self, other: 'SyntaxType'):
         if not isinstance(other, SyntaxType):
             return NotImplemented
-        if self.type != "array":
-            return self.get_real_type() == other.get_real_type()
-        else:
-            return self.arrayType == other.arrayType and self.get_size() == other.get_size()
+        cur_type = self.get_real_type()
+        dst_type = other.get_real_type()
+        if cur_type.type == "array":
+            if dst_type.type!="array":return False
+            return cur_type.arrayType == dst_type.arrayType and cur_type.get_size() == dst_type.get_size()
             # 数组需要尺寸和类型都一致
+        elif cur_type.type== "field_decl":
+            if dst_type.type!="field_decl":
+                return False
+            # 结构体类型比较结构体内部类型是否相等
+            # 原来直接用等于就可以了啊，python真方便（
+            return cur_type.fields==dst_type.fields
+        else:
+            return cur_type.get_real_type().type == dst_type.get_real_type().type
+
 
     def __ne__(self, other: 'SyntaxType'):
         if not isinstance(other, SyntaxType):
@@ -584,28 +597,28 @@ class SyntaxType:
             return NotImplemented
         return self.__le__(other) and self.__ne__(other)
 
-    def get_real_type(self):
+    def get_real_type(self)->'SyntaxType':
         if self.type == "path_id" or self.type == "typevar":
-            return self.resolve_path_id().get_real_type()
+            return self.resolve_path_id()
         else:
-            return self.type
+            return self
 
     def is_basic_type(self):
-        return self.get_real_type() in self.basic_type
+        return self.get_real_type().type in self.basic_type
 
-    def resolve_path_id(self):
+    def resolve_path_id(self)->'SyntaxType':
         if self.type != "path_id" and self.type != "typevar":
             raise Exception(f"{self}不是pathId或者typevar,而是{self.type}")
         type_symbol = self.scope.check_and_get_type_symbol(self.value)
         if type_symbol is None:
             raise UnknownIdentifierException(f"找不到{self.value}，在{self.scope.get_global_name()}内")
-        return type_symbol.syntaxType
+        return type_symbol.syntaxType.get_real_type()
 
     def get_size(self):
         '''计算size表达式，得到一个int值'''
         if self._size is None:
             if self.type == "field_decl":
-                size = len(self.fields.keys())
+                size = len(self.fields)
             elif self.type == "array":
                 from syntax_tree.scade_const_expression import cal_const_expr
                 const_value = cal_const_expr(self.sizeExpr)
@@ -1028,7 +1041,7 @@ class SyntaxScope:
         const_param = tar_package.get_const_symbol(name)
         return const_param
 
-    def check_and_get_type_symbol(self, type_path_id):
+    def check_and_get_type_symbol(self, type_path_id)->SyntaxTypeSymbol:
         """根据路径找到对应的type_decl，没有则返回None
          Parameters:
             type_path_id: 指向某个type_decl,可以没有：：
