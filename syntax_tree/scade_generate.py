@@ -834,7 +834,7 @@ def generate_Array_expr(syntaxExpr, syntaxUserOp, genEqu):
 @register_array_expr_handler("construct")
 def generate_array_expr_construct(syntaxExpr, data_def, genEqu):
     tmp_para, tmp_name = generate_tmp_symbol_and_register(data_def, syntaxExpr.lhsTypeList[0], "array_tmp")
-    size = cal_const_expr(syntaxExpr.objects[1]).value
+    size = cal_const_expr(syntaxExpr.objects[1],SyntaxType("integer"),data_def).value
     element = SyntaxExpr_generate(syntaxExpr.objects[0], data_def, genEqu)
     code = f"{'    ' * genEqu.depth}for(kcg_size idx{genEqu.depth}=0;idx{genEqu.depth}<{size};idx{genEqu.depth}++){{\n" \
            f"{'    ' * (genEqu.depth + 1)}{tmp_name}[idx{genEqu.depth}] = {element};\n" \
@@ -842,6 +842,11 @@ def generate_array_expr_construct(syntaxExpr, data_def, genEqu):
     genEqu.add_preEquations(code)
     return tmp_name
 
+@register_array_expr_handler("list")
+def generate_array_expr_list(syntaxExpr, data_def, genEqu):
+    #数组初始化函数，直接写成{a,b,c,d}即可
+    elements: list[SyntaxExpr] = syntaxExpr.objects[0].objects
+    return f"{{{', '.join([SyntaxExpr_generate(expr,data_def,genEqu) for expr in elements])}}}"
 
 @register_expr_handler('Apply_expr')
 def generate_Apply_expr(syntaxExpr, syntaxUserOp, genEqu):
@@ -1323,6 +1328,7 @@ def generate_syntax_type_enum(typeSymbol, rootPackage):
     print("=== enum ===")
     print(code)
     # 不对啊不对
+    # 具体哪不对你怎么不告诉我??
     return code
 
 
@@ -1403,7 +1409,7 @@ def generate_const_equation(rootPackage):
     global_name = rootPackage.get_global_name()
     for name, constSymbol in rootPackage.constSymbolTable.items():
         if not constSymbol.used: continue
-        if constSymbol.syntaxType == SyntaxType("enum"): continue
+        if constSymbol.syntaxType.get_real_type().type == "enum": continue
         symbol_name = name if len(global_name) == 0 else f"{name}_{global_name}"
         symbol_type = constSymbol.syntaxType.change_name()
         if constSymbol.isImported == True:

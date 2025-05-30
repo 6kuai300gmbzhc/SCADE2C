@@ -177,13 +177,13 @@ def p_type_expr(p):
     | LBPARENTHESE Field_decl Type_expr_1 RBPARENTHESE
     | Type_expr EXPONENT Expr'''
     if p[1].value == "{":
-        p[0] = SyntaxType(tar_type="field_decl")
+        p[0] = SyntaxType(tar_type="field_decl",scope=cur_scope)
         p[0].fields = list()
         p[0].fields.append(p[2].value)
         p[0].fields.extend(p[3].value)
         return
     if len(p) == 4:
-        p[0] = SyntaxType(tar_type="array")
+        p[0] = SyntaxType(tar_type="array",scope=cur_scope)
         p[0].arrayType = p[1]
         p[0].sizeExpr = p[3]
         return
@@ -193,10 +193,9 @@ def p_type_expr(p):
         p[0].sizeExpr = p[3]
         return
     # 普通的情况
-    p[0] = SyntaxType(tar_type=p[1].strs)
+    p[0] = SyntaxType(tar_type=p[1].strs,scope=cur_scope)
     if p[1].strs == "typevar" or p[1].strs == "path_id":
         p[0].value = p[1].value
-        p[0].scope = cur_scope
 
 def p_field_decl(p):
     '''Field_decl : LV6ID COLON Type_expr'''
@@ -1396,6 +1395,7 @@ def p_operator(p):
         else:
             p[0] = SyntaxOperator(subtype="PREFIXOP")
         p[0].add_object(p[1].value)
+        p[0].add_object([])
     elif length == 5:
         if p[2].strs == "make":
             p[0] = SyntaxOperator(subtype="make")

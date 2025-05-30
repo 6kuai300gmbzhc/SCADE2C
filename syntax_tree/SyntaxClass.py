@@ -485,6 +485,9 @@ class SyntaxType:
         self._real_type = None  # 给path_id的缓存
         self.fields=None
         self.enumList=list()
+        need_scope_type=("typevar","array","enum","field_decl")
+        if self.type in need_scope_type and self.scope is None:
+            raise Exception(f"{self}的类型必须需要指定scope")
 
     def __repr__(self):
         s = ""
@@ -621,9 +624,7 @@ class SyntaxType:
                 size = len(self.fields)
             elif self.type == "array":
                 from syntax_tree.scade_const_expression import cal_const_expr
-                const_value = cal_const_expr(self.sizeExpr)
-                if const_value.type_belong_to(SyntaxType("numeric")) and const_value.type_belong_to(SyntaxType("float")):
-                    raise NotStaticExprException(self.sizeExpr)
+                const_value = cal_const_expr(self.sizeExpr,SyntaxType("integer"),self.scope)
                 size = const_value.value
             elif self.type == "enum":
                 size = len(self.enumList)
@@ -735,7 +736,7 @@ class SyntaxConstSymbol:
         """获取值"""
         if self.__value is None:
             from syntax_tree.scade_const_expression import cal_const_expr
-            self.__value = cal_const_expr(self.valueExpr).value
+            self.__value = cal_const_expr(self.valueExpr,SyntaxType("any"),self.scope).value
         return self.__value
 
     def set_value(self, value):
@@ -1665,8 +1666,8 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''可见性，默认为public'''
     isImported: bool
     '''是不是imported'''
-    sizeDecl: dict
-    '''输入的size参数，其中每个值都是const,存名字->SyntaxConstSymbol'''
+    sizeParams: list[SyntaxConstSymbol]
+    '''输入的size参数，其中每个值都是const,需要实例化后才有实际意义'''
     inParams: list  # 存SyntaxVariableSymbol
     '''输入参数，是一个变量声明列表'''
     outParams: list  # 存SyntaxVariableSymbol
@@ -1696,7 +1697,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         self.outParams = list()
         self.typeVarSymbolTable = dict()
         # self.tmpParams = list()
-        self.sizeDecl = dict()
+        self.sizeParams = list()
         self.dependentFunctions = list()
         self.output2inputDependents = list()
         self.isImported = isImported
@@ -1707,10 +1708,13 @@ class SyntaxUserOp(SyntaxDataDefScope):
         for name in sizeDecl:
             const_symbol = SyntaxConstSymbol(name=name, scope=self)
             const_symbol.syntaxType = SyntaxType(tar_type="unsigned")
-            self.sizeDecl[name] = const_symbol
+            self.sizeParams.append(const_symbol)
 
     def get_size_symbol(self, name):
-        return self.sizeDecl.get(name)
+        for symbol in self.sizeParams:
+            if symbol.name==name:
+                return symbol
+        return None
 
     def set_outParams(self, outParams):
         self.outParams = outParams
@@ -1751,7 +1755,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         self.output2inputDependents[output_index].append(input_index)
 
     def isTemplate(self):
-        return self.numericKind is not None
+        return self.numericKind is not None or len(self.sizeParams)>0
 
     def add_type_var(self, type_var_name):
         self.typeVarSymbolTable[type_var_name] = \
@@ -1780,10 +1784,10 @@ class SyntaxUserOp(SyntaxDataDefScope):
         for prev_scope in reversed(prev_list):
             s += prev_scope + "::"
         s += self.name
-        if self.sizeDecl:
+        if self.sizeParams:
             s += "<<"
-            for decl in self.sizeDecl.keys():
-                s += decl + ","
+            for decl in self.sizeParams:
+                s += str(decl) + ","
             s = s[:-1]
             s += ">>"
         s += "( "

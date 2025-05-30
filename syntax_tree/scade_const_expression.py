@@ -1,7 +1,5 @@
 from syntax_tree.SyntaxClass import *
 
-
-
 const_expr_handlers = {}
 
 
@@ -13,7 +11,7 @@ def const_expr_handler(type_):
     return decorator
 
 
-def cal_const_expr(expr: SyntaxExpr) -> ConstValue:
+def cal_const_expr(expr: SyntaxExpr,required_type:SyntaxType,scope:SyntaxPackageScope or SyntaxDataDefScope) -> ConstValue:
     """计算常数表达式，得到具体值
     允许的表达式类型：
     userOP对应的size_decl,非imported的const值->Path_id
@@ -33,15 +31,18 @@ def cal_const_expr(expr: SyntaxExpr) -> ConstValue:
     对于size_decl等需要返回int值
     对常量赋值需要返回兼容常量的值
     """
+
+    from syntax_tree.scade_type_inference import type_inference_expr
+    type_inference_expr(expr,[required_type],scope)
     _type = expr.type
     handler = const_expr_handlers.get(_type)
     if handler is None:
         raise NotStaticExprException(expr)
-    return handler(expr)
+    return handler(expr,required_type,scope)
 
 
 @const_expr_handler("Id_expr")
-def const_path_id(expr: SyntaxExpr) -> ConstValue:
+def const_path_id(expr: SyntaxExpr,required_type:SyntaxType,scope:SyntaxPackageScope or SyntaxDataDefScope) -> ConstValue:
     if expr.subType == "ID":
         return ConstValue(syntax_type=SyntaxType("ID"), value=expr.objects[0])
 
@@ -52,15 +53,43 @@ def const_path_id(expr: SyntaxExpr) -> ConstValue:
     const_symbol = scope.check_and_get_constant_param(path_id)
     if not const_symbol or const_symbol.isImported:
         raise UnknownIdentifierException(path_id)
-    return ConstValue(syntax_type=const_symbol.syntaxType, value=const_symbol.get_value())
+    return ConstValue(syntax_type=expr.lhsTypeList[0], value=const_symbol.get_value())
 
 
 @const_expr_handler("Atom")
-def const_integernum(expr: SyntaxExpr) -> ConstValue:
+def const_integernum(expr: SyntaxExpr,required_type:SyntaxType,scope:SyntaxPackageScope or SyntaxDataDefScope) -> ConstValue:
     given_type, value = expr.get_type_and_value_for_atom()
-    return ConstValue(syntax_type=SyntaxType(tar_type=given_type), value=value)
+    return ConstValue(syntax_type=expr.lhsTypeList[0], value=value)
 
-# @const_expr_handler("Arith_expr")
+@const_expr_handler("List_expr")
+def const_expr_list(expr: SyntaxExpr,required_type:SyntaxType,scope:SyntaxPackageScope or SyntaxDataDefScope)->ConstValue:
+    if len(expr.objects[0])!=1:
+        raise NotStaticExprException(expr)
+    return cal_const_expr(expr.objects[0][0],required_type,scope)
+
+@const_expr_handler("Arith_expr")
+def const_expr_arith(expr: SyntaxExpr,required_type:SyntaxType,scope:SyntaxPackageScope or SyntaxDataDefScope)->ConstValue:
+    subtype=expr.subType
+    if subtype=="cast":
+        syntax_type = expr.objects[1]
+        const_value=cal_const_expr(expr.objects[0],required_type,scope)
+        const_value.type=syntax_type
+        return const_value
+    if subtype=="unary":
+        const_value=cal_const_expr(expr.objects[1],required_type,scope)
+        if expr.objects[0]=="-":
+            const_value.value*=-1
+        elif expr.objects[0]=="lnot":
+            const_value.value=~const_value.value
+        return const_value
+    if subtype=="binOp":
+        value_left=cal_const_expr(expr.objects[0],required_type,scope).value
+        value_right=cal_const_expr(expr.objects[2],required_type,scope).value
+        binOP=expr.objects[1]
+        _value=eval(f"{str(value_left)}{SyntaxExpr.binop_dict[binOP]}{str(value_right)}")
+        const_value=ConstValue(expr.lhsTypeList[0],_value)
+        return const_value
+
 # def const_unary(expr: SyntaxExpr) -> int:
 #     unary_op = expr.objects[0]
 #     value = cal_const_expr(expr.objects[1])

@@ -49,7 +49,7 @@ class SyntaxExpr(HasRhs):
     appliedOpContextList: List[int]
     appliedOpOutCName: str
     returnNum: int
-
+    binop_dict:dict[str,str]
     def __init__(self, type: str, subtype: str, scope: SyntaxScope, objects: Optional[List[Any]] = None, returnNum: int = 1):...
     def add_object(self, tar_object: Any, index: Optional[int] = None):...
     def set_symbol(self, symbol: SyntaxVariableSymbol):...
@@ -455,7 +455,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
     equations: List[SyntaxEquation]
     visibility: str
     isImported: bool
-    sizeDecl: Dict[str, SyntaxConstSymbol]
+    sizeParams: list[SyntaxConstSymbol]
     inParams: List[SyntaxVariableSymbol]
     outParams: List[SyntaxVariableSymbol]
     numericKind: Optional[str]
