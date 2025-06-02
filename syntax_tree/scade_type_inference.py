@@ -554,14 +554,14 @@ def type_inference_array_get_default(expr, lhs_type_list: list[SyntaxType], data
     expr.set_lhs_type([given_default_type])
     return expr.lhsTypeList
 
-@inference_expr_handler("list")
+@inference_array_handler("list")
 def type_inference_array_list(expr, lhs_type_list: list[SyntaxType], data_def):
     # 构造函数，允许output:int32^4;然后output=[(1,2),(3,4)];实在是太抽象了
     # 还好准备了returnNum属性用来处理list的情况
     if len(lhs_type_list) != 1:
         raise TypeMismatchException(expr, lhs_type_list, data_def)
     required_type=lhs_type_list[0]
-    elements:list[SyntaxExpr]=expr.objects[0].objects
+    elements:list[SyntaxExpr]=expr.objects[0].objects[0]
     return_sum=sum([element.returnNum for element in elements])
     if not (required_type.get_size()==return_sum or required_type.min_size<return_sum):
         UnsatisfiableSizeException(expr,required_type.get_size(), f"{required_type.get_size()}或最小值{required_type.min_size}")
@@ -578,10 +578,6 @@ def type_inference_array_list(expr, lhs_type_list: list[SyntaxType], data_def):
     actual_element_type=type_inference_on_groups(element_exprs,[required_type.get_element_type_for_array()],data_def)[0]
     expr.set_lhs_type([SyntaxType("array").set_element_and_size(actual_element_type,required_type.get_size())])
     return expr.lhsTypeList
-
-
-
-
 
 
 @inference_expr_handler("Switch_expr")
@@ -716,7 +712,7 @@ def type_inference_apply_make(operator: SyntaxOperator, lhs_type_list: list[Synt
         raise TypeMismatchException(operator, lhs_type_list, data_def)
 
     fields=struct_type.get_real_type().fields
-    given_types:list[SyntaxType]=[field[1] for field in fields]
+    given_types:list[SyntaxType]=[field.syntaxType for field in fields]
     type_inference_expr(param_expr,given_types,data_def)
 
     operator.set_lhs_type([struct_type])
@@ -730,7 +726,7 @@ def type_inference_apply_flatten(operator: SyntaxOperator, lhs_type_list: list[S
     type_inference_expr(param_expr, [struct_type], data_def)
 
     fields = struct_type.get_real_type().fields
-    given_types: list[SyntaxType] = [field[1] for field in fields]
+    given_types: list[SyntaxType] = [field.syntaxType for field in fields]
     # 返回的左值类型为对给出的类型进行解包
     # 然后比较给出的左值类型和参数中要求的左值类型
 

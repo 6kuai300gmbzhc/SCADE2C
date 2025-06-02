@@ -444,8 +444,8 @@ class SyntaxType:
     必须在编译时可知，并且是严格大于0
     '''
 
-    fields:  list[list[str or 'SyntaxTypeSymbol']] or None
-    '''类型为field_decl时有效，存储了ID:SyntaxTypeSymbol的键值对'''
+    fields:  list['SyntaxTypeSymbol'] or None
+    '''类型为field_decl时有效，按顺序存储了SyntaxTypeSymbol'''
 
     enumList: list['SyntaxConstSymbol'] = None
     '''类型为enum时有效，存储了枚举类型的ID列表'''
@@ -499,9 +499,7 @@ class SyntaxType:
         if self.fields:
             s += "Fields:{"
             for field in self.fields:
-                ID=field[0]
-                symbol=field[1]
-                s += ID + ":" + str(symbol.get_real_type()) + ","
+                s += field.name + ":" + str(field.syntaxType.get_real_type()) + ","
             s = s[:-1]
             s += "}"
         if self.enumList:
@@ -665,10 +663,11 @@ class SyntaxTypeSymbol:
     numericKind: str = None
     '''类型为imported时有效，存储了引用的类型'''
 
-    def __init__(self, name: str, syntaxType: SyntaxType or None, visibility: str = "public"):
+    def __init__(self, name: str, syntaxType: SyntaxType or None, visibility: str = "public", isImported=False):
         self.name = name
         self.syntaxType = syntaxType
         self.visibility = visibility
+        self.isImported=isImported
 
     def __repr__(self):
         s = ""
@@ -1307,6 +1306,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         return self.initVar
 
     def var_change_name(self, name):
+        if name=="_":return name
         symbol = self.get_localVariable_InThisAndPreEnv(name)
         if symbol is None:
             symbol = self.get_tmpSymbol(name)

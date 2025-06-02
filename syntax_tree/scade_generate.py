@@ -446,11 +446,8 @@ def generate_tempo_expr_fby(syntaxExpr, syntaxUserOp, genEqu):
 
 @register_tempo_expr_hander("TIMES")
 def generate_tempo_expr_times(syntaxExpr, syntaxUserOp, genEqu):
-    counter_name = syntaxUserOp.generate_name_for_tmp(postfix="counter")
-    counter_symbol = SyntaxVariableSymbol(counter_name, False, False)
+    counter_symbol,counter_name=generate_tmp_symbol_and_register(syntaxUserOp,SyntaxType("int32"),"counter")
     counter_symbol.isOutput = True
-    counter_symbol.syntaxType = SyntaxType("int32")
-    syntaxUserOp.add_tmpSymbol(counter_symbol)
     # preCode分为两部分，先根据init决定是否初始化，根据输入的布尔值决定是否自减
     # counter_name需要加入到outC之中
     depth = genEqu.depth
@@ -845,9 +842,59 @@ def generate_array_expr_construct(syntaxExpr, data_def, genEqu):
 @register_array_expr_handler("list")
 def generate_array_expr_list(syntaxExpr, data_def, genEqu):
     #数组初始化函数，直接写成{a,b,c,d}即可
-    elements: list[SyntaxExpr] = syntaxExpr.objects[0].objects
+    elements: list[SyntaxExpr] = syntaxExpr.objects[0].objects[0]
     return f"{{{', '.join([SyntaxExpr_generate(expr,data_def,genEqu) for expr in elements])}}}"
+@register_array_expr_handler("get")
+def generate_array_expr_get(syntaxExpr, data_def, genEqu):
+    idx=syntaxExpr.idx_list[0]
+    return f"{SyntaxExpr_generate(syntaxExpr.objects[0],data_def,genEqu)}[{idx}]"
+@register_array_expr_handler("getdefault")
+def generate_array_expr_getdefault(syntaxExpr, data_def, genEqu:GenEqu):
+    # 要在这里检查idx是不是超过数组长度了
+    # 可以get很多层，所以需要递归的看数组
+    depth=genEqu.depth
+    tmp_var,tmp_name=generate_tmp_symbol_and_register(data_def,syntaxExpr.lhsTypeList[0])
 
+    cmp_code = ""
+
+    normal_expr:SyntaxExpr=syntaxExpr.objects[0]
+    normal_code=SyntaxExpr_generate(normal_expr,data_def,genEqu)
+    arr_type=normal_expr.lhsTypeList[0]
+    cur_type=arr_type
+    for idx_expr in syntaxExpr.objects[1]:
+        idx_code=SyntaxExpr_generate(idx_expr,data_def,genEqu)
+        normal_code+=f"[{idx_code}]"
+        # 构建校验是否超出数组上限的表达式
+        cur_size=cur_type.get_size()
+        cur_type=cur_type.arrayType
+        cmp_code+=f"(((kcg_lit_int32(0) <= {idx_code})&({idx_code} < kcg_lit_int32({cur_size})))&"
+    cmp_code=cmp_code[:-1]
+
+    get_normal_code=assign_lhs_to_rhs_expr(tmp_name,normal_code,normal_expr.lhsTypeList,depth,data_def)
+
+    default_expr:SyntaxExpr=syntaxExpr.objects[2]
+    default_code=SyntaxExpr_generate(default_expr,data_def,genEqu)
+    get_default_code=assign_lhs_to_rhs_expr(tmp_name,default_code,default_expr.lhsTypeList,depth,data_def)
+
+    pre_code=f"{'    '*depth}if({cmp_code}){{\n" \
+             f"{'    '*(depth+1)}{get_normal_code}\n" \
+             f"{'    '*depth}}}\n" \
+             f"{'    '*depth}else {{\n" \
+             f"{'    '*(depth+1)}{get_default_code}\n" \
+             f"{'    '*depth}}}\n"
+    genEqu.add_preEquations(pre_code)
+    return tmp_name
+
+
+@register_array_expr_handler("slice")
+def generate_array_expr_slice(syntaxExpr, data_def, genEqu:GenEqu):
+    depth=genEqu.depth
+    tmp_var,tmp_name=generate_tmp_symbol_and_register(data_def,syntaxExpr.lhsTypeList[0])
+    sliced_code=SyntaxExpr_generate(syntaxExpr.objects[1],data_def,genEqu)
+    slice_type_name=syntaxExpr.lhsTypeList[0].change_name()
+
+    genEqu.add_preEquations(f"{'    '*depth}kcg_assign_array(&({tmp_name}),  ({slice_type_name} *) &({sliced_code}), sizeof ({slice_type_name}))")
+    return tmp_name
 @register_expr_handler('Apply_expr')
 def generate_Apply_expr(syntaxExpr, syntaxUserOp, genEqu):
     # 对函数调用情况的代码生成
@@ -912,11 +959,11 @@ def register_operator_iterator_handler(type_):
 def generate_operator_iterator(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope,
                                genEqu, applied_outc_name):
     # 根据不同的算符，组建新的参数表达式交给下级operator
-    operator_name = operator.objects[0]  # "map"等
+    operator_name = operator.objects[0].replace('i',"")  # "map"等
     iterator_handler = generate_operator_iterator_handlers.get(operator_name)
     if iterator_handler is None:
         raise Exception(f"iterator之{operator_name}没有实现代码生成")
-    return iterator_handler(operator, parameters, data_def, genEqu, applied_outc_name)
+    return iterator_handler(operator, parameters, data_def, genEqu, applied_outc_name,'i' in operator.objects[0])
 
 
 def generate_tmp_symbol_and_register(data_def, syntaxType: SyntaxType = None, post_fix="tmp")->(SyntaxVariableSymbol,str):
@@ -934,7 +981,7 @@ def symbol2expr(symbol, symbol_name, symbol_type, scope):
     return expr
 
 
-def assign_lhs_to_rhs_expr(lhs_symbol_name, rhs_expr, type_list: list[SyntaxType], depth, data_def):
+def assign_lhs_to_rhs_expr(lhs_symbol_name:str or list[str], rhs_expr:str or list[str], type_list: list[SyntaxType], depth, data_def):
     code = ""
     # 很蠢的方法，后面一定会改
     # 现在变成了一般蠢的方法，后面也不一定会改
@@ -950,6 +997,7 @@ def assign_lhs_to_rhs_expr(lhs_symbol_name, rhs_expr, type_list: list[SyntaxType
     if len(rhs_exprs) != len(lhs_names) or len(lhs_names) != len(type_list):
         raise Exception(f"不对，左值{lhs_names}和右值{rhs_exprs}以及类型列表{type_list}对不上")
     for lhs, rhs, lhsType in zip(lhs_names, rhs_exprs, type_list):
+        if lhs=="_":continue
         if lhsType.type == "array":
             code += f"{'    ' * depth}memcpy(&{lhs},&({rhs}),sizeof({lhsType.change_name()}));\n"
         else:
@@ -959,7 +1007,7 @@ def assign_lhs_to_rhs_expr(lhs_symbol_name, rhs_expr, type_list: list[SyntaxType
 
 @register_operator_iterator_handler("fold")
 def generate_operator_fold(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope,
-                           genEqu: GenEqu, applied_outc_name):
+                           genEqu: GenEqu, applied_outc_name,hasI:bool):
     depth = genEqu.depth
     array_length = operator.array_length
     # 先生成一个临时变量遍历数组
@@ -969,6 +1017,8 @@ def generate_operator_fold(operator: SyntaxOperator, parameters: list[SyntaxExpr
                                                                           post_fix="fold_out")
     # 然后是为所有参数都生成一个变量用来向下传递
     sub_params = []
+    if hasI:
+        sub_params.append(symbol2expr(tmp_idx_symbol, tmp_idx, tmp_idx_symbol.syntaxType, data_def))
     sub_param_code = ""
     for i in range(len(parameters)):
         param = parameters[i]
@@ -1000,7 +1050,7 @@ def generate_operator_fold(operator: SyntaxOperator, parameters: list[SyntaxExpr
 
 @register_operator_iterator_handler("map")
 def generate_operator_map(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope, genEqu,
-                          applied_outc_name):
+                          applied_outc_name,hasI:bool):
     # map可以多返回值，此处应该返回结构体
     # 但是我做出了一个违背祖宗的决定，返回一个表达式列表，在simple_equation那里挨个进行赋值
     depth = genEqu.depth
@@ -1016,6 +1066,8 @@ def generate_operator_map(operator: SyntaxOperator, parameters: list[SyntaxExpr]
     # 然后构建传给次级operator的参数
     sub_param_code = ""
     sub_params = []
+    if hasI:
+        sub_params.append(symbol2expr(tmp_idx_symbol, tmp_idx, tmp_idx_symbol.syntaxType, data_def))
     for i in range(len(parameters)):
         param = parameters[i]
         param_code = SyntaxExpr_generate(param, data_def, genEqu)
@@ -1060,6 +1112,60 @@ def generate_and_register_outC(data_def, applied_userOp):
                                                               applied_userOp.get_global_name() + "_outC")
     return outC_name
 
+@register_operator_handler("activateDefault")
+def generate_operator_activateDefault(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope,
+                              genEqu:GenEqu, applied_outc_name):
+
+    depth=genEqu.depth
+    cond_code=SyntaxExpr_generate(operator.objects[1],data_def,genEqu)
+    tmp_symbol,tmp_name=generate_tmp_symbol_and_register(data_def,operator.lhsTypeList[0])
+    default_code=assign_lhs_to_rhs_expr(tmp_name,SyntaxExpr_generate(operator.objects[2],data_def,genEqu)
+                                        ,operator.lhsTypeList,depth,data_def)
+    activate_code=assign_lhs_to_rhs_expr(tmp_name,generate_operator(operator.objects[0],parameters,data_def,genEqu,applied_outc_name),
+                                         operator.lhsTypeList,depth,data_def)
+    pre_code=f"{'    '*depth}if({cond_code}){{\n" \
+             f"{activate_code}"\
+             f"{'    '*depth}}}\n" \
+             f"{'    '*depth}else {{\n" \
+             f"{default_code}" \
+             f"{'    '*depth}}}\n"
+    genEqu.add_preEquations(pre_code)
+    return tmp_name
+
+@register_operator_handler("make")
+def generate_operator_make(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope,
+                              genEqu:GenEqu, applied_outc_name):
+    # 搓指定结构体
+    tar_type=operator.lhsTypeList[0].get_real_type()
+    tmp_symbol,tmp_name=generate_tmp_symbol_and_register(data_def,tar_type)
+
+    #竟如此简洁，太棒了
+    param_codes=[SyntaxExpr_generate(expr,data_def,genEqu) for expr in parameters]
+    lhs_names=[f"{tmp_name}.{field.name}" for field in tar_type.fields]
+    types=[field.syntaxType for field in tar_type.fields]
+    pre_code=assign_lhs_to_rhs_expr(lhs_names,param_codes,types,genEqu.depth,data_def)
+    genEqu.add_preEquations(pre_code)
+    return tmp_name
+
+@register_operator_handler("flatten")
+def generate_operator_flatten(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope,
+                              genEqu:GenEqu, applied_outc_name):
+    #展开指定结构体,这下要返回多个str了
+
+
+    tar_expr=parameters[0]
+    tar_type = tar_expr.lhsTypeList[0].get_real_type()
+    if tar_expr.type!="Id_expr":
+        tmp_symbol, tmp_name = generate_tmp_symbol_and_register(data_def, tar_type)
+        genEqu.add_preEquations(assign_lhs_to_rhs_expr(tmp_name,SyntaxExpr_generate(parameters[0],data_def,genEqu),
+                                                       operator.lhsTypeList,genEqu.depth,data_def))
+        tar_struct_name=tmp_name
+    else:
+        tar_struct_name=SyntaxExpr_generate(tar_expr,data_def,genEqu)
+
+    fields=tar_type.fields
+    out_cods=[f"{tar_struct_name}.{field.name}" for field in fields]
+    return out_cods
 
 @register_operator_handler("Path_id")
 def generate_operator_Path_id(operator: SyntaxOperator, parameters: list[SyntaxExpr], data_def: SyntaxDataDefScope,
@@ -1339,8 +1445,8 @@ def generate_syntax_type_field_decl(typeSymbol, rootPackage):
     precode = ""
     code = f"typedef struct {var_name} {{\n"
     for field in typeSymbol.syntaxType.fields:
-        k=field[0]
-        v=field[1]
+        k=field.name
+        v=field.syntaxType
         if v.type in v.basic_type:
             code += f"kcg_{v.type} {k};\n"
         else:

@@ -201,7 +201,8 @@ def p_field_decl(p):
     '''Field_decl : LV6ID COLON Type_expr'''
     p[0] = lex_value("field_decl")
     p[0].type = p[1].value
-    p[0].value = [p[1].value,p[3]]
+    type_symbol=SyntaxTypeSymbol(p[1].value,p[3])
+    p[0].value = type_symbol
 
 
 def p_type_expr_1(p):

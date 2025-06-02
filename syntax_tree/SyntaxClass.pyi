@@ -87,7 +87,7 @@ class SyntaxType:
     scope: Optional[SyntaxScope]
     type: str
     sizeExpr: Optional[SyntaxExpr]
-    fields: Optional[list[list[str or 'SyntaxTypeSymbol']]]
+    fields: Optional[list['SyntaxTypeSymbol']]
     enumList: Optional[List[SyntaxConstSymbol]]
     value: Optional[str]
     arrayType: Optional[SyntaxType]

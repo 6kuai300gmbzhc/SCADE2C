@@ -364,7 +364,7 @@ def t_FLOATNUM(t):
          t.type=reserved.get(t.value.split("_")[-1],"TYPED_FLOAT")
          t.value = lex_value('typed_float', t.value)
     else:
-        t.value=lex_value('floatnum',float(t.value))
+        t.value=lex_value('floatnum',str(t.value))
     return t
 
 # decimal and hexadecimal
@@ -383,7 +383,7 @@ def t_INTEGERNUM(t):
     #     num=int(t.value,8)
     # else:
     #     num=int(t.value)
-    t.value = lex_value('integernum', t.value)
+    t.value = lex_value('integernum', str(t.value))
     return t
 
 def t_LV6ID(t):
