@@ -61,7 +61,10 @@ class ConstValue:
     def __repr__(self):
         return f"{str(self.type)} value:{str(self.value)}"
     # 组合代替继承太爽啦
-
+    def __eq__(self, other:'ConstValue'):
+        if not isinstance(other,ConstValue):
+            return NotImplemented
+        return self.type==other.type and self.value==other.value
 
 class HasRhs:
     rhsList: list[set[str]]

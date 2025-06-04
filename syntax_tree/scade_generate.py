@@ -352,7 +352,8 @@ class GenerateCode:
         with open(target_file, "w") as target:
             target.write(src_content)
 
-    def generate_node_file(self, node):
+    def generate_node_file(self, node:SyntaxUserOp):
+        if node.isImported:return
         self.generate_src_file(node)
         self.generate_head_file(node)
 
@@ -571,36 +572,38 @@ def register_atom_expr_handler(type_):
 
 
 @register_atom_expr_handler("bool_atom")
-def generate_atom_expr_bool(syntax_atom_expr_objects, syntaxUserOp, genEqu):
-    return f"kcg_{syntax_atom_expr_objects[0]}"
+def generate_atom_expr_bool(expr, syntaxUserOp, genEqu):
+    return f"kcg_{expr.objects[0]}"
 
 
 @register_atom_expr_handler("integernum")
-def generate_atom_expr_integernum(syntax_atom_expr_objects, syntaxUserOp, genEqu):
-    return syntax_atom_expr_objects[0]
+def generate_atom_expr_integernum(expr, syntaxUserOp, genEqu):
+    _type:SyntaxType=expr.lhsTypeList[0]
+    return f"{_type.change_name_cast()}({expr.objects[0]})"
 
 
 @register_atom_expr_handler("floatnum")
-def generate_atom_expr_floatnum(syntax_atom_expr_objects, syntaxUserOp, genEqu):
-    return syntax_atom_expr_objects[0]
+def generate_atom_expr_floatnum(expr, syntaxUserOp, genEqu):
+    _type:SyntaxType=expr.lhsTypeList[0]
+    return f"{_type.change_name_cast()}({expr.objects[0]})"
 
 
 @register_atom_expr_handler("character")
-def generate_atom_expr_character(syntax_atom_expr_objects, syntaxUserOp, genEqu):
-    return syntax_atom_expr_objects[0]
+def generate_atom_expr_character(expr, syntaxUserOp, genEqu):
+    return expr.objects[0]
 
 
 @register_atom_expr_handler("typed_integer")
-def generate_atom_expr_typed_integer(syntax_atom_expr_objects, syntaxUserOp, genEqu):
-    lst = syntax_atom_expr_objects[0].split("_")
+def generate_atom_expr_typed_integer(expr, syntaxUserOp, genEqu):
+    lst = expr.objects[0].split("_")
     value = lst[0]
     type_str = lst[1].split("i")
     return f"kcg_lit_{'int'.join(type_str)}({value})"
 
 
 @register_atom_expr_handler("typed_float")
-def generate_atom_expr_typed_float(syntax_atom_expr_objects, syntaxUserOp, genEqu):
-    lst = syntax_atom_expr_objects[0].split("_")
+def generate_atom_expr_typed_float(expr, syntaxUserOp, genEqu):
+    lst = expr.objects[0].split("_")
     value = lst[0]
     type_str = lst[1][1:]  # 后两位，就是32或者64
     return f"kcg_lit_float{type_str}({value})"
@@ -741,7 +744,7 @@ def generate_Atom_expr(syntaxExpr, syntaxUserOp, genEqu):
     subtype_ = syntaxExpr.subType
     generate_atom_expr_handler = generate_atom_expr_handlers.get(subtype_)
     if generate_atom_expr_handler:
-        return generate_atom_expr_handler(syntaxExpr.objects, syntaxUserOp, genEqu)
+        return generate_atom_expr_handler(syntaxExpr, syntaxUserOp, genEqu)
     else:
         raise ValueError(f"generate_Atom_expr , subtype:{subtype_}")
 
@@ -1527,7 +1530,7 @@ def generate_const_equation(rootPackage):
            '''
         else:
             h_content += f"extern const {symbol_type} {symbol_name};\n"
-            c_content += f"const {symbol_type} {symbol_name}={SyntaxExpr_generate(constSymbol.valueExpr, rootPackage, symbol_type)};\n"
+            c_content += f"const {symbol_type} {symbol_name}={SyntaxExpr_generate(constSymbol.valueExpr, rootPackage, GenEqu())};\n"
     return h_content, c_content
 
 

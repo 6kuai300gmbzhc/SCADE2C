@@ -6,7 +6,9 @@ import functools
 
 from syntax_tree.scade_const_expression import cal_const_expr
 
-inferenced_op=list()
+inferenced_op = list()
+
+
 def type_inference(main_operator: SyntaxUserOp):
     """对拓扑排序后，从后向前遍历userOP，进行类型推导
     有主节点的存在，最末端的userOp一定是主节点，且不是模板方法
@@ -30,6 +32,7 @@ def type_inference_userOp(userOp: SyntaxUserOp):
     type_inference_dataDef(userOp)
     print(f"{userOp.get_global_name()}的类型推导结束")
 
+
 def type_inference_dataDef(data_def: SyntaxDataDefScope):
     for equation in data_def.equations:
         if equation.type != "control_block":
@@ -50,12 +53,12 @@ def type_inference_control_block(control_block):
         for state in control_block.stateTable.values():
             type_inference_dataDef(state)
             # 然后是状态转移部分
-            for cond_expr,arrow in state.unlessTransitions:
-                type_inference_arrow(cond_expr,arrow,state)
-            for cond_expr,arrow in state.untilTransitions:
-                type_inference_arrow(cond_expr,arrow,state)
+            for cond_expr, arrow in state.unlessTransitions:
+                type_inference_arrow(cond_expr, arrow, state)
+            for cond_expr, arrow in state.untilTransitions:
+                type_inference_arrow(cond_expr, arrow, state)
             if state.synchroArrow is not None:
-                type_inference_arrow(None,state.synchroArrow,state)
+                type_inference_arrow(None, state.synchroArrow, state)
 
 
 def type_inference_arrow(cond_expr, arrow, data_def):
@@ -82,7 +85,7 @@ def type_inference_equation(equation: SyntaxEquation, data_def: SyntaxDataDefSco
         else:
             lhs_symbol = data_def.get_localVariable_InThisAndPreEnv(lhs)
             if not lhs_symbol:
-                if equation.type=="emission" and data_def.have_signal_InThisAndPreEnv(lhs):
+                if equation.type == "emission" and data_def.have_signal_InThisAndPreEnv(lhs):
                     equation.add_lhs_type(SyntaxType("bool"))
                 else:
                     raise UnknownIdentifierException(lhs)
@@ -132,13 +135,16 @@ def type_inference_ID(expr: SyntaxExpr, lhs_type_list: list[SyntaxType], data_de
     if expr.subType == "ID":
         expr_type = SyntaxType(tar_type='ID')  # ID 的type是ID
     elif expr.subType == "lastSinglequoteLv6id":
-        name = name[1:] # 去掉开头的'
-        variable_symbol=data_def.get_localVariable_InThisAndPreEnv(name)
+        name = name[1:]  # 去掉开头的'
+        variable_symbol = data_def.get_localVariable_InThisAndPreEnv(name)
         expr_type = variable_symbol.syntaxType
     elif expr.subType == "Path_id":
-        symbol=data_def.check_and_get_constant_param(name)
+        symbol = data_def.check_and_get_constant_param(name)
         if symbol is None:
-            symbol=data_def.get_localVariable_InThisAndPreEnv(name)
+            symbol = data_def.get_localVariable_InThisAndPreEnv(name)
+        else:
+            if symbol.valueExpr is not None:
+                type_inference_expr(symbol.valueExpr,[symbol.syntaxType],data_def)
         expr_type = symbol.syntaxType
     else:  # SinglequoteLv6id
         expr_type = SyntaxType("bool")
@@ -426,10 +432,10 @@ def type_inference_tempo_pre(expr, lhs_type_list: list[SyntaxType], data_def):
 def type_inference_tempo_times(expr, lhs_type_list: list[SyntaxType], data_def):
     # 需要bool类型，子类型分别是signed和bool
     # 不支持列表
-    if len(lhs_type_list) != 1 or lhs_type_list[0]!=SyntaxType("bool"):
+    if len(lhs_type_list) != 1 or lhs_type_list[0] != SyntaxType("bool"):
         raise TypeMismatchException(expr, lhs_type_list, data_def)
-    type_inference_expr(expr.objects[0],[SyntaxType("signed")],data_def)
-    type_inference_expr(expr.objects[1],[SyntaxType("bool")],data_def)
+    type_inference_expr(expr.objects[0], [SyntaxType("signed")], data_def)
+    type_inference_expr(expr.objects[1], [SyntaxType("bool")], data_def)
     expr.set_lhs_type(lhs_type_list)
     return expr.lhsTypeList
 
@@ -460,99 +466,108 @@ def type_inference_array_construct(expr, lhs_type_list: list[SyntaxType], data_d
         raise TypeMismatchException(expr, lhs_type_list, data_def)
     required_type = lhs_type_list[0]
     given_element_type = type_inference_expr(expr.objects[0], [required_type.get_element_type_for_array()], data_def)[0]
-    given_array_length = cal_const_expr(expr.objects[1],SyntaxType("integer"),data_def).value
+    given_array_length = cal_const_expr(expr.objects[1], SyntaxType("integer"), data_def).value
     # 也有可能数组长度只有最小值限制
-    if not (given_array_length == required_type.get_size() or given_array_length>required_type.min_size):
-        raise UnsatisfiableSizeException(expr, given_array_length,f"{required_type.get_size()}或最小值{required_type.min_size}")
+    if not (given_array_length == required_type.get_size() or given_array_length > required_type.min_size):
+        raise UnsatisfiableSizeException(expr, given_array_length,
+                                         f"{required_type.get_size()}或最小值{required_type.min_size}")
 
-    given_type = SyntaxType(tar_type="array",scope=data_def)
+    given_type = SyntaxType(tar_type="array", scope=data_def)
     given_type.set_element_and_size(given_element_type, given_array_length)
     expr.set_lhs_type([given_type])
     return expr.lhsTypeList
+
+
 @inference_array_handler("get")
 def type_inference_array_get(expr, lhs_type_list: list[SyntaxType], data_def):
     if len(lhs_type_list) != 1:
         raise TypeMismatchException(expr, lhs_type_list, data_def)
-    idx_symbol=cal_const_expr(expr.objects[1],SyntaxType("integer"),data_def)
+    idx_symbol = cal_const_expr(expr.objects[1], SyntaxType("integer"), data_def)
     # if idx_symbol.type!=SyntaxType("integer"):
     #     raise TypeMismatchException(expr.objects[1], idx_symbol.type, data_def)
-    required_type=lhs_type_list[0]
-    idx_value=idx_symbol.value
+    required_type = lhs_type_list[0]
+    idx_value = idx_symbol.value
     expr.idx_list.append(idx_value)
 
-    required_arr_type=SyntaxType("array",scope=data_def).set_element_and_size(required_type,0)
-    required_arr_type.min_size=idx_value
-    given_arr_type:SyntaxType=type_inference_expr(expr.objects[0],[required_arr_type],data_def)[0]
+    required_arr_type = SyntaxType("array", scope=data_def).set_element_and_size(required_type, 0)
+    required_arr_type.min_size = idx_value
+    given_arr_type: SyntaxType = type_inference_expr(expr.objects[0], [required_arr_type], data_def)[0]
 
     expr.set_lhs_type([given_arr_type.arrayType])
     return expr.lhsTypeList
+
 
 @inference_array_handler("slice")
 def type_inference_array_slice(expr, lhs_type_list: list[SyntaxType], data_def):
     if len(lhs_type_list) != 1:
         raise TypeMismatchException(expr, lhs_type_list, data_def)
 
-    idx_symbols=[cal_const_expr(expr.objects[1],SyntaxType("integer"),data_def),
-                 cal_const_expr(expr.objects[2],SyntaxType("integer"),data_def)]
-    for i,idx_symbol in enumerate(idx_symbols):
+    idx_symbols = [cal_const_expr(expr.objects[1], SyntaxType("integer"), data_def),
+                   cal_const_expr(expr.objects[2], SyntaxType("integer"), data_def)]
+    for i, idx_symbol in enumerate(idx_symbols):
         # if idx_symbol.type!=SyntaxType("integer"):
         #     raise TypeMismatchException(expr.objects[i], idx_symbol.type, data_def)
         idx_value = idx_symbol.value
         expr.idx_list.append(idx_value)
 
-    required_arr_type=SyntaxType("array",scope=data_def).set_element_and_size(lhs_type_list[0],0)
-    required_arr_type.min_size=idx_symbols[1].value
+    required_arr_type = SyntaxType("array", scope=data_def).set_element_and_size(lhs_type_list[0], 0)
+    required_arr_type.min_size = idx_symbols[1].value
     given_arr_type: SyntaxType = type_inference_expr(expr.objects[0], [required_arr_type], data_def)[0]
 
-    actual_returned_type=SyntaxType("array",scope=data_def).set_element_and_size(given_arr_type.arrayType,
-                                                                  idx_symbols[1].value-idx_symbols[0].value)
+    actual_returned_type = SyntaxType("array", scope=data_def).set_element_and_size(given_arr_type.arrayType,
+                                                                                    idx_symbols[1].value - idx_symbols[
+                                                                                        0].value)
     expr.set_lhs_type([actual_returned_type])
     return expr.lhsTypeList
+
+
 @inference_array_handler("getdefault")
 def type_inference_array_get_default(expr, lhs_type_list: list[SyntaxType], data_def):
     # 是一个动态取数的操作，所以不用静态获取下标
     if len(lhs_type_list) != 1:
         raise TypeMismatchException(expr, lhs_type_list, data_def)
-    required_type=lhs_type_list[0]
+    required_type = lhs_type_list[0]
 
     # 先校验一下下标部分的表达式
-    idx_exprs=expr.objects[1]
-    required_arr_type=required_type
+    idx_exprs = expr.objects[1]
+    required_arr_type = required_type
     for idx_expr in idx_exprs:
-        type_inference_expr(idx_expr,[SyntaxType("integer")],data_def)
+        type_inference_expr(idx_expr, [SyntaxType("integer")], data_def)
         # 逐层去构建一个给被取数表达式的对应类型
         # 对大小完全没要求，因为不知道到底是一个什么情况
-        required_arr_type=SyntaxType("array",scope=data_def).set_element_and_size(required_arr_type,0)
-        required_arr_type.min_size=0
+        required_arr_type = SyntaxType("array", scope=data_def).set_element_and_size(required_arr_type, 0)
+        required_arr_type.min_size = 0
 
-    def get_element_type_recursive(arr_type:SyntaxType,depth):
+    def get_element_type_recursive(arr_type: SyntaxType, depth):
         """递归获取元素类型"""
-        cur_type=arr_type
+        cur_type = arr_type
         for i in range(depth):
-            cur_type=cur_type.arrayType
+            cur_type = cur_type.arrayType
         return cur_type
 
-    def build_arr_type(element_type:SyntaxType,depth):
+    def build_arr_type(element_type: SyntaxType, depth):
         """再根据元素类型填充成数组,对长度没有要求"""
-        output:SyntaxType=element_type
+        output: SyntaxType = element_type
         for i in range(depth):
-            output=SyntaxType("array").set_element_and_size(output,0)
-            output.min_size=0
+            output = SyntaxType("array").set_element_and_size(output, 0)
+            output.min_size = 0
         return output
 
     # 然后拿这个新得到的类型去推断被取数表达式
-    given_arr_type=type_inference_expr(expr.objects[0],[required_arr_type],data_def)[0]
-    given_element_type=get_element_type_recursive(given_arr_type,len(idx_exprs))
+    given_arr_type = type_inference_expr(expr.objects[0], [required_arr_type], data_def)[0]
+    given_element_type = get_element_type_recursive(given_arr_type, len(idx_exprs))
     # 用提供的类型去推断默认表达式
-    given_default_type=type_inference_expr(expr.objects[2],[required_type],data_def)[0]
+    given_default_type = type_inference_expr(expr.objects[2], [required_type], data_def)[0]
 
-    if given_element_type<given_default_type:
-        given_default_type=type_inference_expr(expr.objects[2],[given_element_type],data_def)[0]
-    elif given_default_type<given_element_type:
-        given_arr_type=type_inference_expr(expr.objects[0],[build_arr_type(given_default_type,len(idx_exprs))],data_def)
+    if given_element_type < given_default_type:
+        given_default_type = type_inference_expr(expr.objects[2], [given_element_type], data_def)[0]
+    elif given_default_type < given_element_type:
+        given_arr_type = type_inference_expr(expr.objects[0], [build_arr_type(given_default_type, len(idx_exprs))],
+                                             data_def)
 
     expr.set_lhs_type([given_default_type])
     return expr.lhsTypeList
+
 
 @inference_array_handler("list")
 def type_inference_array_list(expr, lhs_type_list: list[SyntaxType], data_def):
@@ -560,32 +575,34 @@ def type_inference_array_list(expr, lhs_type_list: list[SyntaxType], data_def):
     # 还好准备了returnNum属性用来处理list的情况
     if len(lhs_type_list) != 1:
         raise TypeMismatchException(expr, lhs_type_list, data_def)
-    required_type=lhs_type_list[0]
-    elements:list[SyntaxExpr]=expr.objects[0].objects[0]
-    return_sum=sum([element.returnNum for element in elements])
-    if not (required_type.get_size()==return_sum or required_type.min_size<return_sum):
-        UnsatisfiableSizeException(expr,required_type.get_size(), f"{required_type.get_size()}或最小值{required_type.min_size}")
+    required_type = lhs_type_list[0]
+    elements: list[SyntaxExpr] = expr.objects[0].objects[0]
+    return_sum = sum([element.returnNum for element in elements])
+    if not (required_type.get_size() == return_sum or required_type.min_size < return_sum):
+        UnsatisfiableSizeException(expr, required_type.get_size(),
+                                   f"{required_type.get_size()}或最小值{required_type.min_size}")
 
     # 然后把子类型都分发下去
     # 为什么我之前不这么做？？？？太愚蠢了，明明直接把list_expr拆开就好了
     # 不过无需考虑list_expr的嵌套格式还是不错的
-    element_exprs=list()
+    element_exprs = list()
     for element in elements:
-        if element.type=="List_expr":
+        if element.type == "List_expr":
             element_exprs.extend(element.objects)
         else:
             element_exprs.append(element)
-    actual_element_type=type_inference_on_groups(element_exprs,[required_type.get_element_type_for_array()],data_def)[0]
-    expr.set_lhs_type([SyntaxType("array").set_element_and_size(actual_element_type,required_type.get_size())])
+    actual_element_type = \
+    type_inference_on_groups(element_exprs, [required_type.get_element_type_for_array()], data_def)[0]
+    expr.set_lhs_type([SyntaxType("array",scope=data_def).set_element_and_size(actual_element_type, required_type.get_size())])
     return expr.lhsTypeList
 
 
 @inference_expr_handler("Switch_expr")
 def type_inference_switch(expr, lhs_type_list: list[SyntaxType], data_def):
-    sub_type=expr.subType
-    if sub_type=="IF":
-        actual_types=type_inference_on_groups(expr.objects[1:],lhs_type_list,data_def)
-        type_inference_expr(expr.objects[0],[SyntaxType("bool")],data_def)
+    sub_type = expr.subType
+    if sub_type == "IF":
+        actual_types = type_inference_on_groups(expr.objects[1:], lhs_type_list, data_def)
+        type_inference_expr(expr.objects[0], [SyntaxType("bool")], data_def)
         expr.set_lhs_type(actual_types)
         return expr.lhsTypeList
     else:
@@ -620,7 +637,8 @@ def inference_operator_handler(type_):
     return decorator
 
 
-def type_inference_operator(operator, lhs_type_list, param_expr, data_def)->(list[int],SyntaxUserOp or None,list[SyntaxType]):
+def type_inference_operator(operator, lhs_type_list, param_expr, data_def) -> (
+list[int], SyntaxUserOp or None, list[SyntaxType]):
     """让所有的operator处理函数返回一个列表，涵盖了到目前为止所构建的上下文数组的情况，不用数组就返回空列表
     让apply_expr那边进行处理
     比如map (map <<3>>) <<2>> 返回[2,3]
@@ -652,17 +670,18 @@ def type_inference_Apply(expr, lhs_type_list: list[SyntaxType], data_def):
 
     if apply_userOp is not None:
         expr.add_applied_Op(apply_userOp, context_list)
-        add_apply_expr_to_state_and_op(data_def,expr)
+        add_apply_expr_to_state_and_op(data_def, expr)
     expr.set_lhs_type(actual_lhs_type)
     return expr.lhsTypeList
 
-def add_apply_expr_to_state_and_op(data_def:SyntaxDataDefScope,expr):
+
+def add_apply_expr_to_state_and_op(data_def: SyntaxDataDefScope, expr):
     """向这个作用域上层的state与op作用域添加这个函数调用表达式"""
-    cur_scope=data_def
-    while cur_scope.type!="package":
-        if isinstance(cur_scope,SyntaxUserOp) or isinstance(cur_scope,SyntaxState):
+    cur_scope = data_def
+    while cur_scope.type != "package":
+        if isinstance(cur_scope, SyntaxUserOp) or isinstance(cur_scope, SyntaxState):
             cur_scope.apply_exprs.append(expr)
-        cur_scope=cur_scope.prevScope
+        cur_scope = cur_scope.prevScope
 
 
 @inference_expr_handler("generalized_get")
@@ -679,7 +698,7 @@ def type_inerence_generalized_get(expr, lhs_type_list: list[SyntaxType], data_de
         if i < map_index:
             sub_lhs_list.append(lhs)
         else:
-            sub_lhs = SyntaxType(tar_type="array",scope=data_def)
+            sub_lhs = SyntaxType(tar_type="array", scope=data_def)
             sub_lhs.set_element_and_size(lhs, array_size)
             sub_lhs_list.append(sub_lhs)
 
@@ -687,42 +706,49 @@ def type_inerence_generalized_get(expr, lhs_type_list: list[SyntaxType], data_de
     expr.set_lhs_type(actual_type_list)
     return expr.lhsTypeList
 
-@inference_operator_handler("activateDefault")
-def type_inference_apply_activateDefault(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
-    # 三个组件，一个op，一个bool表达式，一个默认表达式
-    type_inference_expr(operator.objects[1],[SyntaxType("bool")],data_def)
-    default_types=type_inference_expr(operator.objects[2],lhs_type_list,data_def)
-    op_context_list, apply_userOp, op_types = type_inference_operator(operator.objects[0],lhs_type_list,param_expr,data_def)
-    min_types=[min(a,b) for a,b in zip(default_types,op_types)]
 
-    if not all([a==b for a,b in zip(default_types,min_types)]):
+@inference_operator_handler("activateDefault")
+def type_inference_apply_activateDefault(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr,
+                                         data_def):
+    # 三个组件，一个op，一个bool表达式，一个默认表达式
+    type_inference_expr(operator.objects[1], [SyntaxType("bool")], data_def)
+    default_types = type_inference_expr(operator.objects[2], lhs_type_list, data_def)
+    op_context_list, apply_userOp, op_types = type_inference_operator(operator.objects[0], lhs_type_list, param_expr,
+                                                                      data_def)
+    min_types = [min(a, b) for a, b in zip(default_types, op_types)]
+
+    if not all([a == b for a, b in zip(default_types, min_types)]):
         type_inference_expr(operator.objects[2], min_types, data_def)
-    if not all([a==b for a,b in zip(op_types,min_types)]):
-        op_context_list, apply_userOp, op_types=type_inference_operator(operator.objects[0],min_types,param_expr,data_def)
+    if not all([a == b for a, b in zip(op_types, min_types)]):
+        op_context_list, apply_userOp, op_types = type_inference_operator(operator.objects[0], min_types, param_expr,
+                                                                          data_def)
 
     operator.set_lhs_type(op_types)
     return op_context_list, apply_userOp, operator.lhsTypeList
-@inference_operator_handler("make")
-def type_inference_apply_make(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def:SyntaxDataDefScope):
-    # 先找到对应的结构体，然后再进行校验
-    struct_type:SyntaxType=data_def.check_and_get_type_symbol(operator.objects[0]).syntaxType
-    required_type=lhs_type_list[0]
 
-    if len(lhs_type_list) != 1 or required_type!=struct_type or struct_type.get_real_type().type!="field_decl":
+
+@inference_operator_handler("make")
+def type_inference_apply_make(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr,
+                              data_def: SyntaxDataDefScope):
+    # 先找到对应的结构体，然后再进行校验
+    struct_type: SyntaxType = data_def.check_and_get_type_symbol(operator.objects[0]).syntaxType
+    required_type = lhs_type_list[0]
+
+    if len(lhs_type_list) != 1 or required_type != struct_type or struct_type.get_real_type().type != "field_decl":
         raise TypeMismatchException(operator, lhs_type_list, data_def)
 
-    fields=struct_type.get_real_type().fields
-    given_types:list[SyntaxType]=[field.syntaxType for field in fields]
-    type_inference_expr(param_expr,given_types,data_def)
+    fields = struct_type.get_real_type().fields
+    given_types: list[SyntaxType] = [field.syntaxType for field in fields]
+    type_inference_expr(param_expr, given_types, data_def)
 
     operator.set_lhs_type([struct_type])
-    return [],None,operator.lhsTypeList
+    return [], None, operator.lhsTypeList
 
 
 @inference_operator_handler("flatten")
 def type_inference_apply_flatten(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
     # 参数表达式为operator明确给出的类型
-    struct_type:SyntaxType=data_def.check_and_get_type_symbol(operator.objects[0]).syntaxType
+    struct_type: SyntaxType = data_def.check_and_get_type_symbol(operator.objects[0]).syntaxType
     type_inference_expr(param_expr, [struct_type], data_def)
 
     fields = struct_type.get_real_type().fields
@@ -730,11 +756,12 @@ def type_inference_apply_flatten(operator: SyntaxOperator, lhs_type_list: list[S
     # 返回的左值类型为对给出的类型进行解包
     # 然后比较给出的左值类型和参数中要求的左值类型
 
-    if len(given_types) != len(lhs_type_list) or not all(g<=r for g,r in zip(given_types,lhs_type_list)):
-        raise TypeMismatchException(operator,lhs_type_list,data_def)
+    if len(given_types) != len(lhs_type_list) or not all(g <= r for g, r in zip(given_types, lhs_type_list)):
+        raise TypeMismatchException(operator, lhs_type_list, data_def)
 
     operator.set_lhs_type(given_types)
-    return [],None,operator.lhsTypeList
+    return [], None, operator.lhsTypeList
+
 
 @inference_operator_handler("iterator")
 def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[SyntaxType], param_expr, data_def):
@@ -744,11 +771,11 @@ def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[
     # 先就map和fold，把abc_N做完了再说别的
     # 加入带i的情况，需要给下层operator的最前面塞一个int32类型的参数
     sub_operator = operator.objects[2]
-    required_length = cal_const_expr(operator.objects[3],SyntaxType("integer"),data_def).value
+    required_length = cal_const_expr(operator.objects[3], SyntaxType("integer"), data_def).value
     operator.set_array_length(required_length)
-    iterator_op:str = operator.objects[0]
+    iterator_op: str = operator.objects[0]
     if iterator_op.startswith("mapfold"):
-        map_index=operator.objects[1]
+        map_index = operator.objects[1]
     elif iterator_op.startswith("map"):
         map_index = 0
     else:
@@ -768,10 +795,9 @@ def type_inference_apply_iterator(operator: SyntaxOperator, lhs_type_list: list[
     if iterator_op.endswith("i"):
         # 如果带了i要塞参数
         # 随便加一个能过就行
-        tmp_idx_expr=SyntaxExpr(type="Atom",subtype="integernum",scope=data_def,objects=["1"])
-        required_param= SyntaxExpr(type="List_expr",subtype="List_expr",scope=data_def,
-                                   objects=[[tmp_idx_expr,required_param]],returnNum=required_param.returnNum+1)
-
+        tmp_idx_expr = SyntaxExpr(type="Atom", subtype="integernum", scope=data_def, objects=["1"])
+        required_param = SyntaxExpr(type="List_expr", subtype="List_expr", scope=data_def,
+                                    objects=[[tmp_idx_expr, required_param]], returnNum=required_param.returnNum + 1)
 
     context_list, apply_userOp, given_lhs_list = type_inference_operator(sub_operator, required_lhs_types,
                                                                          required_param, data_def)
@@ -825,8 +851,9 @@ def type_inference_apply_path_id(operator: SyntaxOperator, lhs_type_list: list[S
     type_inference_expr(param_expr, input_types, data_def)
     # 检查并进行模板实例化
     if tar_userOp.isTemplate():
-        tar_userOp=instantiate_template_function(tar_userOp, param_expr.lhsTypeList, input_types, param_expr,operator.objects[1])
-        operator.appliedUserOp=tar_userOp
+        tar_userOp = instantiate_template_function(tar_userOp, param_expr.lhsTypeList, input_types, param_expr,
+                                                   operator.objects[1])
+        operator.appliedUserOp = tar_userOp
 
     returned_types = [param.syntaxType for param in tar_userOp.outParams]
     if not all(g <= r for g, r in zip(returned_types, lhs_type_list)):
@@ -837,7 +864,8 @@ def type_inference_apply_path_id(operator: SyntaxOperator, lhs_type_list: list[S
     return [], tar_userOp, returned_types
 
 
-def instantiate_template_function(userOp: SyntaxUserOp, lhs_type_list: list[SyntaxType], op_input_types, param_expr,size_exprs):
+def instantiate_template_function(userOp: SyntaxUserOp, lhs_type_list: list[SyntaxType], op_input_types, param_expr,
+                                  size_exprs):
     """模板函数实例化，复制一个函数，并修改各种类型"""
     # 首先需要检查是否所有模板都可以确定类型
     print(f"对{userOp.get_global_name()}进行模板函数实例化")
@@ -864,33 +892,59 @@ def instantiate_template_function(userOp: SyntaxUserOp, lhs_type_list: list[Synt
         raise CanNotInstantiateException(userOp, param_expr, "有模板参数无法推导为基本类型")
     print(f"获取的实例化字典为:{instantiate_dict}")
 
+    instantiate_sizes = list()
+    for size_expr, size_param in zip(size_exprs, userOp.sizeParams):
+        const_value = cal_const_expr(size_expr, SyntaxType('unsigned'), userOp)
+        instantiate_sizes.append(const_value)
+
+    if (instantiated_op := get_instantiated_op(userOp, instantiate_dict, instantiate_sizes)) is not None:
+        # 神必海象运算符
+        # 一点也不好使
+        print(f"已经生成过对应的实例化函数{instantiated_op.name}")
+        return instantiated_op
     # 然后需要复制一份原函数，并把它修改以达到实例化的目的
     # 修改名字，和类型变量声明
-    instantiate_userOp=deepcopy_userOp(userOp)
-
-
+    instantiate_userOp = deepcopy_userOp(userOp)
     for name in instantiate_userOp.typeVarSymbolTable.keys():
-        type_symbol=instantiate_userOp.typeVarSymbolTable[name]
-        type_symbol.syntaxType=instantiate_dict[name]
+        type_symbol = instantiate_userOp.typeVarSymbolTable[name]
+        type_symbol.syntaxType = instantiate_dict[name]
 
-    if len(size_exprs)!=len(instantiate_userOp.sizeParams):
+    for size_symbol, size_param in zip(instantiate_sizes, instantiate_userOp.sizeParams):
+        size_param.set_value(size_symbol.value)
+        size_param.syntaxType = size_symbol.type
+
+    if len(size_exprs) != len(instantiate_userOp.sizeParams):
         raise CanNotInstantiateException(instantiate_userOp, size_exprs, "输入的sizedecl长度与函数声明的不一样")
 
-    instantiate_sizes=list()
-    for size_expr,size_param in zip(size_exprs,instantiate_userOp.sizeParams):
-        const_value=cal_const_expr(size_expr,SyntaxType('unsigned'),userOp)
-        size_param.set_value(const_value.value)
-        size_param.syntaxType=const_value.type
-        instantiate_sizes.append(const_value.value)
-
-    instantiate_userOp.name = generate_instantiate_name(userOp, instantiate_dict,instantiate_sizes)
+    instantiate_userOp.name = generate_instantiate_name(userOp, instantiate_dict, instantiate_sizes)
     instantiate_userOp.get_my_package().add_userOp(instantiate_userOp)
     print(f"生成实例化函数{instantiate_userOp.get_global_name()}")
+    add_instantiated_op(userOp, instantiate_dict, instantiate_sizes, instantiate_userOp)
     return instantiate_userOp
 
 
+instantiated_op_dict: dict[SyntaxUserOp, list[list[dict[str, SyntaxType], list[ConstValue], SyntaxUserOp]]] = dict()
 
-def generate_instantiate_name(userOp,instantiate_dict,instantiate_sizes):
+
+# 类型有点太长了
+def get_instantiated_op(userOp, instantiate_dict, instantiate_sizes) -> SyntaxUserOp or None:
+    """找一下是否有已经实例化的op"""
+    instantiated_ops = instantiated_op_dict.get(userOp)
+    if instantiated_ops is None:
+        instantiated_op_dict[userOp] = list()
+        return None
+    for instantiated_list in instantiated_ops:
+        _dict, sizes, op = instantiated_list[0], instantiated_list[1], instantiated_list[2]
+        if _dict == instantiate_dict and sizes == instantiate_sizes:
+            return op
+    return None
+
+
+def add_instantiated_op(userOp, instantiate_dict, instantiate_sizes, instantiated_op) -> None:
+    instantiated_op_dict.get(userOp).append([instantiate_dict, instantiate_sizes, instantiated_op])
+
+
+def generate_instantiate_name(userOp, instantiate_dict, instantiate_sizes):
     """不能重名，生成func_int32之类的名字"""
 
     post_fix = "_".join(t.get_real_type().type for t in instantiate_dict.values())
@@ -898,24 +952,26 @@ def generate_instantiate_name(userOp,instantiate_dict,instantiate_sizes):
         instant_name = f"{userOp.name}{post_fix[-2:]}"
     else:
         if instantiate_sizes:
-            post_fix+="_"+"_".join(str(s) for s in instantiate_sizes)
-        instant_name=f"{userOp.name}_{post_fix}"
-    package=userOp.get_my_package()
+            post_fix += "_" + "_".join(str(s.value) for s in instantiate_sizes)
+        instant_name = f"{userOp.name}_{post_fix}"
+    package = userOp.get_my_package()
     if package.get_userOp(instant_name) is None:
         return instant_name
 
     # 如果有占用就生成新名字
-    count=1
+    count = 1
     while True:
-        instant_name=f"{userOp.name}_{str(count)}_{post_fix}"
+        instant_name = f"{userOp.name}_{str(count)}_{post_fix}"
         if package.get_userOp(instant_name) is None:
             return instant_name
-        count+=1
+        count += 1
+
+
 def deepcopy_userOp(userOp):
     """天才"""
-    tmp_prev_scope=userOp.prevScope
-    userOp.prevScope=None
-    copied_userOp=copy.deepcopy(userOp)
-    userOp.prevScope=tmp_prev_scope
-    copied_userOp.prevScope=tmp_prev_scope
+    tmp_prev_scope = userOp.prevScope
+    userOp.prevScope = None
+    copied_userOp = copy.deepcopy(userOp)
+    userOp.prevScope = tmp_prev_scope
+    copied_userOp.prevScope = tmp_prev_scope
     return copied_userOp
