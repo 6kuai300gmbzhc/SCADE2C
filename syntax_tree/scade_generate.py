@@ -158,6 +158,7 @@ class GenerateCode:
         """若有函数调用，自动include"""
         code = ""
         had_imported_function=False
+        applied_functions = set()
         for applied_expr in node.apply_exprs:
             applied_op=applied_expr.appliedOp
             if applied_op.isImported:
@@ -166,8 +167,12 @@ class GenerateCode:
                 had_imported_function=True
                 self.importedFunctions.add(applied_op)
 
-            if applied_op.hasInternalState:
-                code += f'#include "{applied_expr.appliedOp.get_global_name()}.h"\n'
+            applied_op = applied_expr.appliedOp
+            if applied_op in applied_functions: continue
+            if applied_op.isImported: continue
+            applied_functions.add(applied_op)
+            code += f'''#include "{applied_op.get_global_name()}.h"\n'''
+
         return code
 
     def generate_head_file(self, node):
@@ -335,15 +340,7 @@ class GenerateCode:
 
     def generate_src_file(self, node):
         global_name = node.get_global_name()
-        src_content = f'''#include "kcg_consts.c"\n#include "{global_name}.h"\n'''
-        # 然后include所调用的其他函数的头文件
-        applied_functions = set()
-        for apply_expr in node.apply_exprs:
-            applied_op = apply_expr.appliedOp
-            if applied_op in applied_functions: continue
-            if applied_op.isImported: continue
-            applied_functions.add(applied_op)
-            src_content += f'''#include "{applied_op.get_global_name()}.c"\n'''
+        src_content = f'''#include "kcg_consts.h"\n#include "{global_name}.h"\n'''
         src_content += self.generate_src_func_file(node)
         src_content += self.generate_src_init(node)
         src_content += self.generate_src_reset(node)
