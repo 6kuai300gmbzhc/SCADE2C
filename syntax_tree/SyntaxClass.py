@@ -526,16 +526,21 @@ class SyntaxType:
             return self.resolve_path_id().change_name()
         if self.type == "enum":
             return f"{self.name}_{self.scope.get_global_name()}"
+        if self.type == "field_decl":
+            return self.name if self.scope.get_global_name() == "" else f"{self.name}_{self.scope.get_global_name()}"
         return f'kcg_{self.type}' if self.type in self.basic_type else self.value
 
     def change_name_cast(self):
         if self.type == "array":
             raise Exception("array不适应于cast操作")
+        if self.type in self.basic_type:
+            return f'kcg_lit_{self.type}'
         if self.type == "path_id" or self.type == "typevar":
             return self.resolve_path_id().change_name_cast()
         if self.type == "enum":
             return f"{self.name}_{self.scope.get_global_name()}"
-        return f'kcg_lit_{self.type}' if self.type in self.basic_type else self.value
+        print(f"{self}的类型无法确定")
+        return ""
 
     def generate_init_expr(self):
         '''生成这个类型变量的初始值，给init函数准备的'''
@@ -671,6 +676,8 @@ class SyntaxTypeSymbol:
         self.syntaxType = syntaxType
         self.visibility = visibility
         self.isImported=isImported
+        if not isImported:
+            self.syntaxType.name=self.name
 
     def __repr__(self):
         s = ""
@@ -1219,6 +1226,11 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         self.equationDependentGraph = Graph()
         self.lhs2EquationDict = dict()
 
+    @property
+    def hasInternalState(self)->bool:
+        '''该作用域内是否存在内存，例如control_block与一些时态算子等'''
+        return len(self.initSymbolSet)>0 or self.initVar is not None
+
     def is_param_declared_externally(self, param_name):
         """判断这个变量是不是在此作用域的外部定义的"""
         # 当前作用域找不到这个变量，但是上面的作用域找到了，说明是一个要返回的变量
@@ -1292,14 +1304,23 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
             name = f"{postfix}_{str(count)}"
         return name
 
+    def generate_name_for_init(self,postfix="init"):
+        count = 0
+        name = f"{postfix}"
+        init_names=[symbol.name for symbol in self.get_my_userOp().initSymbolSet]
+        while self.get_localVariable_InThisAndPreEnv(name) is not None or name in init_names:
+            count += 1
+            name = f"{postfix}_{str(count)}"
+        return name
+
     def set_init_var(self):
         if self.initVar == None:
-            init_name=self.generate_name_for_tmp("init")
+            init_name=self.generate_name_for_init()
             self.initVar = SyntaxVariableSymbol(init_name, False, False)
             self.initVar.isOutput = True
             self.initVar.syntaxType = SyntaxType("bool")
             self.add_tmpSymbol(self.initVar)
-            cur_scope=self
+            cur_scope=self.prevScope
             # 逐层向上添加进入initSymbolSet
             while True:
                 if isinstance(cur_scope,SyntaxPackageScope):

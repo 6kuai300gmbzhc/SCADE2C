@@ -54,8 +54,6 @@ class GenerateCode:
         # write_file_from_src_to_target(src_file,target_file)
 
         # 中间还需要写和types相关的内容
-
-        content = "#endif"
         with open(target_file, 'w') as target:
             with open(src_file, 'r') as src:
                 target.write(src.read())
@@ -115,6 +113,10 @@ class GenerateCode:
 
     def generate_head_outC(self, node):
         code = "typedef struct{\n"
+        # outparams
+        # tmpparams里需要output的
+        # 调用的函数上下文
+        # 状态机的state_nxt
         # 这里要将node及其以下的所有子作用域的out情况都统计进来
         # 所以写一个深度优先搜索吧
         stack = deque()
@@ -270,7 +272,12 @@ class GenerateCode:
                          f"{array_init(f'{para_name}[{idx}]', syntaxType.get_element_type_for_array(), depth + 1)}" \
                          f"{'    ' * (depth + 1)}}}\n"
             return _code
-
+        def generate_init_code(para:SyntaxVariableSymbol)->str:
+            if para.syntaxType.get_real_type().type == "array":
+                return array_init(f"outC->{para.name}", para.syntaxType)
+            if para.syntaxType.get_real_type().type == "field_decl":
+                return ""
+            return f"    outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
         global_name = node.get_global_name()
         code = "#ifndef KCG_USER_DEFINED_INIT\n" \
                f"void {global_name}_init(outC_{global_name} *outC)\n" \
@@ -282,10 +289,7 @@ class GenerateCode:
         # 只有最上层的状态机需要登记outC，其他不需要
         # 只有userOP有outParams，也就是最上层节点
         for para in node.outParams:
-            if para.syntaxType.type != "array":
-                code += f"    outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
-            else:
-                code += array_init(f"outC->{para.name}", para.syntaxType)
+            code+=generate_init_code(para)
         for applied_expr in node.apply_exprs:
             if not applied_expr.appliedOp.hasInternalState: continue
             depth = 1
@@ -301,10 +305,7 @@ class GenerateCode:
             for para in cur_node.tmpParams:
                 if para.isOutput:
                     print("para init ", para.name)
-                    if para.syntaxType.type != "array":
-                        code += f"    outC->{para.name} = {para.syntaxType.generate_init_expr()};\n"
-                    else:
-                        code += array_init(f"outC->{para.name}", para.syntaxType)
+                    code += generate_init_code(para)
         code += "}\n" \
                 "#endif\n"
         return code
@@ -855,32 +856,32 @@ def generate_array_expr_getdefault(syntaxExpr, data_def, genEqu:GenEqu):
     depth=genEqu.depth
     tmp_var,tmp_name=generate_tmp_symbol_and_register(data_def,syntaxExpr.lhsTypeList[0])
 
-    cmp_code = ""
 
     normal_expr:SyntaxExpr=syntaxExpr.objects[0]
     normal_code=SyntaxExpr_generate(normal_expr,data_def,genEqu)
     arr_type=normal_expr.lhsTypeList[0]
     cur_type=arr_type
+    cmp_code_list=[]
     for idx_expr in syntaxExpr.objects[1]:
         idx_code=SyntaxExpr_generate(idx_expr,data_def,genEqu)
         normal_code+=f"[{idx_code}]"
         # 构建校验是否超出数组上限的表达式
         cur_size=cur_type.get_size()
         cur_type=cur_type.arrayType
-        cmp_code+=f"(((kcg_lit_int32(0) <= {idx_code})&({idx_code} < kcg_lit_int32({cur_size})))&"
-    cmp_code=cmp_code[:-1]
+        cmp_code_list.append(f"((kcg_lit_int32(0) <= {idx_code})&({idx_code} < kcg_lit_int32({cur_size})))")
+    cmp_code='&'.join(cmp_code_list)
 
-    get_normal_code=assign_lhs_to_rhs_expr(tmp_name,normal_code,normal_expr.lhsTypeList,depth,data_def)
+    get_normal_code=assign_lhs_to_rhs_expr(tmp_name,normal_code,normal_expr.lhsTypeList,depth+1,data_def)
 
     default_expr:SyntaxExpr=syntaxExpr.objects[2]
     default_code=SyntaxExpr_generate(default_expr,data_def,genEqu)
-    get_default_code=assign_lhs_to_rhs_expr(tmp_name,default_code,default_expr.lhsTypeList,depth,data_def)
+    get_default_code=assign_lhs_to_rhs_expr(tmp_name,default_code,default_expr.lhsTypeList,depth+1,data_def)
 
     pre_code=f"{'    '*depth}if({cmp_code}){{\n" \
-             f"{'    '*(depth+1)}{get_normal_code}\n" \
+             f"{get_normal_code}" \
              f"{'    '*depth}}}\n" \
              f"{'    '*depth}else {{\n" \
-             f"{'    '*(depth+1)}{get_default_code}\n" \
+             f"{get_default_code}" \
              f"{'    '*depth}}}\n"
     genEqu.add_preEquations(pre_code)
     return tmp_name
@@ -890,10 +891,10 @@ def generate_array_expr_getdefault(syntaxExpr, data_def, genEqu:GenEqu):
 def generate_array_expr_slice(syntaxExpr, data_def, genEqu:GenEqu):
     depth=genEqu.depth
     tmp_var,tmp_name=generate_tmp_symbol_and_register(data_def,syntaxExpr.lhsTypeList[0])
-    sliced_code=SyntaxExpr_generate(syntaxExpr.objects[1],data_def,genEqu)
+    sliced_code=SyntaxExpr_generate(syntaxExpr.objects[0],data_def,genEqu)
     slice_type_name=syntaxExpr.lhsTypeList[0].change_name()
 
-    genEqu.add_preEquations(f"{'    '*depth}kcg_assign_array(&({tmp_name}),  ({slice_type_name} *) &({sliced_code}), sizeof ({slice_type_name}))")
+    genEqu.add_preEquations(f"{'    '*depth}kcg_assign_array(&({tmp_name}),  ({slice_type_name} *) &({sliced_code}), sizeof ({slice_type_name}));\n")
     return tmp_name
 @register_expr_handler('Apply_expr')
 def generate_Apply_expr(syntaxExpr, syntaxUserOp, genEqu):
@@ -1441,7 +1442,7 @@ def generate_syntax_type_enum(typeSymbol, rootPackage):
 @register_syntax_type_handler(r"^field_decl")
 def generate_syntax_type_field_decl(typeSymbol, rootPackage):
     global_name = rootPackage.get_global_name()
-    var_name = typeSymbol.name if len(global_name) == 0 else f"{typeSymbol.name}_{global_name}"
+    var_name = typeSymbol.syntaxType.change_name()
     precode = ""
     code = f"typedef struct {var_name} {{\n"
     for field in typeSymbol.syntaxType.fields:

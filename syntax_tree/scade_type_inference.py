@@ -847,13 +847,15 @@ def type_inference_apply_path_id(operator: SyntaxOperator, lhs_type_list: list[S
     # 校验一下，要求的类型是不是和目标op返回的类型一样
     # 这里有可能左值类型并非基本类型，所以仅当可以推断出来一个基本类型时才去进行实例化操作
     input_types = [param.syntaxType for param in tar_userOp.inParams]
-
     type_inference_expr(param_expr, input_types, data_def)
     # 检查并进行模板实例化
     if tar_userOp.isTemplate():
         tar_userOp = instantiate_template_function(tar_userOp, param_expr.lhsTypeList, input_types, param_expr,
                                                    operator.objects[1])
         operator.appliedUserOp = tar_userOp
+        # 实例化后再推理一边，因为实例化后函数的输入参数类型变了
+        input_types = [param.syntaxType for param in tar_userOp.inParams]
+        type_inference_expr(param_expr, input_types, data_def)
 
     returned_types = [param.syntaxType for param in tar_userOp.outParams]
     if not all(g <= r for g, r in zip(returned_types, lhs_type_list)):

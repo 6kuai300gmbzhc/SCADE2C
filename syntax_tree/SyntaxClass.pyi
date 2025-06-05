@@ -297,7 +297,9 @@ class SyntaxDataDefScope(SyntaxScope):
 
     def __init__(self, type: str, name: str, prevscope: SyntaxScope, visibility: str):
         ...
-
+    @property
+    def hasInternalState(self)->bool:
+        ...
     def is_param_declared_externally(self, param_name: str) -> bool:
         ...
 
@@ -317,6 +319,9 @@ class SyntaxDataDefScope(SyntaxScope):
         ...
 
     def generate_name_for_tmp(self, postfix: str = "tmp") -> str:
+        ...
+
+    def generate_name_for_init(self, postfix:str="init") -> str:
         ...
 
     def set_init_var(self) -> SyntaxVariableSymbol:

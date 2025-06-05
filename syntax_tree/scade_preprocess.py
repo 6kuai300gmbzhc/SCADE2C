@@ -97,14 +97,12 @@ def p_Type_decl(p):
     else:
         visibility = p[1]["Visibility"]
 
-    p[0] = SyntaxTypeSymbol(name=p[2].value,syntaxType=None, visibility=visibility)
     if "External" in p[1].keys():
+        p[0] = SyntaxTypeSymbol(name=p[2].value, syntaxType=None, visibility=visibility)
         p[0].numericKind = p[4]["Numeric_kind"]
         p[0].isImported = True
     else:
-        if p[3].type=="enum":
-            p[3].name=p[0].name
-        p[0].syntaxType = p[3]
+        p[0] = SyntaxTypeSymbol(name=p[2].value, syntaxType=p[3], visibility=visibility)
         p[0].isImported = False
     global cur_scope
     cur_scope.add_typeSymbol(p[0])
