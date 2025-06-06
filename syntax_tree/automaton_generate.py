@@ -30,8 +30,15 @@ def get_automaton_full_name(automaton: SyntaxAutomaton) -> str:
 
 
 def get_state_nxt(automaton: SyntaxAutomaton) -> str:
-    """状态枚举类型声明的变量名，就是outC里面的变量名字,即这个周期处于激活态的状态"""
-    return f"{get_automaton_full_name(automaton)}_state_nxt"
+    """状态枚举类型声明的变量名，就是outC里面的变量名字,即这个周期处于激活态的状态
+    这里需要注册一下确认不重名
+    """
+    if automaton.stateNxtName != "":
+        return automaton.stateNxtName
+    op=automaton.get_my_userOp()
+    nxt_name=op.register_outC_name(f"{get_automaton_full_name(automaton)}_state_nxt")
+    automaton.stateNxtName=nxt_name
+    return nxt_name
 
 
 def get_state_act(automaton: SyntaxAutomaton) -> str:
@@ -70,14 +77,14 @@ def get_reset_act(automaton: SyntaxAutomaton) -> str:
     return f"{get_automaton_full_name(automaton)}_reset_act"
 
 
-def generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth) -> (str,str):
+def generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth) -> (str, str):
     """将arrow的判断部分的代码生成出来"""
     tmp_symbol, tmp_name = scade_generate.generate_tmp_symbol_and_register(from_state, SyntaxType("bool"))
     equation = SyntaxEquation(type="simple_equation", lhs=[tmp_name], lineno=-1)
     equation.set_expr(sub_expr)
     tmp_decls = f"{'    ' * depth}kcg_bool {tmp_name};\n"
     tmp_decls += scade_generate.generate_userOp_simple_equation(equation, from_state, code_generator, depth)
-    return tmp_decls,tmp_name
+    return tmp_decls, tmp_name
 
 
 def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton: SyntaxAutomaton,
@@ -87,7 +94,7 @@ def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton
     # 生成arrow中action部分的代码
     if arrow.action is not None:
         data_def_scope = from_state.get_childScope(arrow.action)
-        code +=  code_generator.generate_data_def(data_def_scope, depth)
+        code += code_generator.generate_data_def(data_def_scope, depth)
     if arrow.type != "if":
         # 这里停止递归
         target_state = automaton.get_childScope(arrow.target)
@@ -111,7 +118,7 @@ def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton
             sub_expr = arrow.ifExprList[i][0]
             sub_arrow = arrow.ifExprList[i][1]
 
-            tmp_decls,tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
+            tmp_decls, tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
 
             if i == 0:
                 code += f"{'    ' * depth}if({tmp_name}){{\n"
@@ -134,7 +141,7 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
     # 生成arrow中action部分的代码
     if arrow.action is not None:
         data_def_scope = from_state.get_childScope(arrow.action)
-        code +=  code_generator.generate_data_def(data_def_scope, depth)
+        code += code_generator.generate_data_def(data_def_scope, depth)
     if arrow.type != "if":
         # 这里停止递归
         target_state = automaton.get_childScope(arrow.target)
@@ -156,8 +163,8 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
 
             sub_expr = arrow.ifExprList[i][0]
             sub_arrow = arrow.ifExprList[i][1]
-            tmp_decl,tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
-            tmp_decls+=tmp_decl
+            tmp_decl, tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
+            tmp_decls += tmp_decl
             if i == 0:
                 code += f"{'    ' * depth}if({tmp_name}){{\n"
             else:
@@ -247,7 +254,7 @@ def generate_body_nest(automaton: SyntaxAutomaton, code_generator: scade_generat
     然后对内存执行重置
     """
     initSymbol = automaton.prevScope.set_init_var()
-    initSymbol_name=initSymbol.name
+    initSymbol_name = initSymbol.name
     state_enum = get_state_act(automaton)
     transfer_enum = get_fired_strong(automaton)
     decls = ""
@@ -309,11 +316,11 @@ def generate_switch_act(automaton: SyntaxAutomaton, code_generator: scade_genera
     # 行动枚举，执行当前状态下的代码，然后做弱转移
     switch_act = f"{'    ' * (depth)}switch ({get_state_act(automaton)}){{\n"
     for state_name, state in automaton.stateTable.items():
-        data_def_code= code_generator.generate_data_def(state, depth + 2)
+        data_def_code = code_generator.generate_data_def(state, depth + 2)
         switch_act += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}:{{\n"
 
-        if state.hasInternalState or\
-            any([applied_expr.appliedOp.hasInternalState for applied_expr in state.apply_exprs]):
+        if state.hasInternalState or \
+                any([applied_expr.appliedOp.hasInternalState for applied_expr in state.apply_exprs]):
             # 如果此状态有内存，则加上一个重置操作,即如果rest_act，则设置init为true，然后重置操作，然后将init为false
             switch_act += f"{'    ' * (depth + 2)}if({get_reset_act(automaton)}){{\n"
 
@@ -348,7 +355,6 @@ def generate_state_nxt_for_head(automaton: SyntaxAutomaton) -> str:
     """生成头文件，记录状态机的下一个状态"""
     code = f"    {get_automaton_state_type_name(automaton)}    {get_state_nxt(automaton)};\n"
     return code
-
 
 
 def generate_state_nxt_for_init(automaton: SyntaxAutomaton) -> str:

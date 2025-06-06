@@ -509,10 +509,7 @@ def generate_switch_expr_if(syntaxExpr, syntaxUserOp, genEqu):
 
 @register_switch_expr_handler("CASE")
 def generate_switch_expr_case(syntaxExpr, syntaxUserOp, genEqu):
-    tmp_var_name = syntaxUserOp.generate_name_for_tmp()
-    tmp_var_symbol = SyntaxVariableSymbol(tmp_var_name, False, False)
-    tmp_var_symbol.syntaxType = syntaxExpr.lhsTypeList[0]
-    syntaxUserOp.add_tmpSymbol(tmp_var_symbol)
+    tmp_var_symbol,tmp_var_name=generate_tmp_symbol_and_register(syntaxUserOp,syntaxExpr.lhsTypeList[0])
     pre_equations = f"switch({SyntaxExpr_generate(syntaxExpr.objects[0], syntaxUserOp, genEqu)}){{\n"
     for elem in syntaxExpr.objects[1]:
         syntaxPattern = elem[0]
@@ -871,11 +868,11 @@ def generate_array_expr_getdefault(syntaxExpr, data_def, genEqu:GenEqu):
         cmp_code_list.append(f"((kcg_lit_int32(0) <= {idx_code})&({idx_code} < kcg_lit_int32({cur_size})))")
     cmp_code='&'.join(cmp_code_list)
 
-    get_normal_code=assign_lhs_to_rhs_expr(tmp_name,normal_code,normal_expr.lhsTypeList,depth+1,data_def)
+    get_normal_code=assign_lhs_to_rhs_expr(tmp_name,normal_code,syntaxExpr.lhsTypeList,depth+1,data_def)
 
     default_expr:SyntaxExpr=syntaxExpr.objects[2]
     default_code=SyntaxExpr_generate(default_expr,data_def,genEqu)
-    get_default_code=assign_lhs_to_rhs_expr(tmp_name,default_code,default_expr.lhsTypeList,depth+1,data_def)
+    get_default_code=assign_lhs_to_rhs_expr(tmp_name,default_code,syntaxExpr.lhsTypeList,depth+1,data_def)
 
     pre_code=f"{'    '*depth}if({cmp_code}){{\n" \
              f"{get_normal_code}" \
@@ -906,7 +903,7 @@ def generate_Apply_expr(syntaxExpr, syntaxUserOp, genEqu):
     if syntaxExpr.appliedOp is not None and syntaxExpr.appliedOp.hasInternalState:
         # 如果调用了函数，且函数有内存，就要构造outc并进行传递
 
-        syntaxExpr.appliedOpOutCName = generate_outC_name(syntaxExpr.appliedOp)
+        generate_and_register_outC_name(syntaxUserOp.get_my_userOp(), syntaxExpr.appliedOp, syntaxExpr)
         applied_outc_name = f"outC->{syntaxExpr.appliedOpOutCName}"
     else:
         applied_outc_name = None
@@ -969,7 +966,7 @@ def generate_operator_iterator(operator: SyntaxOperator, parameters: list[Syntax
 
 def generate_tmp_symbol_and_register(data_def, syntaxType: SyntaxType = None, post_fix="tmp")->(SyntaxVariableSymbol,str):
     tmp_name = data_def.generate_name_for_tmp(post_fix)
-    tmp_symbol = SyntaxVariableSymbol(tmp_name, False, False)
+    tmp_symbol = SyntaxVariableSymbol(tmp_name, False, False,data_def)
     tmp_symbol.syntaxType = syntaxType
     data_def.add_tmpSymbol(tmp_symbol)
     return tmp_symbol, tmp_name
@@ -1100,9 +1097,10 @@ def generate_and_register_inC(data_def, applied_userOp):
     return inc_name
 
 
-def generate_outC_name(applied_userOp):
-    # todo 确保outC不重名
-    return applied_userOp.get_outC_name()
+def generate_and_register_outC_name(userOp:SyntaxUserOp, applied_userOp,expr:SyntaxExpr):
+    name=userOp.register_outC_name(applied_userOp.get_outC_name())
+    expr.appliedOpOutCName=name
+    return name
 
 
 def generate_and_register_outC(data_def, applied_userOp):

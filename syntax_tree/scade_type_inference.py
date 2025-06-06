@@ -515,8 +515,8 @@ def type_inference_array_slice(expr, lhs_type_list: list[SyntaxType], data_def):
     given_arr_type: SyntaxType = type_inference_expr(expr.objects[0], [required_arr_type], data_def)[0]
 
     actual_returned_type = SyntaxType("array", scope=data_def).set_element_and_size(given_arr_type.arrayType,
-                                                                                    idx_symbols[1].value - idx_symbols[
-                                                                                        0].value)
+                                                                                    idx_symbols[1].value
+                                                                                    - idx_symbols[0].value+1)
     expr.set_lhs_type([actual_returned_type])
     return expr.lhsTypeList
 

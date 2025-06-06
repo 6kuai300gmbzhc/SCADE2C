@@ -178,10 +178,11 @@ class SyntaxClockExpr(HasRhs):
 
 
 class SyntaxVariableSymbol:
-    name: str
+    _name: str
+    scope:SyntaxScope
     isClock: bool
     isProbe: bool
-    isOutput: bool
+    _isOutput: bool
     isInput: bool
     syntaxType: SyntaxType
     whenExpr: Optional[SyntaxClockExpr]
@@ -189,7 +190,25 @@ class SyntaxVariableSymbol:
     lastExpr: Optional[SyntaxExpr]
     postExpr: Optional[List[str]] or Optional[str]
 
-    def __init__(self, name: str, isClock: bool, isProbe: bool):...
+    def __init__(self, name: str, isClock: bool, isProbe: bool,scope:SyntaxScope):...
+    @property
+    def name(self):
+        ...
+    @name.setter
+    def name(self,name):
+        ...
+    @property
+    def isOutput(self):
+        ...
+    @isOutput.setter
+    def isOutput(self,value):
+        ...
+    def _update_name_output(self,new_name):
+        ...
+    def _output_remove_name(self,old_name):
+        ...
+    def _output_add_name(self,name):
+        ...
     def __repr__(self) -> str:...
 
 
@@ -420,6 +439,7 @@ class SyntaxState(SyntaxDataDefScope):
 class SyntaxAutomaton(SyntaxScope):
     type: str
     name: str
+    stateNxtName:str
     prevScope: SyntaxDataDefScope
     childScopeTable: Dict[str, SyntaxDataDefScope]
     visibility: str
@@ -469,7 +489,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
     dependentFunctions: List[str]
     apply_exprs: List[SyntaxExpr]
     output2inputDependents: List[List[int]]
-
+    outCNameSet: set[str]
     def __init__(self, type: str, name: str, prevscope: SyntaxScope, visibility: str, isImported: bool = False):
         ...
 
@@ -507,6 +527,9 @@ class SyntaxUserOp(SyntaxDataDefScope):
         ...
 
     def get_outC_name(self) -> str:
+        ...
+
+    def register_outC_name(self, prefix) -> str:
         ...
 
     def scope2str(self, depth: int = 0) -> str:

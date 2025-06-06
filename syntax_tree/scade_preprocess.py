@@ -1561,7 +1561,7 @@ def p_var_decls_1(p):
 
 def p_var_id(p):
     'Var_id : Var_id_1 Var_id_2 LV6ID'
-    p[0] = SyntaxVariableSymbol(name=p[3].value, isClock=p[1].strs == "clock", isProbe=p[2].strs == "probe")
+    p[0] = SyntaxVariableSymbol(name=p[3].value, isClock=p[1].strs == "clock", isProbe=p[2].strs == "probe",scope=cur_scope)
 
 
 def p_var_id_1(p):
