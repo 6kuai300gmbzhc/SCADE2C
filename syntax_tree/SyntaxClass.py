@@ -1265,7 +1265,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     @property
     def hasInternalState(self) -> bool:
         '''该作用域内是否存在内存，例如control_block与一些时态算子等'''
-        return len(self.initSymbolSet) > 0 or self.initVar is not None
+        return super().hasInternalState or self.initVar is not None
 
     def is_param_declared_externally(self, param_name):
         """判断这个变量是不是在此作用域的外部定义的"""
@@ -1773,6 +1773,9 @@ class SyntaxUserOp(SyntaxDataDefScope):
         self.apply_exprs = list()
         self.outCNameSet = set()
 
+    @property
+    def hasInternalState(self) -> bool:
+        return super().hasInternalState or any(expr.appliedOp.hasInternalState for expr in self.apply_exprs)
     def set_sizeDecl(self, sizeDecl: list):
         # 所有的sizeDecl都是正整数，设置成unsigned类型
         for name in sizeDecl:

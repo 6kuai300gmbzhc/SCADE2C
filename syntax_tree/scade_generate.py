@@ -1,3 +1,4 @@
+import os.path
 from collections import deque
 
 from syntax_tree.SyntaxClass import *
@@ -354,6 +355,55 @@ class GenerateCode:
         if node.isImported:return
         self.generate_src_file(node)
         self.generate_head_file(node)
+    def generate_test_file(self,main_node:SyntaxUserOp):
+        """一个测试类"""
+        import syntax_tree.testdata.generate_test_data as generate_test_data
+        length=100
+
+        test_code=f'#include "stdio.h"\n' \
+                  f'#include "kcg_types.h"\n' \
+                  f'#include "{main_node.get_global_name()}.c"\n' \
+                  f'#define true kcg_true\n' \
+                  f'#define false kcg_false\n' \
+                  f'int main(){{\n' \
+                  f'    int length={length};\n' \
+                  f'    {main_node.get_inC_name()} input;\n' \
+                  f'    {main_node.get_outC_name()} output;\n' \
+                  f'    {main_node.get_global_name()}_init(&output);\n'
+        # 填充测试用例
+        decls=""
+        fills_in=""
+        fills_out=""
+        if not os.path.exists(f"{self.outputDir}/../../../testdata/test_data_{main_node.name}_c.txt"):
+            generate_test_data.generate([p.syntaxType.get_real_type().type for p in main_node.inParams], main_node.name,
+                                        length)
+        with open(f"{self.outputDir}/../../../testdata/test_data_{main_node.name}_c.txt", "r") as test_data:
+            for in_param in main_node.inParams:
+                data=test_data.readline().strip("\n")
+                decls+=f'    {in_param.syntaxType.change_name()} {in_param.name}_list[] = {{{data}}};\n'
+                fills_in+=f'        input.{in_param.name}={in_param.name}_list[i];\n'
+        for out_param in main_node.outParams:
+            decls+=f'    {out_param.syntaxType.change_name()} {out_param.name}_list[{str(length)}];\n'
+            fills_out+=f"        {out_param.name}_list[i]=output.{out_param.name};\n"
+        test_code+=decls
+        test_code+="    for(int i=0;i<length;i++){\n"
+        test_code+=fills_in
+        test_code+=f'        {main_node.get_global_name()}(&input,&output);\n'
+        test_code+=fills_out
+        test_code+='    }\n'
+        test_code+= f'    FILE *file = fopen("../../testdata/test_data_{main_node.name}_c_out.txt","w");\n'
+        for out_param in main_node.outParams:
+            test_code += f'    fprintf(file,"%s\\n","{out_param.name}");\n'
+            test_code += "    for(int i=0;i<length;i++){\n"
+            test_code += f'        fprintf(file,"%.2f, ",{out_param.name}_list[i]);\n'
+            test_code += '    }\n'
+            test_code += f'   fprintf(file,"\\n");\n'
+        test_code+=f'    fclose(file);\n' \
+                  f'}}\n'
+
+        file_name=f"{self.outputDir}/../test_{main_node.get_global_name()}.c"
+        with open(file_name,"w") as file:
+            file.write(test_code)
 
 
 class GenEqu:
@@ -885,13 +935,13 @@ def generate_array_expr_getdefault(syntaxExpr, data_def, genEqu:GenEqu):
 
 
 @register_array_expr_handler("slice")
-def generate_array_expr_slice(syntaxExpr, data_def, genEqu:GenEqu):
+def generate_array_expr_slice(syntaxExpr:SyntaxExpr, data_def, genEqu:GenEqu):
     depth=genEqu.depth
     tmp_var,tmp_name=generate_tmp_symbol_and_register(data_def,syntaxExpr.lhsTypeList[0])
     sliced_code=SyntaxExpr_generate(syntaxExpr.objects[0],data_def,genEqu)
     slice_type_name=syntaxExpr.lhsTypeList[0].change_name()
 
-    genEqu.add_preEquations(f"{'    '*depth}kcg_assign_array(&({tmp_name}),  ({slice_type_name} *) &({sliced_code}), sizeof ({slice_type_name}));\n")
+    genEqu.add_preEquations(f"{'    '*depth}kcg_assign_array(&({tmp_name}),  ({slice_type_name} *) &(({sliced_code})[{syntaxExpr.idx_list[0]}]), sizeof ({slice_type_name}));\n")
     return tmp_name
 @register_expr_handler('Apply_expr')
 def generate_Apply_expr(syntaxExpr, syntaxUserOp, genEqu):
@@ -1039,6 +1089,7 @@ def generate_operator_fold(operator: SyntaxOperator, parameters: list[SyntaxExpr
                                          f"{applied_outc_name}[{tmp_idx}]")
     pre_code = f"{'    ' * depth}for ({tmp_idx} = 0; {tmp_idx} < {str(array_length)}; {tmp_idx}++) {{\n" \
                f"{sub_param_code}" \
+               f"{''.join(sub_gen_equ.preEquations)}" \
                f"{'    ' * (depth + 1)}{tmp_output_name}={sub_gen_equ.expr};\n" \
                f"{'    ' * depth}}}\n"
     # fold只返回一个变量，直接用=赋值是安全的
@@ -1546,7 +1597,7 @@ def generate_type_block(rootPackage):
     return h_content
 
 
-def scade_parse(input_path: str, main_operator: str, output_path: str):
+def scade_parse(input_path: str, main_operator: str, output_path: str,need_test_file:bool):
     parser = yacc(debug=1, start="Program")
 
     file = open(input_path, 'r')
@@ -1582,12 +1633,14 @@ def scade_parse(input_path: str, main_operator: str, output_path: str):
         gen.generate_node_file(op)
     gen.generate_imported_functions_file()
     gen.add_code_to_types_file("#endif\n")  # 结束
-
+    if need_test_file:
+        gen.generate_test_file(userOp_order[-1])
 
 if __name__ == "__main__":
     argParser = argparse.ArgumentParser()
     argParser.add_argument('-i', '--input_path', required=True, type=str)
     argParser.add_argument('-m', '--main_operator', required=True, type=str)
     argParser.add_argument('-o', '--output_path', required=True, type=str)
+    argParser.add_argument('-t', '--need_test_file',required=False,type=bool,default=False)
     args = argParser.parse_args()
-    scade_parse(args.input_path, args.main_operator, args.output_path)
+    scade_parse(args.input_path, args.main_operator, args.output_path,args.need_test_file)

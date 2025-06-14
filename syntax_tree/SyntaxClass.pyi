@@ -493,6 +493,9 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def __init__(self, type: str, name: str, prevscope: SyntaxScope, visibility: str, isImported: bool = False):
         ...
 
+    @property
+    def hasInternalState(self) -> bool:
+        ...
     def set_sizeDecl(self, sizeDecl: List[str]):
         ...
 
