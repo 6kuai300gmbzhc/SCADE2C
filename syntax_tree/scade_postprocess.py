@@ -441,8 +441,12 @@ def post_Switch_expr(expr,data_def):
         rhs_list=add_rhs_to_each(expr.objects[0].rhsList,rhs_list)
         expr.rhsList=rhs_list
     else:
-        expr.returnNum=expr.objects[1][1].returnNum
-        raise Exception("case这里后处理没做呢")
+        cases = expr.objects[1]
+        expr.returnNum=cases[0][1].returnNum
+        # pattern都是常量的
+        rhs_list=union_rhsLists([case[1].rhsList for case in cases])
+        rhs_list=add_rhs_to_each(expr.objects[0].rhsList,rhs_list)
+        expr.rhsList=rhs_list
 
 @post_expr_handler('Apply_expr')
 def post_Apply_expr(expr, data_def):

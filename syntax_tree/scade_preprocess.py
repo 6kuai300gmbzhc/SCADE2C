@@ -50,6 +50,12 @@ def p_program(p):
     print("统计")
     for k,v in d.items():
         print(f"{k},{v}")
+    print("operator:")
+    for k,v in op_d.items():
+        print(f"{k},{v}")
+    print("iterator:")
+    for k,v in it_d.items():
+        print(f"{k},{v}")
     print("======符号表======")
     print(root_scope)
 
@@ -1373,7 +1379,8 @@ def p_apply_expr(p):
     p[0].add_object(p[1])
     p[0].add_object(p[3])
 
-
+op_d=dict()
+it_d=dict()
 def p_operator(p):
     '''Operator : Prefix
     | LPARENTHESE Prefix LSHIFT Operator_1 RSHIFT RPARENTHESE
@@ -1449,6 +1456,17 @@ def p_operator(p):
         p[0].add_object(p[5])
         p[0].add_object(p[8])
         p[0].add_object(p[10])
+
+    t=p[0].subtype
+    if t not in op_d:
+        op_d[t]=0
+    op_d[t]+=1
+
+    if t=="iterator_mw" or t=="iterator":
+        it=p[0].objects[0]
+        if it not in it_d:
+            it_d[it]=0
+        it_d[it]+=1
 
 
 def p_prefix(p):

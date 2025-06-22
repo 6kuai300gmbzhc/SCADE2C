@@ -12,6 +12,8 @@ def generate(input_types,name,data_num):
                 v=format(random.random()*100,".2f")
             elif _type=="bool":
                 v="true" if random.random()>0.5 else "false"
+            elif _type=="int32":
+                v=str(int(random.random()*5))
             scade_out += v + " "
             c_out[c].append(v)
         scade_out+="\n"

@@ -374,8 +374,7 @@ class GenerateCode:
         decls=""
         fills_in=""
         fills_out=""
-        if not os.path.exists(f"{self.outputDir}/../../../testdata/test_data_{main_node.name}_c.txt"):
-            generate_test_data.generate([p.syntaxType.get_real_type().type for p in main_node.inParams], main_node.name,
+        generate_test_data.generate([p.syntaxType.get_real_type().type for p in main_node.inParams], main_node.name,
                                         length)
         with open(f"{self.outputDir}/../../../testdata/test_data_{main_node.name}_c.txt", "r") as test_data:
             for in_param in main_node.inParams:
@@ -395,7 +394,10 @@ class GenerateCode:
         for out_param in main_node.outParams:
             test_code += f'    fprintf(file,"%s\\n","{out_param.name}");\n'
             test_code += "    for(int i=0;i<length;i++){\n"
-            test_code += f'        fprintf(file,"%.2f, ",{out_param.name}_list[i]);\n'
+            if out_param.syntaxType<=SyntaxType("float"):
+                test_code += f'        fprintf(file,"%f, ",{out_param.name}_list[i]);\n'
+            else:
+                test_code += f'        fprintf(file,"%d, ",{out_param.name}_list[i]);\n'
             test_code += '    }\n'
             test_code += f'   fprintf(file,"\\n");\n'
         test_code+=f'    fclose(file);\n' \
@@ -1634,6 +1636,7 @@ def scade_parse(input_path: str, main_operator: str, output_path: str,need_test_
     gen.generate_imported_functions_file()
     gen.add_code_to_types_file("#endif\n")  # 结束
     if need_test_file:
+        print(f"生成测试类:{userOp_order[-1].name}")
         gen.generate_test_file(userOp_order[-1])
 
 if __name__ == "__main__":
