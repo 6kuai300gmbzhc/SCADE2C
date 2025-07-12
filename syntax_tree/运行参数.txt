@@ -30,3 +30,11 @@ syntax_tree/test/flight_control.scade
 FlightControlSimulation::World
 -o
 syntax_tree/test/out
+
+pilot
+-i
+syntax_tree/test/pilot.scade
+-m
+Pilot::Pilot
+-o
+syntax_tree/test/out

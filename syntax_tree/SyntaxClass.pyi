@@ -113,7 +113,7 @@ class SyntaxType:
     def set_size(self, size: int):...
     def set_element_and_size(self, array_type: SyntaxType, size: int) -> SyntaxType:...
     def get_element_type_for_array(self) -> SyntaxType:...
-
+    def get_element_for_fields(self,name)-> SyntaxConstSymbol or None:...
 
 class SyntaxTypeSymbol:
     name: str
@@ -161,10 +161,11 @@ class SyntaxGroupSymbol:
 
 
 class SyntaxPattern(HasRhs):
-    type: str
-    value: str
+    constExpr:Optional[SyntaxExpr]
+    value:str
+    constValue: Optional[ConstValue]
 
-    def __init__(self, type: str, value: str):...
+    def __init__(self, _type: str, value: str,scope:SyntaxScope):...
     def __repr__(self) -> str:...
 
 

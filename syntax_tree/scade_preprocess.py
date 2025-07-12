@@ -1364,9 +1364,7 @@ def p_label_or_index(p):
     if len(p) == 2:
         p[0] = p[1]
     else:
-        p[0] = SyntaxExpr(type="Id_expr", subtype="ID",scope=cur_scope)
-        p[0].add_object(p[2].value)
-
+        p[0]=p[2].value
 
 def p_index(p):
     '''Index : LBRACKET Expr RBRACKET'''
@@ -1635,14 +1633,13 @@ def p_pattern(p):
     | Pattern_1 TYPED_INTEGER
     | Bool_atom
     | UNDERLINE'''
-    p[0] = dict()
     if len(p) == 3:
         _type = p[2].strs
         value = p[1].value + p[2].value
     else:
         value = p[1].value
         _type = p[1].strs
-    p[0] = SyntaxPattern(type=_type, value=value)
+    p[0] = SyntaxPattern(_type=_type, value=value,scope=cur_scope)
 
 
 def p_pattern_1(p):

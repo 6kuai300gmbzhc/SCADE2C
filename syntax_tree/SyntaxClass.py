@@ -440,8 +440,7 @@ class SyntaxType:
     '''
 
     type: str
-    '''类型，int8，枚举类型等field_decl,array,signed,unsigned,typevar,path_id,enum
-    见文档
+    '''类型,见文档
     typevar类型应该被当作path_id来对待
     额外加入other存储不在scade内部的类型，即函数的inc，outc等
     '''
@@ -653,10 +652,14 @@ class SyntaxType:
 
     def get_element_type_for_array(self):
         """获取数组元素的类型"""
-        if self.type != "array":
+        if self.get_real_type().type != "array":
             raise TypeMismatchException(self, "array类型")
-        return self.arrayType
-
+        return self.get_real_type().arrayType
+    def get_element_for_fields(self,name):
+        for field in self.fields:
+            if field.name==name:
+                return field
+        return None
 
 class SyntaxTypeSymbol:
     """人为定义的类型变量，输入到符号表里面"""
@@ -801,25 +804,38 @@ class SyntaxGroupSymbol:
 
 class SyntaxPattern(HasRhs):
     '''pattern类'''
-    type: str
-    '''具体的pattern类型
-    Path_id
-    | CHARACTER
-    | INTEGERNUM
-    | TYPED_INTEGER
-    | Bool_atom
-    | UNDERLINE
-    对应的lex_value的strs'''
-    value: str
-    '''类型对应的内容'''
 
-    def __init__(self, type, value):
+    constExpr:SyntaxExpr or None
+    '''等价的常量表达式'''
+
+    value:str
+    '''存储内容'''
+
+    constValue: ConstValue or None
+    '''计算出的常量value'''
+
+    def __init__(self, _type, value,scope):
         super().__init__()
-        self.type = type
-        self.value = value
+        self.value=value
+        self.constValue = None
+        if _type=="path_id":
+            self.constExpr=SyntaxExpr("Id_expr","Path_id",scope,[value])
+        elif _type=="character":
+            self.constExpr = SyntaxExpr("Atom", "character", scope, [value])
+        elif _type == 'true' or _type == 'false':
+            self.constExpr=SyntaxExpr("Atom", "bool_atom",scope,[value])
+        elif _type=="_":
+            # _ 没有对应的常量表达式
+            self.constExpr=None
+        else:
+            if value.startswith("-"):
+                self.constExpr=SyntaxExpr(type="Arith_expr", subtype="unary",scope=scope,objects=
+                ["-",SyntaxExpr(type="Atom", subtype=_type, scope=scope,objects=[value[1:]])])
+            else:
+                self.constExpr=SyntaxExpr(type="Atom", subtype=_type, scope=scope,objects=[value])
 
     def __repr__(self):
-        return self.value
+        return str(self.constExpr)
 
 
 class SyntaxClockExpr(HasRhs):

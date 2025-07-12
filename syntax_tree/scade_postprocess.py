@@ -305,12 +305,7 @@ def post_process_clock_expr(clock_expr,data_def):
         post_process_pattern(clock_expr.pattern,data_def)
         clock_expr.rhsList=clock_expr.pattern.rhsList
 def post_process_pattern(pattern,data_def):
-    if pattern.type=="Path_id":
-        equivalent_expr = SyntaxExpr("Id_expr", "Path_id", data_def, [pattern.value])
-        post_process_expr(equivalent_expr, data_def)
-        pattern.rhsList=equivalent_expr.rhsList
-    else:
-        pattern.set_rhs(None)
+    pattern.set_rhs(None)
 def process_subexpr_default(expr, data_def):
     """默认的子expr后处理，就是挨个遍历一下，没有operator,有clockExpr和pattern"""
     flat_list = flatten_list(expr.objects)
@@ -582,6 +577,14 @@ def post_operator_activateDefault(operator: SyntaxOperator,param_rhs_list, expr:
     op_rhs_list=add_rhs_to_each(cond_expr.rhsList,op_rhs_list)
     return return_num,op_rhs_list
 
+@post_operator_handler("activateInitDefault")
+def post_operator_activateInitDefault(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
+    return post_operator_activateDefault(operator,param_rhs_list,expr,data_def)
+@post_operator_handler("foldw")
+def post_operator_foldw(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
+    # 和iterator是一样
+    sub_operator = operator.objects[2]
+    return post_process_operator(sub_operator, param_rhs_list, expr, data_def)
 def flatten_list(input_list: list) -> list:
     """把嵌套列表展开，不是列表的输入也返回一个列表"""
     if not type(input_list) == list:
