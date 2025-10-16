@@ -544,7 +544,7 @@ def post_operator_make(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr
 
 
 @post_operator_handler("iterator")
-def post_operator_map(operator: SyntaxOperator,param_rhs_list:list, expr: SyntaxExpr, data_def):
+def post_operator_iterator(operator: SyntaxOperator,param_rhs_list:list, expr: SyntaxExpr, data_def):
     sub_operator=operator.objects[2]
     # 很神奇吧，iterator不修改返回的参数数量
     # 他们会对调用的op有要求

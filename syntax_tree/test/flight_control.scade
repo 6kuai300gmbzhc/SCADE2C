@@ -9,13 +9,13 @@ package FlightControl
   open RegulationConstants;
   open AlarmConstants;
   package AlarmConstants
-    const alarmSpeedThreshold : float32 = 85.0;
+    const alarmSpeedThreshold : float32 = 50.0;
 
-    const alarmAltThreshold : float32 = 100.0;
+    const alarmAltThreshold : float32 = 10.0;
 
-    const alarmSpeedTimer : int32 = 22;
+    const alarmSpeedTimer : int32 = 3;
 
-    const alarmAltTimer : int32 = 18;
+    const alarmAltTimer : int32 = 2;
 
   end;
 

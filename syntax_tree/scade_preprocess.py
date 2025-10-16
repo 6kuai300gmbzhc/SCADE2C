@@ -7,6 +7,8 @@ import os
 
 scade_lexer = scade_lex()
 precedence = (
+    ('right', 'TIMES'),
+    ('left', 'IF','ELSE'),
     ('left', 'ARROW'),
     ('left', 'LOR', 'LXOR'),
     ('left', 'LAND'),
@@ -17,10 +19,13 @@ precedence = (
     ('left', 'PLUS', 'MINUS'),
     ('left', 'STAR', 'MOD', 'DIVIDE'),
     ('right', 'UMINUS', 'UPLUS'),
-    ('left', 'PRE'),
+    ('right', 'PRE'),
+    ('left', 'REVERSE'),
+    ('left', 'WHEN'),
     ('right', 'NOT', 'LNOT'),
     ('left', 'EXPONENT'),
-    ('left', 'POINT')
+    ('left', 'AT'),
+    ('left', 'POINT','LBRACKET')
 )
 root_scope = SyntaxPackageScope(type="package", name="*global", prevscope=None, visibility="public")
 cur_scope = root_scope

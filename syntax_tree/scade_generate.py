@@ -1803,10 +1803,10 @@ def generate_syntax_type_field_decl(typeSymbol, rootPackage):
     for field in typeSymbol.syntaxType.fields:
         k = field.name
         v = field.syntaxType
-        if v.type in v.basic_type:
+        if v.get_real_type() in v.basic_type:
             code += f"kcg_{v.type} {k};\n"
         else:
-            tmpTypeSymbol = SyntaxTypeSymbol(f"tmp_struct_{k}", v, "public")
+            tmpTypeSymbol = SyntaxTypeSymbol(f"tmp_struct_{k}", v.get_real_type(), "public")
             precode = generate_type_symbol(tmpTypeSymbol, rootPackage)
             tmpName = f"tmp_struct_{k}" if len(global_name) == 0 else f"tmp_struct_{k}_{global_name}"
             code += f"{tmpName} {k};\n"
