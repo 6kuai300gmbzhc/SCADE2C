@@ -1,11 +1,19 @@
 from collections import deque
-
-from syntax_tree.SyntaxClass import *
 from syntax_tree.graph import Graph
 import syntax_tree.control_block_post_process as control_block_post_process
-import scade_type_inference as type_inference
-from syntax_tree.scade_const_expression import cal_const_expr
+from syntax_tree.syntax_class.Exceptions import *
+from typing import TYPE_CHECKING
 
+from syntax_tree.syntax_class.expression import SyntaxExpr
+from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
+
+if TYPE_CHECKING:
+    from syntax_tree.syntax_class.scope.package import SyntaxPackageScope
+    from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
+    from syntax_tree.syntax_class.scope.data_def import SyntaxDataDefScope
+    from syntax_tree.syntax_class.equation import SyntaxEquation
+    from syntax_tree.syntax_class.scope.automaton import SyntaxAutomaton
+    from syntax_tree.syntax_class.scope.clocked_block import SyntaxIfBlock
 """
 后处理流程，在预处理过程完成对语法树的构建后，进行这个流程来进行排序，与其他相关的处理
 代码生成过程应该只生成代码，而不对语法树结构有任何过多的修改，所以后处理流程负责将语法树的结构修正为可以直接逐句生成代码的方式
@@ -62,7 +70,7 @@ def dependent_graph_str(graph):
     return out
 
 
-def post_process(root_scope: SyntaxPackageScope,main_operator_path:str):
+def post_process(root_scope: 'SyntaxPackageScope',main_operator_path:str):
     """后处理流程，遍历语法树，进行一些修改方便代码生成"""
     print("============postProcess Begin============")
 
@@ -71,7 +79,7 @@ def post_process(root_scope: SyntaxPackageScope,main_operator_path:str):
     path=main_operator_path.split("::")
     main_operator=root_scope.resolve_path(path[:-1]).get_userOp(path[-1])
     if not main_operator:
-        raise UnknownIdentifierException(main_operator_path)
+        raise UnknownIdentifierException("找不到主节点："+main_operator_path)
     # 从主节点开始建图
     build_userOp_dependent_graph(main_operator,userOp_dependent_graph)
     sorted_order = userOp_dependent_graph.topological_sort()
@@ -87,14 +95,11 @@ def post_process(root_scope: SyntaxPackageScope,main_operator_path:str):
         # 按拓扑顺序去遍历各个函数，而非按package的顺序
         # 前面已经处理过open package，所以应该不会出现找不到引用的情况
     print("============postProcess END============")
-    instantiated_op_order=type_inference.type_inference(main_operator) # 主节点在最后一个，是必然的,即进行一个反向的遍历
+    return sorted_order,main_operator
 
 
 
-    return instantiated_op_order
-
-
-def post_process_package(package: SyntaxPackageScope,userOpGraph:Graph) -> None:
+def post_process_package(package: 'SyntaxPackageScope',userOpGraph:Graph) -> None:
     """package级别，即全局作用域和package作用域
     要处理open package"""
     open_package(package)
@@ -109,7 +114,7 @@ def post_process_package(package: SyntaxPackageScope,userOpGraph:Graph) -> None:
 
 
 
-def build_userOp_dependent_graph(userOp: SyntaxUserOp, userOp_dependent_graph: Graph) -> None:
+def build_userOp_dependent_graph(userOp: 'SyntaxUserOp', userOp_dependent_graph: Graph) -> None:
     """根据函数之间的依赖关系登记进入单向图"""
     print(f"{userOp.get_global_name()}的依赖函数路径：{str(userOp.dependentFunctions)}")
     userOp_dependent_graph.addVertex(userOp)  # 先把自己加进去
@@ -121,7 +126,7 @@ def build_userOp_dependent_graph(userOp: SyntaxUserOp, userOp_dependent_graph: G
         build_userOp_dependent_graph(target_userOp,userOp_dependent_graph)
 
 
-def open_package(package: SyntaxPackageScope) -> None:
+def open_package(package: 'SyntaxPackageScope') -> None:
     """处理open package情况"""
     open_list = package.openPackageList
 
@@ -132,7 +137,7 @@ def open_package(package: SyntaxPackageScope) -> None:
         package.open(tar_package)
 
 
-def post_process_userOp(userOp: SyntaxUserOp) -> None:
+def post_process_userOp(userOp: 'SyntaxUserOp') -> None:
     """在这里，遍历内部所有语句，对语句进行拓扑排序，并更新此函数的输入输出参数之间的依赖关系"""
     # 如果函数是imported的话，就假设输入输出之间全都有关系
     if userOp.isImported:
@@ -143,7 +148,7 @@ def post_process_userOp(userOp: SyntaxUserOp) -> None:
     print(userOp.get_global_name(), "的输入输出参数之间因果关系为:", userOp.output2inputDependents)
 
 
-def build_userOp_output2inputDependents(userOp: SyntaxUserOp, equation_graph):
+def build_userOp_output2inputDependents(userOp: 'SyntaxUserOp', equation_graph):
     """拿到完整的依赖关系图后，辨识输出参数和输入参数之间的关系
     这对吗这个
     在图中找到左值是out_param的句子，然后前向遍历，看看其他的句子里面有没有in_param
@@ -172,28 +177,29 @@ def build_userOp_output2inputDependents(userOp: SyntaxUserOp, equation_graph):
                 userOp.add_input_output_dependency(in_index, out_index)
 
 
-def find_non_intermediate_dependencies(data_def:SyntaxDataDefScope,param_name:str)->list:
+def find_non_intermediate_dependencies(data_def:'SyntaxDataDefScope',param_name:str)->list:
     """在指定作用域里，找到指定变量名所依赖的全部非局部变量的名字"""
-    out_equation = data_def.get_equation_by_lhs(param_name)
-    equation_stack = deque([out_equation])
+
+    out_equation_list = data_def.get_equation_by_lhs(param_name)
+    equation_stack = deque([out_equation_list])
     var_stack = deque([param_name])
     out_list=list()
     while equation_stack:
-        cur_equation = equation_stack.pop()
+        cur_equation_list = equation_stack.pop()
         cur_var_name = var_stack.pop()
-        cur_rhs_list = cur_equation.get_rhs_list_by_name(cur_var_name)
-        if cur_rhs_list is None: continue
+        cur_rhs_list = {item for e in cur_equation_list for item in e.get_rhs_list_by_name(cur_var_name)}
+        if not cur_rhs_list: continue
         for rhs_name in cur_rhs_list:
             # 是局部变量，就一定有以自己为右值的语句
-            nxt_equation = data_def.get_equation_by_lhs(rhs_name)
-            if nxt_equation is None:
+            nxt_equation_list = data_def.get_equation_by_lhs(rhs_name)
+            if nxt_equation_list is None:
                 out_list.append(rhs_name)
             else:
-                equation_stack.append(nxt_equation)
+                equation_stack.extend([nxt_equation_list])
                 var_stack.append(rhs_name)
     return out_list
 
-def post_process_data_def(data_def: SyntaxDataDefScope) -> Graph:
+def post_process_data_def(data_def: 'SyntaxDataDefScope') -> Graph:
     """对所有data_def类型，遍历其内部的所有语句，给出依赖关系，对语句进行拓扑排序,返回此作用域内的单向图
     除此之外还需要给出变量之间的依赖关系单向图
     """
@@ -222,11 +228,11 @@ def post_process_data_def(data_def: SyntaxDataDefScope) -> Graph:
     return graph
 
 
-def post_process_equation(equation: SyntaxEquation, data_def) -> None:
+def post_process_equation(equation: 'SyntaxEquation', data_def) -> None:
     """这里要处理所有语句的变量依赖关系，从预处理阶段挪到这里了"""
     # 只有control_block有不同的地方，其他都一样
     if equation.type != "control_block":
-        post_process_expr(equation.expr, data_def)
+        equation.expr.post_process(data_def)
         equation.rhsList = equation.expr.rhsList
         # 将equation的返回值与expr的返回值相对应
     else:
@@ -234,7 +240,7 @@ def post_process_equation(equation: SyntaxEquation, data_def) -> None:
         control_block = data_def.get_childScope(equation.controlBlockID)
         rhs_dict=post_process_control_block(control_block)
         for lhs in equation.lhs:
-            equation.add_rhs(rhs_dict[lhs])
+            equation.add_rhs(rhs_dict[lhs.symbol_name])
     if len(equation.lhs) != len(equation.rhsList):
         print("!!!不对")
         print(equation)
@@ -244,9 +250,41 @@ def post_process_equation(equation: SyntaxEquation, data_def) -> None:
         print(equation.lhs2RhsDict)
         raise Exception(f"equation{equation}的左右值长度不一样")
     for i in range(len(equation.lhs)):
-        equation.lhs2RhsDict[equation.lhs[i]] = equation.rhsList[i]
+        symbol_name=equation.lhs[i].symbol_name
+        if equation.lhs2RhsDict.get(symbol_name) is None:
+            equation.lhs2RhsDict[symbol_name]=set()
+        equation.lhs2RhsDict[symbol_name].update(equation.rhsList[i])
 
+def set_rhs_default(expr):
+    # 默认的情况下，expr的rhs是各子expr之和，合并成一个
+    # 我一定会处理函数调用的情况，所以这里就没有operator了
+    flat_list = flatten_list(expr.objects)
+    tar_rhs = set()
+    for sub_expr in flat_list:
+        if not isinstance(sub_expr,SyntaxExpr): continue
+        for rhs in sub_expr.rhsList:
+            tar_rhs |= rhs
+    expr.set_rhs(tar_rhs)
+def process_subexpr_default(expr, data_def):
+    """默认的子expr后处理，就是挨个遍历一下，有clockExpr"""
+    flat_list = flatten_list(expr.objects)
+    for sub_expr in flat_list:
+        if isinstance(sub_expr,SyntaxExpr) or isinstance(sub_expr,SyntaxClockExpr):
+            sub_expr.post_process(data_def)
 
+def flatten_list(input_list: list) -> list:
+    """把嵌套列表展开，不是列表的输入也返回一个列表"""
+    if not type(input_list) == list:
+        return [input_list]
+    output = []
+    for item in input_list:
+        if type(item) == list:
+            flattened = flatten_list(item)
+            for sub_item in flattened:
+                output.append(sub_item)
+        else:
+            output.append(item)
+    return output
 post_process_control_block_handlers = {}
 
 
@@ -265,336 +303,11 @@ def post_process_control_block(control_block):
 
 
 @post_control_block_handler('automaton')
-def post_automaton(automaton: SyntaxAutomaton):
+def post_automaton(automaton: 'SyntaxAutomaton'):
     #返回一个字典{左值变量名字->[依赖的右值变量名字]}
     return control_block_post_process.post_process_automaton(automaton)
 
 @post_control_block_handler('if_block')
-def post_if_block(if_block: SyntaxIfBlock):
+def post_if_block(if_block: 'SyntaxIfBlock'):
     #返回一个字典{左值变量名字->[依赖的右值变量名字]}
     return control_block_post_process.post_process_if_block(if_block)
-
-post_process_expr_handlers = {}
-
-
-def post_expr_handler(type_):
-    def decorator(func):
-        post_process_expr_handlers[type_] = func
-        return func
-
-    return decorator
-
-
-def post_process_expr(expr, data_def):
-    """expr后处理，进行变量校验，判断因果关系"""
-    type_ = expr.type
-    # 需要对expr进行类型校验，每个expr有不同的类型校验规则
-    process_subexpr_default(expr,data_def)
-    if type_ in post_process_expr_handlers.keys():
-        expr_handler = post_process_expr_handlers[type_]
-        expr_handler(expr, data_def)
-    else:
-        set_rhs_default(expr)
-def post_process_clock_expr(clock_expr,data_def):
-    """时钟表达式后处理"""
-    if clock_expr.type!="pattern":
-        equivalent_expr = SyntaxExpr("Id_expr", "Path_id", data_def, [clock_expr.ID])
-        post_process_expr(equivalent_expr,data_def)
-        clock_expr.rhsList=equivalent_expr.rhsList
-    else:
-        post_process_pattern(clock_expr.pattern,data_def)
-        clock_expr.rhsList=clock_expr.pattern.rhsList
-def post_process_pattern(pattern,data_def):
-    pattern.set_rhs(None)
-def process_subexpr_default(expr, data_def):
-    """默认的子expr后处理，就是挨个遍历一下，没有operator,有clockExpr和pattern"""
-    flat_list = flatten_list(expr.objects)
-    for sub_expr in flat_list:
-        if type(sub_expr) == SyntaxExpr:
-            post_process_expr(sub_expr, data_def)
-        elif type(sub_expr) == SyntaxClockExpr:
-            post_process_clock_expr(sub_expr,data_def)
-        elif type(sub_expr) == SyntaxPattern:
-            post_process_pattern(sub_expr,data_def)
-def set_rhs_default(expr):
-    # 默认的情况下，expr的rhs是各子expr之和，合并成一个
-    # 我一定会处理函数调用的情况，所以这里就没有operator了
-    flat_list = flatten_list(expr.objects)
-    tar_rhs = set()
-    for sub_expr in flat_list:
-        if type(sub_expr) != SyntaxExpr: continue
-        for rhs in sub_expr.rhsList:
-            tar_rhs |= rhs
-    expr.set_rhs(tar_rhs)
-
-
-@post_expr_handler('Id_expr')
-def post_Id_expr(expr: SyntaxExpr, data_def:SyntaxDataDefScope):
-    name = expr.objects[0]
-    if expr.subType == "ID" :
-        expr.set_rhs([])
-    elif expr.subType == "lastSinglequoteLv6id":
-        name = name[1:] # 去掉开头的'
-        variable_symbol=data_def.get_localVariable_InThisAndPreEnv(name)
-        if variable_symbol is None:
-            raise UnknownIdentifierException(name)
-        expr.set_symbol(variable_symbol)
-        expr.set_rhs([])
-    elif expr.subType == "Path_id":
-        symbol=data_def.check_and_get_constant_param(name)
-        if symbol is not None:
-            expr.set_rhs([])
-            expr.set_symbol(symbol)
-        else:
-            symbol=data_def.get_localVariable_InThisAndPreEnv(name)
-            if symbol is None:
-                raise UnknownIdentifierException(name+" "+str(expr)+f"在{data_def.get_global_name()}") #有枚举类型，可恶,把枚举类型给放到常数变量里了
-            expr.set_rhs([name])
-        expr.set_symbol(symbol)
-    else: # SinglequoteLv6id
-        name = name[1:]  # 去掉开头的'
-        if not data_def.have_signal_InThisAndPreEnv(name):
-            raise UnknownIdentifierException(name)
-        # id_expr仅有单个返回值，设置rhs
-        expr.set_rhs([name])
-
-@post_expr_handler("Tempo_expr")
-def post_tempo_expr(expr: SyntaxExpr, data_def):
-    # 设置一下返回值数量，从输入参数大概估算一个，不需要具体的校验
-    if expr.subType == "PRE":
-        expr.set_rhs(None)
-        expr.returnNum=expr.objects[0].returnNum
-    elif expr.subType == "FBY":
-        expr.rhsList=expr.objects[2].rhsList
-        expr.returnNum = expr.objects[0].returnNum
-        # 这里加一个优化，如果fby(a;1;b)则转为b->pre a
-        if cal_const_expr(expr.objects[1],SyntaxType("integer"),data_def).value==1:
-            pre_sub_expr=SyntaxExpr("List_expr","List_expr",data_def,
-                                    objects=[[SyntaxExpr("Tempo_expr","PRE",data_def,[expr.objects[0]])]])
-            post_tempo_expr(pre_sub_expr,data_def)
-            expr.subType="ARROW"
-            expr.objects=[expr.objects[2],pre_sub_expr]
-    elif expr.subType == "ARROW":
-        expr.returnNum = expr.objects[0].returnNum
-        expr.rhsList = union_rhsLists([expr.objects[0].rhsList, expr.objects[1].rhsList])
-    elif expr.subType == "WHEN":
-        expr.returnNum = expr.objects[0].returnNum
-        expr.rhsList=add_rhs_to_each(expr.objects[1].rhsLst,expr.objects[0].rhsList)
-    elif expr.subType=="MERGE":
-        expr.returnNum = expr.objects[1][0].returnNum
-        expr.rhsList=union_rhsLists([sub_expr.rhsList for sub_expr in expr.objects[1]])
-    elif expr.subType=="TIMES":
-        # 只返回一个值
-        expr.rhsList=expr.objects[1].rhsList
-
-
-
-
-@post_expr_handler('List_expr')
-def post_List_expr(expr: SyntaxExpr, data_def):
-    # 列表有多个返回值
-    # 嵌套列表视为其完全展开格式
-    # 这里对这种情况进行处理,如果可以保证按后序处理语法树结构，就不用递归的检查了
-    if not expr.objects: return
-    expr_list = expr.objects[0]
-    new_object_list = list()
-    return_num=0
-    for sub_expr in expr_list:
-        expr.absorb_rhs(sub_expr)
-        return_num+=sub_expr.returnNum
-        if sub_expr.type == "List_expr":
-            # 因为还需要考虑到函数调用的因素，所以这里不可能全部的将list展开
-            for o in sub_expr.objects[0]:
-                new_object_list.append(o)
-        else:
-            new_object_list.append(sub_expr)
-    expr.objects[0] = new_object_list
-    expr.returnNum=return_num
-def union_rhsLists(rhsList_list:list[list[set[str]]])->list[set[str]]:
-    """把输入expr列表的右值列表按位取并集"""
-    length=len(rhsList_list[0])
-    out_list=[set()]*length
-    for rhs_list in rhsList_list:
-        if len(rhs_list)!=length:
-            raise Exception(f"在{rhsList_list}中，存在expr的返回长度不一样")
-        for i,rhs in enumerate(rhs_list):
-            out_list[i]|=rhs
-    return out_list
-def add_rhs_to_each(src_list,dst_list):
-    """把src中的所有右值逐个加到dst里面"""
-    tar_rhs=set().union(*src_list)
-    output=list()
-    for rhs in dst_list:
-        output.append(rhs|tar_rhs)
-    return output
-@post_expr_handler('Switch_expr')
-def post_Switch_expr(expr,data_def):
-    if expr.subType=="IF":
-        expr.returnNum=expr.objects[1].returnNum
-        # 将两个条件分支的因果关系逐个合并起来，然后加上条件语句的因果关系
-        rhs_list=union_rhsLists([expr.objects[1].rhsList,expr.objects[2].rhsList])
-        rhs_list=add_rhs_to_each(expr.objects[0].rhsList,rhs_list)
-        expr.rhsList=rhs_list
-    else:
-        cases = expr.objects[1]
-        expr.returnNum=cases[0][1].returnNum
-        # pattern都是常量的
-        rhs_list=union_rhsLists([case[1].rhsList for case in cases])
-        rhs_list=add_rhs_to_each(expr.objects[0].rhsList,rhs_list)
-        expr.rhsList=rhs_list
-
-@post_expr_handler('Apply_expr')
-def post_Apply_expr(expr, data_def):
-    """遇到函数调用，根据输入，输出参数来确定对应的依赖关系"""
-    # 处理一下operator的情况，情况比较复杂，需要分配到每个函数自行解决问题
-    operator = expr.objects[0]
-    param_expr_list=expr.objects[1].objects[0]
-    param_rhs_list=extend_rhs_list([expr.rhsList for expr in param_expr_list])
-    expr.returnNum,expr.rhsList=post_process_operator(operator,param_rhs_list,expr,data_def)
-def extend_rhs_list(rhs_list_list:list[list[set[str]]])->list[set[str]]:
-    """把右值列表连接起来"""
-    output=list()
-    for rhs_list in rhs_list_list:
-        output.extend(rhs_list)
-    return output
-def merge_rhs_list(rhs_list:list[set[str]])->list[set[str]]:
-    """把指定右值列表汇聚到一个set内并返回"""
-    output=set()
-    for rhs in rhs_list:
-        output.update(rhs)
-    return [output]
-
-def post_process_operator(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
-    """返回两个参数，expr返回参数数量，和右值列表"""
-    type_ = operator.subtype
-    if type_ in post_process_operator_handlers.keys():
-        operator_handler = post_process_operator_handlers[type_]
-        return operator_handler(operator,param_rhs_list, expr, data_def)
-    else:
-        raise Exception(f"{type_}这个operator还没实现后处理")
-
-post_process_operator_handlers = {}
-
-
-def post_operator_handler(type_):
-    def decorator(func):
-        post_process_operator_handlers[type_] = func
-        return func
-
-    return decorator
-
-
-@post_operator_handler('Path_id')
-def post_operator_Path_id(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
-    """最常用的，函数调用部分，找到目标函数，然后查看输入输出依赖关系，更新expr的右值"""
-    # 找到目标函数
-    tar_userOp: SyntaxUserOp = data_def.check_and_get_userOp(operator.objects[0])
-    params: list[set[str]] = param_rhs_list
-    if not tar_userOp:
-        raise UnknownIdentifierException(f"{data_def.get_global_name()}找不到{operator.objects[0]}")
-    operator.appliedUserOp=tar_userOp
-    # 找到了之后，根据这个函数的依赖关系确定这个表达式的依赖关系
-    # 如果这个函数没有返回值，就直接返回输入的参数
-    # 如果有返回值，就看一眼对应的参数，根据依赖表确定情况
-    if len(tar_userOp.inParams) != len(params):
-        raise ParamMismatcheException(f"{expr}在函数调用时参数数量不匹配,在{data_def.get_global_name()}内")
-    rhs_list=list()
-    if not tar_userOp.outParams:
-        rhs_set=set()
-        for i in tar_userOp.output2inputDependents[0]:
-            rhs_set.update(params[i])
-        rhs_list.append(rhs_set)
-    else:
-        for i in range(len(tar_userOp.output2inputDependents)):
-            rhs_set=set()
-            out_dependent_list = tar_userOp.output2inputDependents[i]
-            for j in out_dependent_list:
-                rhs_set.update(params[j])
-            rhs_list.append(rhs_set)
-    return len(tar_userOp.outParams),rhs_list
-
-@post_operator_handler('PREFIXOP')
-def post_operator_PREFIXOP(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
-    # 全部因果关系，返回1个变量
-    # todo 按照等价的表达式检查一下？似乎也不一定
-    return 1,merge_rhs_list(param_rhs_list)
-
-
-
-@post_operator_handler('flatten')
-def post_operator_flatten(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
-    tar_type_name=operator.objects[0]
-    tar_type=data_def.check_and_get_type_symbol(tar_type_name).syntaxType
-    if tar_type is None:
-        raise UnknownIdentifierException(tar_type_name)
-    size=tar_type.get_size()
-    #全部因果关系，返回参数数量为结构体中元素个数
-    return size,list(merge_rhs_list(param_rhs_list)*size)
-
-
-@post_operator_handler('make')
-def post_operator_make(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def)->(int,list[set[str]]):
-    params: list[SyntaxExpr] = expr.objects[1].objects[0]
-    tar_type_name=operator.objects[0]
-    tar_type=data_def.check_and_get_type_symbol(tar_type_name).syntaxType
-    if tar_type is None:
-        raise UnknownIdentifierException(tar_type_name)
-    # 全部因果关系，返回1个变量
-    return 1, merge_rhs_list(param_rhs_list)
-
-
-@post_operator_handler("iterator")
-def post_operator_iterator(operator: SyntaxOperator,param_rhs_list:list, expr: SyntaxExpr, data_def):
-    sub_operator=operator.objects[2]
-    # 很神奇吧，iterator不修改返回的参数数量
-    # 他们会对调用的op有要求
-    # 在类型推导里做具体的校验
-    # 但是需要改变一下给subOp的参数
-    iterator_op=operator.objects[0]
-    if iterator_op[-1]=="i":
-        # 末尾带i的都要加一个常数
-        sub_param_list=param_rhs_list.copy()
-        sub_param_list.insert(0,set())
-    else:
-        sub_param_list=param_rhs_list
-    return post_process_operator(sub_operator,sub_param_list,expr,data_def)
-
-@post_operator_handler("activate")
-def post_operator_activate(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
-    sub_operator=operator.objects[2]
-    # 只改变时钟
-    return post_process_operator(sub_operator,param_rhs_list,expr,data_def)
-
-@post_operator_handler("activateDefault")
-def post_operator_activateDefault(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
-    sub_operator=operator.objects[0]
-    default_expr=operator.objects[2]
-    post_process_expr(default_expr,data_def)
-    cond_expr=operator.objects[1]
-    post_process_expr(cond_expr,data_def)
-    return_num,sub_op_rhs_list=post_process_operator(sub_operator, param_rhs_list, expr, data_def)
-    op_rhs_list=union_rhsLists([sub_op_rhs_list,default_expr.rhsList])
-    op_rhs_list=add_rhs_to_each(cond_expr.rhsList,op_rhs_list)
-    return return_num,op_rhs_list
-
-@post_operator_handler("activateInitDefault")
-def post_operator_activateInitDefault(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
-    return post_operator_activateDefault(operator,param_rhs_list,expr,data_def)
-@post_operator_handler("foldw")
-def post_operator_foldw(operator: SyntaxOperator,param_rhs_list, expr: SyntaxExpr, data_def):
-    # 和iterator是一样
-    sub_operator = operator.objects[2]
-    return post_process_operator(sub_operator, param_rhs_list, expr, data_def)
-def flatten_list(input_list: list) -> list:
-    """把嵌套列表展开，不是列表的输入也返回一个列表"""
-    if not type(input_list) == list:
-        return [input_list]
-    output = []
-    for item in input_list:
-        if type(item) == list:
-            flattened = flatten_list(item)
-            for sub_item in flattened:
-                output.append(sub_item)
-        else:
-            output.append(item)
-    return output

@@ -1,6 +1,8 @@
-import scade_generate as scade_generate
-from syntax_tree.SyntaxClass import *
-import graph
+import syntax_tree.scade_generate as scade_generate
+from syntax_tree.syntax_class.equation import LeftItemId
+
+from syntax_tree.syntax_class.scope.automaton import SyntaxAutomaton, SyntaxState, SyntaxArrow
+from syntax_tree.syntax_class.syntaxType import SyntaxType
 
 
 def is_nest_automaton(automaton: SyntaxAutomaton) -> bool:
@@ -79,8 +81,9 @@ def get_reset_act(automaton: SyntaxAutomaton) -> str:
 
 def generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth) -> (str, str):
     """将arrow的判断部分的代码生成出来"""
+    from syntax_tree.syntax_class.equation import SyntaxEquation
     tmp_symbol, tmp_name = scade_generate.generate_tmp_symbol_and_register(from_state, SyntaxType("bool"))
-    equation = SyntaxEquation(type="simple_equation", lhs=[tmp_name], lineno=-1)
+    equation = SyntaxEquation(type="simple_equation", lhs=[LeftItemId(from_state,tmp_name)], lineno=-1,scope=from_state)
     equation.set_expr(sub_expr)
     tmp_decls = f"{'    ' * depth}kcg_bool {tmp_name};\n"
     tmp_decls += scade_generate.generate_userOp_simple_equation(equation, from_state, code_generator, depth)

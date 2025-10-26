@@ -1,9 +1,0 @@
-package rollmode1
-    function SORT() returns()
-    let
-        c=a;
-        a=b;
-        b=c;
-
-    tel
-end;

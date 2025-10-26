@@ -5,7 +5,7 @@
 
 #define KCG_MAPW_CPY
 
-#include "./user_macros.h"
+// #include "./user_macros.h"
 
 #ifndef kcg_char
 #define kcg_char kcg_char
@@ -72,7 +72,7 @@ typedef signed short kcg_int16;
 typedef signed char kcg_int8;
 #endif /* kcg_int8 */
 
-#include "kcg_imported_types.h"
+// #include "kcg_imported_types.h"
 
 #ifndef kcg_lit_float32
 #define kcg_lit_float32(kcg_C1) ((kcg_float32) (kcg_C1))
@@ -163,7 +163,7 @@ typedef signed char kcg_int8;
 #endif /* kcg_lnot_uint8 */
 
 #ifndef kcg_assign
-#include "kcg_assign.h"
+#define kcg_assign(kcg_D, kcg_S, kcg_sz) (memcpy((kcg_D), (kcg_S), (kcg_sz)))
 #endif /* kcg_assign */
 
 #ifndef kcg_assign_struct

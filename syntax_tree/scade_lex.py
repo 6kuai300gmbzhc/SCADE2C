@@ -35,47 +35,31 @@ class lex_value:
         return strs
 
 reserved = {
-    'include':"INCLUDE",
     'package':"PACKAGE",
-    'body':"BODY",
     'end':"END",
-    'uses':"USES",
     'is':"IS",
-    'provides':"PROVIDES",
-    'unsafe':"UNSAFE",
     'node':"NODE",
     'function':"FUNCTION",
     'returns':"RETURNS",
     'type':"TYPE",
-    'model':"MODEL",
-    'needs':"NEEDS",
     'const':"CONST",
     'var':"VAR",
     'when':"WHEN",
     'enum':"ENUM",
-    'struct':"STRUCT",
     'bool':"BOOL",
-    'int':"INT",
-    'real':"REAL",
-    'extern':"EXTERN",
     'not':"NOT",
     'and':"AND",
     'or':"OR",
     'xor':"XOR",
-    'div':"DIV",
     'mod':"MOD",
     'if':"IF",
     'then':"THEN",
     'else':"ELSE",
     'let':"LET",
     'tel':"TEL",
-    'assert':"ASSERT",
-    'step':"STEP",
     'pre':"PRE",
-    'current':"CURRENT",
     'fby':"FBY",
     'with':"WITH",
-    'nor':"NOR",
     'merge':"MERGE",
     'true':"TRUE",
     'false':"FALSE",
@@ -88,7 +72,6 @@ reserved = {
     'float' : "FLOAT",
     'float32' : "FLOAT32",
     'float64' : "FLOAT64",
-    'int' : "INT",
     'int8' : "INT8",
     'int16' : "INT16",
     'int32' : "INT32",
@@ -163,7 +146,6 @@ tokens = [
     "TYPED_FLOAT",
     "CHARACTER", #++
     "LV6ID",  # id
-    "LV6IDREF",  # ++
     'LBRACKET',  # [
     'RBRACKET',  # ]
     'LPARENTHESE',  # (
@@ -186,11 +168,9 @@ tokens = [
     'MINUS',  # -
     'STAR',  # *
     'DIVIDE',  # /
-    'SURPLUS',  # %
     'ARROW',  # ->
     'HASHTAG',  # #
     'EXPONENT',  # ^
-    'SHIFT',  # =>
     'POINT',  # .
     'TPOINT',  # ..
     'VERTICALBAR',  # |
@@ -201,9 +181,7 @@ tokens = [
 
 
 t_BOOL = r'bool'
-t_REAL = r'real'
 t_IF = r'if'
-t_STRUCT = r'struct'
 t_FALSE = r'false'
 t_FBY = r'fby'
 t_NODE = r'node'
@@ -212,35 +190,22 @@ t_OR = r'or'
 t_XOR = r'xor'
 t_PACKAGE = r'package'
 t_LET = r'let'
-t_INT = r'int'
-t_PROVIDES = r'provides'
 t_END = r'end'
 t_FUNCTION = r'function'
-t_INCLUDE = r'include'
 t_IS = r'is'
 t_PRE = r'pre'
 t_TYPE = r'type'
-t_NEEDS = r'NEEDS'
-t_EXTERN = r'extern'
-t_CURRENT = r'current'
-t_DIV = r'div'
-t_ASSERT = r'assert'
 t_RETURNS = r'returns'
-t_USES = r'uses'
 t_MOD = r'mod'
 t_ENUM = r'enum'
 t_TEL = r'tel'
-t_BODY = r'body'
-t_NOR = r'nor'
 t_MERGE = r'merge'
 t_CONST = r'const'
-t_UNSAFE = r'unsafe'
 t_TRUE = r'true'
 t_WITH = r'with'
 t_NOT = r'not'
 t_THEN = r'then'
 t_ELSE = r'else'
-t_STEP = r'step'
 t_VAR = r'var'
 t_WHEN = r'when'
 t_LAST = r'last'
@@ -262,7 +227,6 @@ t_NOEQU = r'<>'
 t_GREATEREQU = r'>='
 t_ARROW = r'->'
 t_RSHIFT = r'>>'
-t_SHIFT = r'=>'
 t_TPOINT = r'\.\.'
 t_LBRACKET = r'\['
 t_COMMA = r','
@@ -279,7 +243,6 @@ t_EQU = r'='
 t_COLON = r':'
 t_DOUBLECOLON = r'::'
 t_DIVIDE = r'/'
-t_SURPLUS = r'%'
 t_LESS = r'<'
 t_EXPONENT = r'\^'
 t_POINT = r'\.'

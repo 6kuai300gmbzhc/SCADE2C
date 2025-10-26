@@ -1,7 +1,15 @@
-from syntax_tree.SyntaxClass import *
-import syntax_tree.scade_postprocess as scade_postprocess
+import syntax_tree.scade_postprocess as scade_postproces
+from syntax_tree import scade_postprocess
+from syntax_tree.syntax_class.hasRhs import add_rhs_to_each
 
 
+
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from syntax_tree.syntax_class.scope.automaton import SyntaxAutomaton, SyntaxState, SyntaxArrow
+    from syntax_tree.syntax_class.scope.clocked_block import SyntaxClockedScope, SyntaxIfBlock
+    from syntax_tree.syntax_class.scope.data_def import SyntaxDataDefScope
 def merge_dict(*dicts: dict[str, set[str]]) -> dict[str, set[str]]:
     # 按key融合对set取并集
     result = {}
@@ -14,8 +22,7 @@ def merge_dict(*dicts: dict[str, set[str]]) -> dict[str, set[str]]:
     return result
 
 
-# todo 状态机转移部分的语句需要加入右值列表中
-def post_process_automaton(automaton: SyntaxAutomaton):
+def post_process_automaton(automaton: 'SyntaxAutomaton'):
     # 遍历所有state，找到他修改的变量，与修改这些变量所用到的变量
     # 要如何确定这些变量是上层的呢？就是需要查看是否在当前作用域找不到，而在上层作用域可以找到
     # 将这些变量中，作为左值的变量记录起来，同时记录其对应的右值的变量才行
@@ -28,14 +35,14 @@ def post_process_automaton(automaton: SyntaxAutomaton):
     return rhs_dict
 
 
-def post_process_if_block(clock_scope: SyntaxClockedScope):
+def post_process_if_block(clock_scope: 'SyntaxClockedScope'):
     # 返回一个字典{左值变量名字->[依赖的右值变量名字]}
     return post_process_cond_block(clock_scope.block)
 
 
-def post_process_cond_block(block: SyntaxIfBlock) -> dict:
+def post_process_cond_block(block: 'SyntaxIfBlock') -> dict:
     """处理if_block"""
-    scade_postprocess.post_process_expr(block.conditionExpr, block.scope)
+    block.conditionExpr.post_process(block.scope)
     rhs_dict = dict()
     for sub_block in [block.thenBlock, block.elseBlock]:
         if isinstance(sub_block, str):
@@ -46,11 +53,11 @@ def post_process_cond_block(block: SyntaxIfBlock) -> dict:
         else:
             rhs_dict=merge_dict(rhs_dict,post_process_cond_block(sub_block))
     rhs_dict = dict(zip(
-        rhs_dict.keys(), scade_postprocess.add_rhs_to_each(block.conditionExpr.rhsList, list(rhs_dict.values()))))
+        rhs_dict.keys(), add_rhs_to_each(block.conditionExpr.rhsList, list(rhs_dict.values()))))
     return rhs_dict
 
 
-def post_process_state(state: SyntaxState)->dict[str,set[str]]:
+def post_process_state(state: 'SyntaxState')->dict[str,set[str]]:
     """对state进行后处理，处理state，和其内部的所有arrow，不需要给state进行排序
     所以得到对语句的graph后，整理出该state的整体的一个左值右值的情况
     """
@@ -84,8 +91,13 @@ def post_process_arrow(cond_expr, arrow, data_def) -> set[str]:
     if arrow is None: return set()
     arrow_rhs_set = set()
     if cond_expr is not None:
-        scade_postprocess.post_process_expr(cond_expr, data_def)
+        cond_expr.post_process(data_def)
         arrow_rhs_set = arrow_rhs_set.union(*cond_expr.rhsList)
+    if arrow.action is not None:
+        action_scope = data_def.get_childScope(arrow.action)
+        scade_postproces.post_process_data_def(action_scope)
+        action_dict=update_dependent_dict(action_scope)
+
     if arrow.type == "if":
         for (sub_cond_expr, sub_arrow) in arrow.ifExprList:
             arrow_rhs_set.update(post_process_arrow(sub_cond_expr, sub_arrow, data_def))
@@ -93,11 +105,12 @@ def post_process_arrow(cond_expr, arrow, data_def) -> set[str]:
     return arrow_rhs_set
 
 
-def update_dependent_dict(data_def: SyntaxDataDefScope) -> dict[str,set[str]]:
+def update_dependent_dict(data_def: 'SyntaxDataDefScope') -> dict[str,set[str]]:
     """更新state中输入输出参数的依赖列表，更新存储于dict中"""
     # returnSymbolsTable的key就是左值，感谢之前的我整理出来这个东西
     out_dict = dict()
     for symbol_name in data_def.returnSymbolsTable:
+        if data_def.get_equation_by_lhs(symbol_name) is None:continue
         out_dict[symbol_name] = set()
         dependent_params = scade_postprocess.find_non_intermediate_dependencies(data_def, symbol_name)
         for dependent_param_name in dependent_params:
