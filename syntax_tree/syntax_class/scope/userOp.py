@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from .package import SyntaxPackageScope
     from ..expression.expr_common import SyntaxExpr
 
-@exclude_from_deepcopy('prevScope','dependentFunctions')
+@exclude_from_deepcopy('prevScope','dependentFunctions','instantiatedOpList')
 class SyntaxUserOp(SyntaxDataDefScope):
     """
     包含slocal声明部分
@@ -68,7 +68,13 @@ class SyntaxUserOp(SyntaxDataDefScope):
     '''
     存储了此op通过实例化产生的op，用于产生最终的遍历顺序
     '''
-    _hasInternalState:bool=False
+    opReturnSymbolCache:dict[str:[str,[str]]]
+    '''
+    若调用的函数输入为空且有内存，则他们会把结果缓存起来
+    用调用函数的get_outC_name方法作为key
+    value中第一个元素存储了对应函数注册的outC_name
+    第二个元素存储了输出的那堆代码
+    '''
     def __init__(self, type, name, prevscope, visibility="public", isImported=False):
         super().__init__(type, name, prevscope, visibility)
         self.inParams = list()
@@ -82,12 +88,13 @@ class SyntaxUserOp(SyntaxDataDefScope):
         self.apply_exprs = list()
         self.outCNameSet = set()
         self.instantiatedOpList=list()
+        self.opReturnSymbolCache=dict()
 
     def add_instantiatedOp(self,op):
         self.instantiatedOpList.append(op)
     @property
     def hasInternalState(self) -> bool:
-        return self._hasInternalState or super().hasInternalState or any(expr.get_applied_op().hasInternalState for expr in self.apply_exprs)
+        return super().hasInternalState or any(expr.get_applied_op().hasInternalState for expr in self.apply_exprs)
     @hasInternalState.setter
     def hasInternalState(self,value):
         self._hasInternalState=value
@@ -163,18 +170,25 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def get_outC_name(self):
         return f"outC_{self.get_global_name()}"
 
-    def register_outC_name(self,prefix)->str:
+    def register_outC_name(self,name)->None:
         """向outC中注册一个不重名的名字"""
+        if name in self.outCNameSet:
+            raise Exception(f"{name}已经在{self.get_global_name()}中出现了")
+        self.outCNameSet.add(name)
+    def generate_name_for_outC(self,prefix)->str:
+        '''生成一个在outC结构体中不重名的名字'''
         if prefix not in self.outCNameSet:
-            self.outCNameSet.add(prefix)
             return prefix
         count=1
         while True:
             name=f"{prefix}_{str(count)}"
             if name not in self.outCNameSet:
-                self.outCNameSet.add(name)
                 return name
             count+=1
+    def generate_name_for_outC_and_register(self,prefix):
+        name=self.generate_name_for_outC(prefix)
+        self.register_outC_name(name)
+        return name
 
     def scope2str(self, depth=0):
         s = "    " * depth

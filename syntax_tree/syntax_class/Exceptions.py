@@ -111,3 +111,10 @@ class CanNotInstantiatePackageException(Exception):
     def __str__(self):
         return f"无法进行model实例化操作:{self.stub},因为{self.reason}"
 
+class NumericConstraintViolateException(Exception):
+    def __init__(self, value,_type):
+        self.value = value
+        self._type=_type
+
+    def __str__(self):
+        return repr(f"{self.value}超过了{self._type}表达的范围")

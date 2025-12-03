@@ -3,6 +3,9 @@ from .expression.clock_expr import SyntaxClockExpr
 from .expression.expr_common import SyntaxExpr
 from .expression.const_value import ConstValue
 from .scope.scope import SyntaxScope
+
+
+
 class SyntaxVariableSymbol:
     """局部变量，即在var内部所声明的变量，不包括signal，这一点非常好，因为一个局部变量最多只能是一个equation的左值"""
     _name: str
@@ -30,6 +33,8 @@ class SyntaxVariableSymbol:
     last也用了
     这个expr是让此symbol在data_def的最后，添加关于此symbol的一些操作
     '''
+    __last_symbol:'SyntaxVariableSymbol'=None
+    '''很蠢！确保一个变量只有一个唯一的对应的last变量来记录内存信息，这样可以确保last运算符总能找到此变量上周期的值'''
 
     def __init__(self, name: str, scope: 'SyntaxScope', isClock: bool=False, isProbe: bool=False):
         self._name = name
@@ -40,6 +45,7 @@ class SyntaxVariableSymbol:
         self.scope = scope
         # 默认情况就是任意时钟
         self.whenExpr= SyntaxClockExpr.init_clock_base(scope)
+        self.__last_symbol=None
     @property
     def name(self):
         return self._name
@@ -70,6 +76,11 @@ class SyntaxVariableSymbol:
     def _output_add_name(self,name):
         op = self.scope.get_my_userOp()
         op.outCNameSet.add(name)
+    def set_last_symbol(self, symbol):
+        self.__last_symbol=symbol
+    def get_last_symbol(self):
+        """没有返回None"""
+        return self.__last_symbol
     def __repr__(self):
         s = ""
         if self.isClock: s += "clock "
@@ -142,9 +153,18 @@ class SyntaxConstSymbol:
     def get_value(self):
         """获取值"""
         if self.__value is None:
-            self.__value = self.valueExpr.cal_const_value(SyntaxType("any"), self.scope).value
+            if self.syntaxType.get_real_type().type=="enum":
+                self.__value= self.change_name()
+            else:
+                self.__value = self.valueExpr.cal_const_value(self.syntaxType, self.scope).value
         return self.__value
-
+    def generate_code_const(self):
+        if self.__value is None:
+            from ..scade_generate import GenEqu
+            self.valueExpr.post_process(self.scope)
+            self.valueExpr.type_inference([self.syntaxType],self.scope)
+            return self.valueExpr.generate_code_const(self.scope, GenEqu())
+        return self.__value
     def set_value(self, value):
         self.__value = value
 

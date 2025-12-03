@@ -4,6 +4,7 @@ from syntax_tree.syntax_class.expression import SyntaxExpr
 
 from typing import TYPE_CHECKING
 
+from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 
 if TYPE_CHECKING:
@@ -32,6 +33,7 @@ class Id_expr_singlequoteLv6id(SyntaxExpr):
         else:
             raise TypeMismatchException(f"{self}有type为{expr_type.get_real_type()}", required_type.get_real_type(),
                                         data_def)
+        self.set_clock_list([SyntaxClockExpr.init_clock_any(data_def)])
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
         # 把signal的第一个字符也就是'去掉

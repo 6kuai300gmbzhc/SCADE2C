@@ -11,11 +11,14 @@ class HasRhs:
     '''记录了返回值的类型列表，按顺序存放每个返回值的对应类型, 存放syntaxtype，很好'''
     lhsClockList: list['SyntaxClockExpr']
     '''记录了返回值的时钟类型，按顺序存放每个返回值的时钟表达式'''
+    allUsedSymbolNames:set[str]
+    '''记录了其右值所引用的全部变量名字'''
 
     def __init__(self):
         self.rhsList = list()
         self.lhsTypeList = list()
         self.lhsClockList = list()
+        self.allUsedSymbolNames=set()
     def set_clock_list(self,clock_list:list):
         self.lhsClockList=clock_list
 

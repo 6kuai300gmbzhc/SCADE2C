@@ -1,15 +1,15 @@
 from syntax_tree.scade_postprocess import set_rhs_default
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression import SyntaxExpr
-
+from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr
 from typing import TYPE_CHECKING
-
+from syntax_tree.syntax_class.syntaxType import SyntaxType
 
 
 if TYPE_CHECKING:
-    from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr
+
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
-    from syntax_tree.syntax_class.syntaxType import SyntaxType
+
     from syntax_tree.syntax_class.scope.scope import SyntaxScope
 class Array_expr_reverse(SyntaxExpr):
     name:str
@@ -22,6 +22,7 @@ class Array_expr_reverse(SyntaxExpr):
             raise TypeMismatchException(self, lhs_type_list, data_def)
         actual_type = self.objects[0].type_inference(lhs_type_list, data_def)
         self.set_lhs_type(actual_type)
+        self.set_clock_list(self.objects[0].lhsClockList)
         return self.lhsTypeList
     def generate_code(self, data_def:'SyntaxUserOp', genEqu:'GenEqu'):
         array_type: SyntaxType = self.lhsTypeList[0]

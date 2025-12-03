@@ -1,3 +1,4 @@
+import typing
 from abc import abstractmethod
 
 from ..Exceptions import *
@@ -10,6 +11,8 @@ if TYPE_CHECKING:
     from .userOp import SyntaxUserOp
     from ..syntaxSymbol import SyntaxVariableSymbol, SyntaxConstSymbol
     from .package import SyntaxPackageScope
+
+
 @exclude_from_deepcopy('prevScope')
 class SyntaxScope:
     """作用域父类"""
@@ -30,7 +33,8 @@ class SyntaxScope:
     '''创建中间变量使用的init'''
     initSymbolSet: set['SyntaxVariableSymbol']
     '''其子作用域内的所有init变量集合,在userop范围内不能重名，userop以上为空集合'''
-    tmpParams: list
+    tmpParams: list['SyntaxVariableSymbol']
+    _hasInternalState: bool = False
 
     def __init__(self, type, name, prevScope, visibility):
         self.type = type
@@ -46,7 +50,11 @@ class SyntaxScope:
     @property
     def hasInternalState(self) -> bool:
         '''该作用域内是否存在内存，例如control_block与一些时态算子等'''
-        return len(self.initSymbolSet) > 0
+        return self._hasInternalState or len(self.initSymbolSet) > 0
+
+    @hasInternalState.setter
+    def hasInternalState(self, value):
+        self._hasInternalState = value
 
     def add_childScope(self, childScope: 'SyntaxScope') -> None:
         self.childScopeTable[childScope.name] = childScope
@@ -76,11 +84,11 @@ class SyntaxScope:
         if self.prevScope is None:  # 是global
             return "global"
         elif self.prevScope.name == "*global":
-            if self.name=="switch":
+            if self.name == "switch":
                 return f"_{self.name}"
             return self.name
         else:
-            return self.name+"_"+self.prevScope.get_global_name()
+            return self.name + "_" + self.prevScope.get_global_name()
 
     def add_tmpSymbol(self, tmpSymbol):
         self.tmpParams.append(tmpSymbol)
@@ -90,36 +98,49 @@ class SyntaxScope:
             if symbol.name == tmpSymbolName: return symbol
         return None
 
-    @abstractmethod
     def get_localVariable_InThisAndPreEnv(self, name) -> 'SyntaxVariableSymbol' or None:
-        raise Exception("不对")
-        pass
+        if symbol := self.get_localVariable(name):
+            return symbol
+        return self.prevScope.get_localVariable_InThisAndPreEnv(name)
 
+    def get_localVariable_InThisAndPreEnv_until_certain_scope(self,name,certain_scope):
+        if certain_scope.prevScope is None or self is certain_scope.prevScope:
+            return None
+        if (symbol := self.get_localVariable(name)) is not None:
+            return symbol
+        return self.prevScope.get_localVariable_InThisAndPreEnv_until_certain_scope(name,certain_scope)
+
+    def get_localVariable(self, name: str) -> 'SyntaxVariableSymbol' or None:
+        for symbol in self.tmpParams:
+            if name == symbol.name:
+                return symbol
+        return None
+
+    def _get_certain_prev_scope(self, scope_types: typing.Iterable[str]):
+        tar_scope = self
+        while tar_scope is not None and tar_scope.type not in scope_types:
+            tar_scope = tar_scope.prevScope
+        return tar_scope
 
     def get_my_userOp(self):
         """返回此作用域对应的userOp作用域"""
         if self.type == "package": raise Exception(f"{self.name}是一个package")
-        op_scope = self
-        while op_scope.type != "function" and op_scope.type != "node":
-            op_scope = op_scope.prevScope
-        return op_scope
+        return self._get_certain_prev_scope({"function", "node"})
 
     def get_my_op_or_state(self):
         """返回此作用域对应的op或者状态机state的作用域，选取语法树上最近的那个"""
         if self.type == "package": raise Exception(f"{self.name}是一个package")
-        op_scope = self
-        while op_scope.type != "function" and op_scope.type != "node" and op_scope.type != "state":
-            op_scope = op_scope.prevScope
-        return op_scope
+        return self._get_certain_prev_scope({"function", "node", "automaton_state"})
 
-    def get_my_package(self):
-        if self.type == "package":
-            return self
-        return self.get_my_userOp().prevScope
+    def get_my_package(self) -> 'SyntaxPackageScope':
+        return self._get_certain_prev_scope({"package"})
+
+    def get_my_clocked_scope(self):
+        return self._get_certain_prev_scope({"if_block", "match_block", "automaton"})
 
     def resolve_path(self, path_list: list):
         """解析Path类型，直接返回对应的package,输入数组格式,即split::后的"""
-        cur_package:SyntaxPackageScope = self.get_my_package()
+        cur_package: SyntaxPackageScope = self.get_my_package()
         # 先根据path第一个找到对应package，然后逐层向下找
         if len(path_list) == 0:
             return cur_package
@@ -155,6 +176,10 @@ class SyntaxScope:
     def check_and_get_constant_param(self, param_path_id):
         """检查这个参数是不是一个常数，如果是则返回syntaxconstSymbol，否则返回None
         """
+        if self.type != "package":
+            userOp = self.get_my_userOp()
+            if (size_param := userOp.get_size_symbol(param_path_id)) is not None:
+                return size_param
         tar_package, name = self.resolve_path_id(param_path_id)
         const_param = tar_package.get_const_symbol(name)
         return const_param
@@ -166,6 +191,7 @@ class SyntaxScope:
         """
         tar_package, name = self.resolve_path_id(type_path_id)
         return tar_package.get_type_symbol(name)
+
     def get_const_symbol(self, symbol_name):
         raise Exception(f"{self.name} 作为{self.type}没有const")
 
@@ -173,9 +199,34 @@ class SyntaxScope:
         return self.typeSymbolTable.get(type_name)
 
     def var_change_name(self, name):
-        return self.get_my_userOp().var_change_name(name)
+        if name == "_": return name
+        symbol = self.get_localVariable_InThisAndPreEnv(name)
+        if symbol is None:
+            symbol = self.get_tmpSymbol(name)
+        if symbol is not None:
+            if symbol.isOutput:
+                return f"outC->{symbol.name}"
+            elif symbol.isInput:
+                return f"inC->{symbol.name}"
+            else:
+                return symbol.name
+        else:
+            symbol = self.check_and_get_constant_param(name)
+            if symbol is None:
+                raise ValueError(f"var_change_name error , name:{name}")
+            return symbol.change_name()
 
     def scope2str(self) -> str:
         """一个抽象方法"""
         ...
 
+    def generate_name_for_tmp(self, postfix="tmp", isOutPut=False):
+        '''生成一个没有被用过的变量名，用来代码生成'''
+        count = 0
+        name = f"{postfix}"
+        while self.get_localVariable_InThisAndPreEnv(name) is not None:
+            count += 1
+            name = f"{postfix}_{str(count)}"
+        if isOutPut:
+            name = self.get_my_userOp().generate_name_for_outC(name)
+        return name

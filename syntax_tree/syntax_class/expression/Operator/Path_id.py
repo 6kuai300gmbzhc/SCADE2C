@@ -1,5 +1,6 @@
 import copy
 
+from syntax_tree.exclude_from_deepcopy import exclude_from_deepcopy
 from syntax_tree.scade_generate import GenerateCode, assign_lhs_to_rhs_expr, generate_tmp_symbol_and_register
 from syntax_tree.scade_type_inference import type_inference_userOp
 from syntax_tree.syntax_class.Exceptions import ParamMismatcheException, UnknownIdentifierException, \
@@ -118,9 +119,11 @@ def instantiate_template_function(userOp: SyntaxUserOp, lhs_type_list: list[Synt
         type_symbol = instantiate_userOp.typeVarSymbolTable[name]
         type_symbol.syntaxType = instantiate_dict[name]
 
-    for size_symbol, size_param in zip(instantiate_sizes, instantiate_userOp.sizeParams):
+    for size_expr,size_symbol, size_param in zip(size_exprs,instantiate_sizes, instantiate_userOp.sizeParams):
         size_param.set_value(size_symbol.value)
         size_param.syntaxType = size_symbol.type
+        size_param.valueExpr=size_expr
+        size_expr.type_inference([size_param.syntaxType],userOp)
 
     if len(size_exprs) != len(instantiate_userOp.sizeParams):
         raise CanNotInstantiateException(instantiate_userOp, size_exprs, "输入的sizedecl长度与函数声明的不一样")
@@ -133,8 +136,9 @@ def instantiate_template_function(userOp: SyntaxUserOp, lhs_type_list: list[Synt
     return instantiate_userOp
 def add_instantiated_op(userOp, instantiate_dict, instantiate_sizes, instantiated_op) -> None:
     instantiated_op_dict.get(userOp).append([instantiate_dict, instantiate_sizes, instantiated_op])
+@exclude_from_deepcopy('appliedOp')
 class Operator_Path_id(SyntaxExpr):
-    tar_op:SyntaxUserOp
+    appliedOp:SyntaxUserOp
     '''要调用的op'''
     paramExpr:SyntaxExpr
     '''参数表达式，应该是一个list表达式'''
@@ -142,70 +146,71 @@ class Operator_Path_id(SyntaxExpr):
     '''调用此op的时钟表达式'''
     def post_process(self, data_def: 'SyntaxUserOp'):
         self.paramExpr.post_process(data_def)
-        self.tar_op=data_def.check_and_get_userOp(self.objects[0])
-        if not self.tar_op:
+        self.appliedOp=data_def.check_and_get_userOp(self.objects[0])
+        if not self.appliedOp:
             raise UnknownIdentifierException(f"{data_def.get_global_name()}找不到{self.objects[0]}")
         params: list[set[str]] = extend_rhs_list([expr.rhsList for expr in self.paramExpr.objects[0]])
         # 找到了之后，根据这个函数的依赖关系确定这个表达式的依赖关系
         # 如果这个函数没有返回值，就直接返回输入的参数
         # 如果有返回值，就看一眼对应的参数，根据依赖表确定情况
-        if len(self.tar_op.inParams) != len(params):
+        if len(self.appliedOp.inParams) != len(params):
             raise ParamMismatcheException(f"{self}在函数调用时参数数量不匹配,在{data_def.get_global_name()}内")
+        for size_expr in self.objects[1]:
+            size_expr.post_process(data_def)
         rhs_list:list[set[str]] = list()
-        if not self.tar_op.outParams:
+        if not self.appliedOp.outParams:
             rhs_set:set[str] = set()
-            for i in self.tar_op.output2inputDependents[0]:
+            for i in self.appliedOp.output2inputDependents[0]:
                 rhs_set.update(params[i])
             rhs_list.append(rhs_set)
         else:
-            for i in range(len(self.tar_op.output2inputDependents)):
+            for i in range(len(self.appliedOp.output2inputDependents)):
                 rhs_set:set[str] = set()
-                out_dependent_list = self.tar_op.output2inputDependents[i]
+                out_dependent_list = self.appliedOp.output2inputDependents[i]
                 for j in out_dependent_list:
                     rhs_set.update(params[j])
                 rhs_list.append(rhs_set)
-        self.returnNum, self.rhsList = len(self.tar_op.outParams), rhs_list
+        self.returnNum, self.rhsList = len(self.appliedOp.outParams), rhs_list
     def type_inference(self, lhs_type_list: list['SyntaxType'], data_def:'SyntaxUserOp'):
         # 进行实例化
         # 校验一下，要求的类型是不是和目标op返回的类型一样
         # 这里有可能左值类型并非基本类型，所以仅当可以推断出来一个基本类型时才去进行实例化操作
-        input_types = [param.syntaxType for param in self.tar_op.inParams]
+        input_types = [param.syntaxType for param in self.appliedOp.inParams]
         self.paramExpr.type_inference(input_types, data_def)
         # 检查并进行模板实例化
-        if self.tar_op.isTemplate():
-            self.tar_op = instantiate_template_function(self.tar_op, self.paramExpr.lhsTypeList, input_types, self.paramExpr,
-                                                       self.objects[1])
-            self.appliedUserOp = self.tar_op
+        if self.appliedOp.isTemplate():
+            self.appliedOp = instantiate_template_function(self.appliedOp, self.paramExpr.lhsTypeList, input_types, self.paramExpr,
+                                                           self.objects[1])
             # 实例化后再推理一边，因为实例化后函数的输入参数类型变了
-            input_types = [param.syntaxType for param in self.tar_op.inParams]
+            input_types = [param.syntaxType for param in self.appliedOp.inParams]
             self.paramExpr.type_inference(input_types, data_def)
 
-        returned_types = [param.syntaxType for param in self.tar_op.outParams]
+        returned_types = [param.syntaxType for param in self.appliedOp.outParams]
         if not all(g <= r for g, r in zip(returned_types, lhs_type_list)):
-            raise TypeMismatchException(f"{self.tar_op.get_global_name()}有type{returned_types}", lhs_type_list, data_def)
+            raise TypeMismatchException(f"{self.appliedOp.get_global_name()}有type{returned_types}", lhs_type_list, data_def)
 
-        type_inference_userOp(self.tar_op)
+        type_inference_userOp(self.appliedOp)
 
         self.set_lhs_type(returned_types)
-        self.add_applied_Op(self.tar_op, [])
+        self.add_applied_Op(self.appliedOp, [])
         self.set_lhs_type(returned_types)
 
 
         param_clock_list=self.paramExpr.lhsClockList
         if not param_clock_list:
-            self.set_clock_list([out_param.whenExpr for out_param in self.tar_op.outParams])
+            self.set_clock_list([out_param.whenExpr for out_param in self.appliedOp.outParams])
             self.call_clock=SyntaxClockExpr.init_clock_base(data_def.get_my_userOp())
             return self.lhsTypeList
 
         param_clock_dict:dict[str,SyntaxClockExpr]=dict()
         # 把函数内部参数时钟和输入的参数时钟对应起来
-        for param_clock,in_param in zip(param_clock_list,self.tar_op.inParams):
+        for param_clock,in_param in zip(param_clock_list, self.appliedOp.inParams):
             in_param_clock_str=str(in_param.whenExpr)
             if (existed_clock:=param_clock_dict.get(in_param_clock_str)) is None:
                 param_clock_dict[in_param_clock_str]=param_clock
             else:
                 if not existed_clock.fit(param_clock):
-                    raise Exception(f"在调用函数{self.tar_op.name}时，{in_param.name}的输入时钟存在冲突")
+                    raise Exception(f"在调用函数{self.appliedOp.name}时，{in_param.name}的输入时钟存在冲突")
 
         def get_fast_clock(clock_list):
             if len(clock_list)==0:
@@ -223,21 +228,27 @@ class Operator_Path_id(SyntaxExpr):
         # 最快时钟就是调用此函数的时钟，也是其输出参数的基准时钟
 
         out_clock_list=list()
-        for out_param in self.tar_op.outParams:
+        for out_param in self.appliedOp.outParams:
             if out_param.whenExpr.ID=="_":
                 curres_clock=param_clock_dict.get(str(out_param.whenExpr))
                 if curres_clock is None:
                     raise Exception("不对！！！")
                 out_clock_list.append(curres_clock)
             else:
-                # todo 这里需要参考scade的clock类型变量进行校验
-                # todo 时钟为输入参数的情况
-                out_clock_list.append(out_param.whenExpr)
+                raise Exception(f"{self.appliedOp.get_global_name()}不是内联函数，输出参数不可为有时钟的对象")
+                # # todo 这里需要参考scade的clock类型变量进行校验
+                # # todo 时钟为输入参数的情况
+                # out_clock_list.append(out_param.whenExpr)
         self.set_clock_list(out_clock_list)
 
 
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
+        # 先看一眼cache再说
+        my_op=syntaxUserOp.get_my_userOp()
+        if (cache:=my_op.opReturnSymbolCache.get(self.appliedOp.get_outC_name())) is not None:
+            if cached_symbol_codes:=cache[1]:
+                return cached_symbol_codes
 
         # 这里是函数调用语句
         # 生成一个inC结构体，将输入参数填入
@@ -246,21 +257,21 @@ class Operator_Path_id(SyntaxExpr):
         # 如果是function，就直接初始化一个，说实话有点恶心
         # 结束调用后，把outC里面的结果拿出来进行进一步赋值操作
         parameters=self.paramExprs
-        global_name = self.tar_op.get_global_name()
-        if self.tar_op.isImported:
+        global_name = self.appliedOp.get_global_name()
+        if self.appliedOp.isImported:
             # 拿一下输入参数对应代码
             param_code = ", ".join(param.generate_code(syntaxUserOp, genEqu) for param in parameters)
-            applied_code = GenerateCode.generate_imported_function_name(self.tar_op)
+            applied_code = GenerateCode.generate_imported_function_name(self.appliedOp)
             applied_code += f"({param_code})"
             return applied_code
 
         code = ""
         # inC需要自己进行构造，outC可能出现在此函数的outC中
-        tmp_inC_name = generate_and_register_inC(syntaxUserOp, self.tar_op)
-        if self.tar_op.hasInternalState:
+        tmp_inC_name = generate_and_register_inC(syntaxUserOp, self.appliedOp)
+        if self.appliedOp.hasInternalState:
             tmp_outC_name = f"outC->{self.appliedOpOutCName}"
         else:
-            tmp_outC_name = generate_and_register_outC(syntaxUserOp, self.tar_op)
+            tmp_outC_name = generate_and_register_outC(syntaxUserOp, self.appliedOp)
         depth=genEqu.depth
         need_clock=self.call_clock.ID!="_"
         if need_clock:
@@ -271,7 +282,7 @@ class Operator_Path_id(SyntaxExpr):
         # 填充inc结构体
         for idx, param in enumerate(parameters):
             param_code = param.generate_code(syntaxUserOp, genEqu)
-            in_param = self.tar_op.inParams[idx]
+            in_param = self.appliedOp.inParams[idx]
             code += assign_lhs_to_rhs_expr(f"{tmp_inC_name}.{in_param.name}", param_code, [in_param.syntaxType],
                                            depth, syntaxUserOp)
 
@@ -279,15 +290,22 @@ class Operator_Path_id(SyntaxExpr):
         code += f"{'    ' * depth}{global_name}(&{tmp_inC_name}, &{tmp_outC_name});\n"
         if need_clock:
             code+=f"{'    '*(depth-1)}}}\n"
+        if len(self.appliedOp.outParams)==0:
+            return ""
         # 把outC中的结果取出
         output_names = []
-        for out_param in self.tar_op.outParams:
+        for out_param in self.appliedOp.outParams:
             output_name = f"{tmp_outC_name}.{out_param.name}"
             output_names.append(output_name)
 
         # 添加代码到preEquations中
         genEqu.add_preEquations(code)
-        return output_names if len(output_names) > 1 else output_names[0]
+        output_names=output_names[0] if len(output_names) == 1 else output_names
+        if len(self.appliedOp.inParams)==0 and self.appliedOp.hasInternalState:
+            if (cache := my_op.opReturnSymbolCache.get(self.appliedOp.get_outC_name())) is not None:
+                if not cache[1]:
+                    cache[1]=output_names
+        return output_names
     def set_params(self, params: list['SyntaxExpr']):
         """代码生产环节使用，设置用于产生代码的参数表达式"""
         self.paramExprs=params
@@ -298,4 +316,4 @@ class Operator_Path_id(SyntaxExpr):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
     def get_applied_op(self):
-        return self.tar_op
+        return self.appliedOp

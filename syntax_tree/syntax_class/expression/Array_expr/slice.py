@@ -15,7 +15,8 @@ class Array_expr_slice(SyntaxExpr):
     def type_inference(self, lhs_type_list: list['SyntaxType'], userOp:'SyntaxUserOp'):
         if len(lhs_type_list) != 1:
             raise TypeMismatchException(self, lhs_type_list, userOp)
-
+        self.objects[1].type_inference([SyntaxType("integer")], userOp)
+        self.objects[2].type_inference([SyntaxType("integer")], userOp)
         idx_symbols = [self.objects[1].cal_const_value(SyntaxType("integer"), userOp),
                        self.objects[2].cal_const_value(SyntaxType("integer"), userOp)]
         for i, idx_symbol in enumerate(idx_symbols):

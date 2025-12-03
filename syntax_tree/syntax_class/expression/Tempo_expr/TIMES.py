@@ -3,11 +3,11 @@ from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression import SyntaxExpr, expression_factory
 
 from typing import TYPE_CHECKING
-
+from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 
 if TYPE_CHECKING:
-    from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register
+
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
 
     from syntax_tree.syntax_class.scope.scope import SyntaxScope
@@ -25,10 +25,10 @@ class Tempo_expr_TIMES(SyntaxExpr):
             raise TypeMismatchException(self, lhs_type_list, data_def)
         self.subExpr.type_inference([SyntaxType("signed"),SyntaxType("bool")],data_def)
         self.set_lhs_type(lhs_type_list)
+        self.set_clock_list(self.subExpr.lhsClockList)
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
-        counter_symbol, counter_name = generate_tmp_symbol_and_register(syntaxUserOp, SyntaxType("int32"), "counter")
-        counter_symbol.isOutput = True
+        counter_symbol, counter_name = generate_tmp_symbol_and_register(syntaxUserOp, SyntaxType("int32"), "counter",isOutPut=True)
         # preCode分为两部分，先根据init决定是否初始化，根据输入的布尔值决定是否自减
         # counter_name需要加入到outC之中
         depth = genEqu.depth

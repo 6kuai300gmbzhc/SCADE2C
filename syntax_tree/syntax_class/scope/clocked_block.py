@@ -46,10 +46,12 @@ class SyntaxMatchBlock:
     '''用于switch的语句'''
     matchList: list
     '''保存（SyntaxPattern.指向data_def的ID）的列表'''
-
-    def __init__(self, expr: SyntaxExpr, matchList: list):
+    scope: 'SyntaxDataDefScope'
+    '''此block所处scope'''
+    def __init__(self, expr: SyntaxExpr, matchList: list,scope):
         self.switchExpr = expr
         self.matchList = matchList
+        self.scope=scope
 
     def __repr__(self):
         return self.block2str(0)
@@ -102,16 +104,15 @@ class SyntaxClockedScope(SyntaxScope):
                 equation = SyntaxEquation(type="simple_equation", lhs=[LeftItemId(symbol.scope,name)], lineno=-1,scope=symbol.scope)
                 if not symbol.defaultExpr:  # 没有默认表达式就报错
                     if symbol.lastExpr:
-                        equation.set_expr(symbol.lastExpr)
-                        childScope.add_equation(equation)
+                        symbol.isOutput=True
+                        # equation.set_expr(symbol.lastExpr)
+                        # childScope.add_equation(equation)
                     else:
                         raise InitializationErrorException(name)
                 else:
                     equation.set_expr(symbol.defaultExpr)
                     childScope.add_equation(equation)
         return output
-    def get_localVariable_InThisAndPreEnv(self, name) -> 'SyntaxVariableSymbol' or None:
-        return self.prevScope.get_localVariable_InThisAndPreEnv(name)
     def scope2str(self, depth):
         s = "    " * depth
         s += "" + self.type + " as "

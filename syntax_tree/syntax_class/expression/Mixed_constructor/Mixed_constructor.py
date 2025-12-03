@@ -1,13 +1,14 @@
-from syntax_tree.scade_postprocess import set_rhs_default
+from syntax_tree.scade_postprocess import set_rhs_default, flatten_list
+from syntax_tree.scade_type_inference import clock_inference_sync
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression import SyntaxExpr
-
+from syntax_tree.scade_generate import GenEqu, assign_lhs_to_rhs_expr, generate_tmp_symbol_and_register
 from typing import TYPE_CHECKING
 
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 
 if TYPE_CHECKING:
-    from syntax_tree.scade_generate import GenEqu, assign_lhs_to_rhs_expr, generate_tmp_symbol_and_register
+
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
     from syntax_tree.syntax_class.syntaxSymbol import SyntaxConstSymbol
     from syntax_tree.syntax_class.scope.scope import SyntaxScope
@@ -24,6 +25,7 @@ class Mixed_constructor_Mixed_constructor(SyntaxExpr):
         self.objects[0].type_inference(lhs_type_list, data_def)
 
         cur_type = tar_type
+        sync_clock_list=list(self.objects[0].lhsClockList)
         for idx in self.objects[1]:
             if isinstance(idx, str) and cur_type.type == "field_decl":
                 tar_symbol: SyntaxConstSymbol = cur_type.get_element_for_fields(idx)
@@ -34,17 +36,20 @@ class Mixed_constructor_Mixed_constructor(SyntaxExpr):
             elif isinstance(idx, SyntaxExpr) and cur_type.type == "array":
                 idx.type_inference([SyntaxType("integer")], data_def)
                 cur_type = cur_type.get_element_type_for_array()
+                sync_clock_list.append(idx.lhsClockList)
                 # 数组取数
             else:
                 raise TypeMismatchException(idx, "取数方式错误", data_def)
         # 确认这个type是右值type
         self.objects[2].type_inference([cur_type], data_def)
+        sync_clock_list.append(self.objects[2].lhsClockList)
+        self.set_clock_list(clock_inference_sync(flatten_list(sync_clock_list)))
         self.set_lhs_type(lhs_type_list)
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
         # 先copy，然后修改
         struct_type = self.lhsTypeList[0]
-        tmp_symbol, tmp_name = generate_tmp_symbol_and_register(syntaxUserOp, struct_type, "struct")
+        tmp_symbol, tmp_name = generate_tmp_symbol_and_register(syntaxUserOp, struct_type, "tmp_mix")
 
         depth = genEqu.depth
 

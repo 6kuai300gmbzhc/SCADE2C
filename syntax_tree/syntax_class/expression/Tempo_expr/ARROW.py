@@ -1,6 +1,6 @@
 from syntax_tree.scade_postprocess import flatten_list
 from syntax_tree.scade_type_inference import type_inference_on_groups, clock_inference_sync
-from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
+from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr, bool_to_expression
 from syntax_tree.syntax_class.hasRhs import union_rhsLists
 from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr
 from syntax_tree.syntax_class.syntaxType import SyntaxType
@@ -30,8 +30,10 @@ class Tempo_expr_ARROW(SyntaxExpr):
 
         # lustre中，为此句声明一个额外变量
         depth=genEqu.depth
-        init_symbol,init_name=generate_tmp_symbol_and_register(syntaxUserOp, SyntaxType("bool"),"arrow_mem")
-        init_symbol.isOutput=True
+        init_symbol,init_name=generate_tmp_symbol_and_register(syntaxUserOp, SyntaxType("bool"),"arrow_mem",isOutPut=True)
+        init_symbol.lastExpr=bool_to_expression(True,syntaxUserOp)
+        # 给这个mem添加last值，让他自动变True
+        # 好像有点道理啊，但是听起来就很离谱
         tmp_name_list=list()
         for sub_type in self.lhsTypeList:
             tmp_symbol,tmp_name=generate_tmp_symbol_and_register(syntaxUserOp, sub_type)

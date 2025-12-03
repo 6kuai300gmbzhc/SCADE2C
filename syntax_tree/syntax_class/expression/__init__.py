@@ -5,7 +5,7 @@ from pathlib import Path
 # 先把基类和工厂方法暴露出去
 from .expr_common import SyntaxExpr, expression_factory
 # 2. 只扫描「顶层包」的下一级子目录
-_root = Path(__file__).parent           # animals/
+_root = Path(__file__).parent
 for sub_dir in _root.iterdir():
     if not sub_dir.is_dir():
         continue                       # 跳过普通文件

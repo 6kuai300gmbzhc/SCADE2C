@@ -9,11 +9,14 @@ from syntax_tree.syntax_class.expression import SyntaxExpr, expression_factory
 from syntax_tree.syntax_class.scope.data_def import SyntaxDataDefScope
 from syntax_tree.syntax_class.scope.package import SyntaxPackageScope
 from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
-from syntax_tree.syntax_class.syntaxSymbol import SyntaxVariableSymbol
+from syntax_tree.syntax_class.syntaxSymbol import SyntaxVariableSymbol, SyntaxConstSymbol
 from syntax_tree.syntax_class.syntaxType import SyntaxType, SyntaxTypeSymbol
 from typing import TYPE_CHECKING
+from collections.abc import Iterable
+from typing import TypeVar, cast
 if TYPE_CHECKING:
     from syntax_tree.syntax_class.scope.clocked_block import SyntaxIfBlock
+
 
 class GenerateCode:
     def __init__(self, rootNode, mainNode, outputDir):
@@ -23,10 +26,11 @@ class GenerateCode:
         self.specialTypes = set()  # 保存了需要手动加入type文件的类型，比如数组,存str
         self.importedFunctions: set[SyntaxUserOp] = set()  # 保存了
 
+        self.generated_const_symbol_names=set()# 保存了生成过的常量名字
         if not os.path.isdir(self.outputDir):
             os.makedirs(self.outputDir)
 
-    def generate_const_file(self):
+    def generate_const_file(self,userOp_order):
         # 只要写了const_block无论是否使用都会使用,从root_node开始深度遍历
         # 改了，没用到的没有生成进去
         c_content = '''#include "kcg_consts.h"\n'''
@@ -34,7 +38,26 @@ class GenerateCode:
                      '#define _KCG_CONSTS_C_\n'
         h_content = '''#ifndef _KCG_CONSTS_H_\n#define _KCG_CONSTS_H_\n#include "kcg_types.h"\n'''
 
-        h, c = generate_const_equation(self.rootNode)
+        def set_base_type(param: SyntaxConstSymbol):
+            if param.syntaxType.is_basic_type():
+                return
+            value = param.get_value()
+            if value < 128:
+                param.syntaxType = SyntaxType("uint8")
+            elif value < 65538:
+                param.syntaxType = SyntaxType("uint16")
+            elif value < 4294967296:
+                param.syntaxType = SyntaxType("uint32")
+            else:
+                param.syntaxType = SyntaxType("uint64")
+            return
+        for userOpScope in userOp_order:
+            for size_param in userOpScope.sizeParams:
+                set_base_type(size_param)
+                h, c = generate_const_symbol(self,size_param)
+                h_content += h
+                c_content += c
+        h, c = generate_const_equation(self, self.rootNode)
         h_content += h
         c_content += c
 
@@ -91,7 +114,9 @@ class GenerateCode:
 
         code = f"#ifndef KCG_IMPORTED_FUNCTIONS_H_\n" \
                f"#define KCG_IMPORTED_FUNCTIONS_H_\n" \
-               f'#include "kcg_types.h"\n'
+               f'#include "kcg_types.h"\n' \
+               f'#include "macro_libmathext32.h"\n' \
+               f'#include "macro_libmathext64.h"\n'
         for imported_op in self.importedFunctions:
             code += generate_imported_function_decl(imported_op)
         code += "#endif"
@@ -145,6 +170,11 @@ class GenerateCode:
                 if para.isOutput:
                     print("para out", para.name)
                     code += f"    {para.syntaxType.change_name()} {para.name};\n"
+            if isinstance(cur_node,SyntaxDataDefScope):
+                for para in cur_node.localSymbolTable.values():
+                    if para.isOutput:
+                        print("para out", para.name)
+                        code += f"    {para.syntaxType.change_name()} {para.name};\n"
 
         code += f"}}{node.get_outC_name()};\n"
         return code
@@ -202,8 +232,9 @@ class GenerateCode:
 
     def check_and_add_special_types(self, syntaxType: SyntaxType):
         """向types文件中添加特殊类型定义"""
-        real_type=syntaxType.get_real_type()
-
+        real_type = syntaxType.get_real_type()
+        if real_type.is_basic_type():
+            return
         c_type_name = real_type.change_name()
         if c_type_name in self.specialTypes:
             return
@@ -213,16 +244,13 @@ class GenerateCode:
             type_decl_code = f"typedef " \
                              f"{ele_type.change_name()} {c_type_name}[{real_type.get_size()}];\n"
             self.add_code_to_types_file(type_decl_code)
-        elif real_type.type=="field_decl":
-            name=real_type.name
-            type_symbol=real_type.scope.check_and_get_type_symbol(name)
-            rootPackage=real_type.scope
+        elif real_type.type == "field_decl":
+            rootPackage = real_type.scope
             global_name = rootPackage.get_global_name()
-            symbol_type = type_symbol.syntaxType.get_real_type()
-            var_name = symbol_type.change_name()
+            var_name = real_type.change_name()
             precode = ""
             code = f"typedef struct {var_name} {{\n"
-            for field in symbol_type.fields:
+            for field in real_type.fields:
                 k = field.name
                 v: SyntaxType = field.syntaxType
                 self.check_and_add_special_types(v)
@@ -236,10 +264,10 @@ class GenerateCode:
             code += f"\n}} {var_name};\n"
             code = precode + code
             self.add_code_to_types_file(code)
-        elif real_type.type=="enum":
-            name=real_type.name
-            type_symbol=real_type.scope.check_and_get_type_symbol(name)
-            rootPackage=real_type.scope
+        elif real_type.type == "enum":
+            name = real_type.name
+            type_symbol = real_type.scope.check_and_get_type_symbol(name)
+            rootPackage = real_type.scope
             global_name = rootPackage.get_global_name()
             var_name = f"{type_symbol.name}_{global_name}"
             code = f"typedef enum {var_name} {{\n"
@@ -251,14 +279,19 @@ class GenerateCode:
             self.add_code_to_types_file(code)
         self.specialTypes.add(c_type_name)
 
-    def generate_data_def(self, data_def: SyntaxDataDefScope, depth=0) -> str:
-        """对data_def的代码生成
-        应只有最基础的功能，即data_def只作为某个代码块出现
-        包括了变量声明，一般的语句生成，init过程
-        有变量声明就需要有init，因为需要在
-        """
+    def generate_data_def_decl(self, data_def: SyntaxDataDefScope, depth=0) -> str:
+        decl_content=""
+        for name, symbol in data_def.localSymbolTable.items():
+            self.check_and_add_special_types(symbol.syntaxType)
+            if not symbol.isOutput:
+                decl_content += self.generate_variable_decl(symbol, name, depth)
+        for paraSymbol in data_def.tmpParams:
+            self.check_and_add_special_types(paraSymbol.syntaxType)
+            if not paraSymbol.isOutput:
+                decl_content += self.generate_variable_decl(paraSymbol, paraSymbol.name, depth)
+        return decl_content
+    def generate_data_def_src(self, data_def: SyntaxDataDefScope, depth=0) -> str:
         # localVariable + tmpVariable
-        decl_content = ""
         src_content = ""
         post_content = ""
         body_content = SyntaxUserOp_generate(data_def, self, depth)
@@ -272,22 +305,28 @@ class GenerateCode:
         src_content += body_content
         if data_def.initVar:
             src_content += f"{'    ' * depth}outC->{data_def.initVar.name} = kcg_false;\n"
-        for name, symbol in data_def.localSymbolTable.items():
-            self.check_and_add_special_types(symbol.syntaxType)
-            decl_content += self.generate_variable_decl(symbol, name, depth)
+
 
         for paraSymbol in data_def.tmpParams:
-            self.check_and_add_special_types(paraSymbol.syntaxType)
-            if paraSymbol.isOutput == False:
-                decl_content += self.generate_variable_decl(paraSymbol, paraSymbol.name, depth)
             post_code = paraSymbol.postExpr
             if post_code:
                 if not isinstance(post_code, list):
-                    post_content += '    ' + post_code
+                    post_content += f"{'    ' * depth}{post_code}"
                 else:
-                    post_content += '    ' + '    '.join(post_code)
-        content = decl_content + src_content + post_content
+                    for code in post_code:
+                        post_content += f"{'    ' * depth}{code}"
+        content = src_content + post_content
         return content
+    def generate_data_def(self, data_def: SyntaxDataDefScope, depth=0) -> str:
+        """对data_def的代码生成
+        应只有最基础的功能，即data_def只作为某个代码块出现
+        包括了变量声明，一般的语句生成，init过程
+        有变量声明就需要有init，因为需要在
+        """
+        # 顺序不能变
+        src=self.generate_data_def_src(data_def,depth)
+        decl=self.generate_data_def_decl(data_def,depth)
+        return decl+src
 
     def generate_src_func_file(self, node):
         global_name = node.get_global_name()
@@ -302,29 +341,40 @@ class GenerateCode:
         print(src_content)
         print("======================")
         return src_content
-
+    @staticmethod
+    def call_func_recursive(depth, context_list, func_name, outc_name):
+        if not context_list:
+            return \
+                f"{'    ' * depth}{func_name}(&({outc_name}));\n"
+        _code = ""
+        idx = "idx" if depth == 1 else f"idx_{str(depth)}"
+        _code += f"{'    ' * (depth)}for(kcg_size {idx}=0;{idx}<{context_list[0]};{idx}++){{\n" \
+                 f"{GenerateCode.call_func_recursive(depth + 1, context_list[1:], func_name, f'{outc_name}[{idx}]')}" \
+                 f"{'    ' * (depth)}}}\n"
+        return _code
     def generate_src_init(self, node):
         # 如果是数组情况，就需要加循环
-        def generate_init_code(syntax_type:SyntaxType,param_name,depth=1) -> str:
-            syntax_type=syntax_type.get_real_type()
+        def generate_init_code(syntax_type: SyntaxType, param_name, depth=1) -> str:
+            syntax_type = syntax_type.get_real_type()
             if syntax_type.is_basic_type():
-                return f"{'    '*depth}{param_name} = {syntax_type.generate_init_expr()};\n"
+                return f"{'    ' * depth}{param_name} = {syntax_type.generate_init_expr()};\n"
             if syntax_type.type == "array":
                 _code = ""
                 idx = "idx" if depth == 1 else f"idx_{str(depth)}"
                 _code += f"{'    ' * (depth)}for(kcg_size {idx}=0;{idx}<{syntax_type.get_size()};{idx}++){{\n" \
-                         f"{generate_init_code(syntax_type.get_element_type_for_array(),f'{param_name}[{idx}]', depth + 1)}" \
+                         f"{generate_init_code(syntax_type.get_element_type_for_array(), f'{param_name}[{idx}]', depth + 1)}" \
                          f"{'    ' * (depth)}}}\n"
                 return _code
             if syntax_type.type == "field_decl":
-                _code=""
+                _code = ""
                 for type_symbol in syntax_type.fields:
-                    _code+=generate_init_code(type_symbol.syntaxType,f"{param_name}.{type_symbol.name}",depth+1)
+                    _code += generate_init_code(type_symbol.syntaxType, f"{param_name}.{type_symbol.name}", depth + 1)
                 return _code
-            if syntax_type.type=="enum":
+            if syntax_type.type == "enum":
                 return f"{'    ' * depth}{param_name} = {syntax_type.generate_init_expr()};\n"
             print(syntax_type)
             raise Exception("为什么")
+
         global_name = node.get_global_name()
         code = "#ifndef KCG_USER_DEFINED_INIT\n" \
                f"void {global_name}_init(outC_{global_name} *outC)\n" \
@@ -336,23 +386,13 @@ class GenerateCode:
         # 只有最上层的状态机需要登记outC，其他不需要
         # 只有userOP有outParams，也就是最上层节点
         for para in node.outParams:
-            code += generate_init_code(para.syntaxType,node.var_change_name(para.name),1)
+            code += generate_init_code(para.syntaxType, node.var_change_name(para.name), 1)
 
 
-        def generate_op_init(depth,context_list,init_func_name,outc_name):
-            if not context_list:
-                return \
-                    f"{'    ' * depth}{init_func_name}(&({outc_name}));\n"
-            _code = ""
-            idx = "idx" if depth == 1 else f"idx_{str(depth)}"
-            _code += f"{'    ' * (depth)}for(kcg_size {idx}=0;{idx}<{context_list[0]};{idx}++){{\n" \
-                     f"{generate_op_init(depth+1,context_list[1:],init_func_name,f'{outc_name}[{idx}]')}" \
-                     f"{'    ' * (depth)}}}\n"
-            return _code
 
         for applied_expr in node.apply_exprs:
             if not applied_expr.get_applied_op().hasInternalState: continue
-            code += generate_op_init(1,applied_expr.appliedOpContextList,
+            code += self.call_func_recursive(1, applied_expr.appliedOpContextList,
                                      f"{applied_expr.get_applied_op().get_global_name()}_init",
                                      f"outC->{applied_expr.appliedOpOutCName}")
         while stack:
@@ -363,10 +403,10 @@ class GenerateCode:
                 import syntax_tree.automaton_generate as automaton_generate
                 code += automaton_generate.generate_state_nxt_for_init(cur_node)
 
-            for para in node.tmpParams:
+            for para in cur_node.tmpParams:
                 if para.isOutput:
                     print("para init ", para.name)
-                    code += generate_init_code(para.syntaxType, node.var_change_name(para.name), 1)
+                    code += generate_init_code(para.syntaxType, cur_node.var_change_name(para.name), 1)
         code += "}\n" \
                 "#endif\n"
         return code
@@ -380,11 +420,28 @@ class GenerateCode:
                f"void {global_name}_reset(outC_{global_name} *outC)\n" \
                "{\n"
         # reset 其他函数
+        reset_code=""
+        last_gen =GenEqu()
         for applied_expr in node.apply_exprs:
             if not applied_expr.get_applied_op().hasInternalState: continue
-            depth = 1
-            # todo 调用函数情况为数组的reset过程，参考array初始化
-            code += f"{'    ' * depth}{applied_expr.get_applied_op().get_global_name()}_reset(&(outC->{applied_expr.appliedOpOutCName}));\n"
+            code += self.call_func_recursive(1, applied_expr.appliedOpContextList,
+                                     f"{applied_expr.get_applied_op().get_global_name()}_reset",
+                                     f"outC->{applied_expr.appliedOpOutCName}")
+
+        def add_symbol_reset_code(param:SyntaxVariableSymbol,N:SyntaxDataDefScope)->str:
+            # 很明显这就不对
+            # 但是我真没招了
+            if param.lastExpr is None:
+                return ""
+            try:
+                param.lastExpr.cal_const_value(SyntaxType("any"), N)
+                l_code = param.lastExpr.generate_code(N, last_gen)
+                s_code = f"{assign_lhs_to_rhs_expr(N.var_change_name(param.name), l_code, [param.syntaxType], 1, N)}"
+            except Exception as e:
+                s_code=''
+            return s_code
+        for out_param in node.outParams:
+            reset_code+=add_symbol_reset_code(out_param,node)
         # 最上层状态机回到初始状态
         # 重置init
         stack = deque()
@@ -395,7 +452,11 @@ class GenerateCode:
                 stack.append(child_scope)
 
             if cur_node.initVar:
-                code += f"    outC->{cur_node.initVar.name} = kcg_true;\n"
+                reset_code += f"    outC->{cur_node.initVar.name} = kcg_true;\n"
+            for tmp_symbol in cur_node.tmpParams:
+                reset_code+=add_symbol_reset_code(tmp_symbol,cur_node)
+        reset_code='.'.join(last_gen.preEquations)+reset_code
+        code += reset_code
         code += "}\n" \
                 "#endif\n"
         return code
@@ -447,17 +508,19 @@ class GenerateCode:
         fills_in = ""
         fills_out = ""
         generate_test_data.generate([p.syntaxType.get_real_type() for p in main_node.inParams], main_node.name,
-                                    length,self.outputDir)
+                                    length, self.outputDir)
         with open(f"{self.outputDir}/test_data_{main_node.name}_c.txt", "r") as test_data:
             for in_param in main_node.inParams:
                 data = test_data.readline().strip("\n")
                 decls += f'    {in_param.syntaxType.change_name()} {in_param.name}_list[] = {{{data}}};\n'
-                fills_in += assign_lhs_to_rhs_expr(f"input.{in_param.name}",f"{in_param.name}_list[i]",[in_param.syntaxType.get_real_type()],2,main_node)
+                fills_in += assign_lhs_to_rhs_expr(f"input.{in_param.name}", f"{in_param.name}_list[i]",
+                                                   [in_param.syntaxType.get_real_type()], 2, main_node)
                 # fills_in += f'        input.{in_param.name}={in_param.name}_list[i];\n'
         for out_param in main_node.outParams:
             decls += f'    {out_param.syntaxType.change_name()} {out_param.name}_list[{str(length)}];\n'
-            fills_out += assign_lhs_to_rhs_expr(f"{out_param.name}_list[i]",f"output.{out_param.name}",[out_param.syntaxType],
-                                                2,main_node)
+            fills_out += assign_lhs_to_rhs_expr(f"{out_param.name}_list[i]", f"output.{out_param.name}",
+                                                [out_param.syntaxType],
+                                                2, main_node)
         test_code += decls
         test_code += "    for(int i=0;i<length;i++){\n"
         test_code += fills_in
@@ -466,9 +529,9 @@ class GenerateCode:
         test_code += '    }\n'
         test_code += f'    FILE *file = fopen("./test_data_{main_node.name}_c_out.txt","w");\n'
 
-        def generate_param_out_code(param_type,param_name,param_list_name):
-            code=""
-            param_type=param_type.get_real_type()
+        def generate_param_out_code(param_type, param_name, param_list_name):
+            code = ""
+            param_type = param_type.get_real_type()
             if param_type.is_basic_type():
                 code += f'    fprintf(file,"%s\\n","{param_name}");\n'
                 code += "    for(int i=0;i<length;i++){\n"
@@ -480,18 +543,19 @@ class GenerateCode:
                 code += f'   fprintf(file,"\\n");\n'
 
                 return code
-            if param_type.type=="field_decl":
-                code=""
+            if param_type.type == "field_decl":
+                code = ""
                 for type_symbol in param_type.fields:
-                    code+=generate_param_out_code(type_symbol.syntaxType,f"{param_name}_{type_symbol.name}",f"{param_list_name}.{type_symbol.name}")
+                    code += generate_param_out_code(type_symbol.syntaxType, f"{param_name}_{type_symbol.name}",
+                                                    f"{param_list_name}.{type_symbol.name}")
                 return code
-            elif param_type.type=="array":
-                code=""
-                sub_type=param_type.get_element_type_for_array()
+            elif param_type.type == "array":
+                code = ""
+                sub_type = param_type.get_element_type_for_array()
                 for i in range(param_type.get_size()):
-                    code+=generate_param_out_code(sub_type,f"{param_name}[{i}]",f"{param_list_name}[{i}]")
+                    code += generate_param_out_code(sub_type, f"{param_name}[{i}]", f"{param_list_name}[{i}]")
                 return code
-            elif param_type.type=="enum":
+            elif param_type.type == "enum":
                 code += f'    fprintf(file,"%s\\n","{param_name}");\n'
                 code += "    for(int i=0;i<length;i++){\n"
                 code += f'        fprintf(file,"%d, ",{param_list_name});\n'
@@ -503,24 +567,25 @@ class GenerateCode:
                 raise Exception("为什么")
 
         for out_param in main_node.outParams:
-            test_code += generate_param_out_code(out_param.syntaxType.get_real_type(),out_param.name,f"{out_param.name}_list[i]")
+            test_code += generate_param_out_code(out_param.syntaxType.get_real_type(), out_param.name,
+                                                 f"{out_param.name}_list[i]")
         test_code += f'    fclose(file);\n' \
                      f'}}\n'
 
         file_name = f"{self.outputDir}/test_{main_node.get_global_name()}.c"
         with open(file_name, "w") as file:
             file.write(test_code)
-    def generate_compile_bash(self,nodes:list[SyntaxUserOp]):
-        """生成一个编译bash"""
-        node_names=[node.get_global_name()+'.c' for node in nodes if not node.isImported]
-        content="set - x\n" \
-                "if [ -z ${C_COMPILER} ]; then C_COMPILER=gcc; fi\n" \
-                f"$C_COMPILER -w -o {nodes[-1].name}.exec {' '.join(node_names)} kcg_consts.c" \
-                f" -lpthread test_{nodes[-1].get_global_name()}.c ${{C_LIBS}}\n"
-        file_name=f"{self.outputDir}/kcg_compile.sh"
-        with open(file_name,"w",newline='\n') as file:
-            file.write(content)
 
+    def generate_compile_bash(self, nodes: list[SyntaxUserOp]):
+        """生成一个编译bash"""
+        node_names = [node.get_global_name() + '.c' for node in nodes if not node.isImported]
+        content = "set - x\n" \
+                  "if [ -z ${C_COMPILER} ]; then C_COMPILER=gcc; fi\n" \
+                  f"$C_COMPILER -w -o {nodes[-1].name}.exec {' '.join(node_names)} kcg_consts.c" \
+                  f" -lpthread test_{nodes[-1].get_global_name()}.c -lm ${{C_LIBS}}\n"
+        file_name = f"{self.outputDir}/kcg_compile.sh"
+        with open(file_name, "w", newline='\n') as file:
+            file.write(content)
 
 
 class GenEqu:
@@ -548,11 +613,14 @@ class GenEqu:
         code += "\n ==== \n"
         return code
 
-def generate_tmp_symbol_and_register(data_def, syntaxType: SyntaxType = None, post_fix="tmp") -> (
-SyntaxVariableSymbol, str):
-    tmp_name = data_def.generate_name_for_tmp(post_fix)
-    tmp_symbol = SyntaxVariableSymbol(tmp_name,data_def)
+
+def generate_tmp_symbol_and_register(data_def, syntaxType: SyntaxType = None, post_fix="tmp", isOutPut=False) -> (
+        SyntaxVariableSymbol, str):
+    tmp_name = data_def.generate_name_for_tmp(post_fix, isOutPut)
+    tmp_symbol = SyntaxVariableSymbol(tmp_name, data_def)
     tmp_symbol.syntaxType = syntaxType
+    if isOutPut:
+        tmp_symbol.isOutput = True
     data_def.add_tmpSymbol(tmp_symbol)
     return tmp_symbol, tmp_name
 
@@ -565,30 +633,38 @@ def symbol2expr(symbol, symbol_name, symbol_type, scope):
     return expr
 
 
-def assign_lhs_to_rhs_expr(lhs_symbol_name: str or list[str], rhs_expr: str or list[str], type_list: list[SyntaxType],
-                           depth, data_def):
-    code = ""
-    # 很蠢的方法，后面一定会改
-    # 现在变成了一般蠢的方法，后面也不一定会改
-    if not isinstance(lhs_symbol_name, list):
-        lhs_names = [lhs_symbol_name]
-    else:
-        lhs_names = lhs_symbol_name
-    if not isinstance(rhs_expr, list):
-        rhs_exprs = [rhs_expr]
-    else:
-        rhs_exprs = rhs_expr
+T = TypeVar('T')
 
-    if len(rhs_exprs) != len(lhs_names) or len(lhs_names) != len(type_list):
-        raise Exception(f"不对，左值{lhs_names}和右值{rhs_exprs}以及类型列表{type_list}对不上")
-    for lhs, rhs, lhsType in zip(lhs_names, rhs_exprs, type_list):
-        if lhs == "_": continue
-        if lhsType.get_real_type().type == "array":
-            code += f"{'    ' * depth}memcpy(&{lhs},&({rhs}),sizeof({lhsType.change_name()}));\n"
+def _ensure_list(x: T or Iterable[T]) -> list[T]:
+    """单个元素→[元素]，本身已是 list 保持原样"""
+    if isinstance(x, list):
+        return x
+    # str 是 Iterable 但这里要当成原子，单独判断
+    if isinstance(x, str):
+        return [x]
+    # 其它可迭代对象直接展开
+    if isinstance(x, Iterable):
+        return list(cast(Iterable[T], x))
+    return [x]
+
+def assign_lhs_to_rhs_expr(lhs, rhs, types, depth: int, data_def) -> str:
+    lhs_l   = _ensure_list(lhs)
+    rhs_l   = _ensure_list(rhs)
+    types_l = _ensure_list(types)
+
+    if not (len(lhs_l) == len(rhs_l) == len(types_l)):
+        raise ValueError(f"长度不一致: {lhs_l} / {rhs_l} / {types_l}")
+
+    indent = '    ' * depth
+    lines = []
+    for l, r, t in zip(lhs_l, rhs_l, types_l):
+        if l == '_':
+            continue
+        if t.get_real_type().type == "array":
+            lines.append(f'{indent}memcpy(&{l}, &({r}), sizeof({t.change_name()}));')
         else:
-            code += f"{'    ' * depth}{lhs} = {rhs};\n"
-    return code
-
+            lines.append(f'{indent}{l} = {r};')
+    return '\n'.join(lines) + '\n'
 
 
 generate_userOp_handlers = {}
@@ -600,6 +676,29 @@ def register_userOp_handler(type_):
         return func
 
     return decorator
+
+
+@register_userOp_handler("emission")
+def generate_userOp_emission(syntaxEquation, syntaxUserOp, code_generator: GenerateCode, depth=1):
+
+    genEqu = GenEqu(depth)
+    genEqu.expr = syntaxEquation.expr.generate_code(syntaxUserOp, genEqu)
+    rhs_code = genEqu.expr
+    if rhs_code=="kcg_true":
+        emit_code = ""
+        for lhs in syntaxEquation.lhs:
+            emit_code += f"{'    ' * (depth)}{lhs.change_name()} = kcg_true;\n"
+        code=emit_code
+    else:
+        emit_code = ""
+        for lhs in syntaxEquation.lhs:
+            emit_code += f"{'    ' * (depth + 1)}{lhs.change_name()} = kcg_true;\n"
+        code = f"{'    ' * depth}if ({rhs_code}){{\n" \
+               f"{emit_code}" \
+               f"{'    ' * depth}}}\n"
+    return code
+
+
 @register_userOp_handler("simple_equation")
 def generate_userOp_simple_equation(syntaxEquation, syntaxUserOp, code_generator: GenerateCode, depth=1):
     # out1=in1;若out1是数组或结构体，则需要使用memcpy，不能使用=。若右边是函数调用，且返回多个值，也不能直接使用=
@@ -615,12 +714,12 @@ def generate_userOp_simple_equation(syntaxEquation, syntaxUserOp, code_generator
     genEqu.expr = syntaxEquation.expr.generate_code(syntaxUserOp, genEqu)
     code = ""
     code += "".join(genEqu.preEquations)
-    #kcg_copy_array_int32_3(&outC->output, (array_int32_3 *) &inC->input[1]);
-    lhs_codes=[lhs.change_name() for lhs in syntaxEquation.lhs]
-    if len(lhs_codes)==1:
+    # kcg_copy_array_int32_3(&outC->output, (array_int32_3 *) &inC->input[1]);
+    lhs_codes = [lhs.change_name() for lhs in syntaxEquation.lhs]
+    if len(lhs_codes) == 1:
         rhs_codes = [genEqu.expr]
     else:
-        rhs_codes=genEqu.expr
+        rhs_codes = genEqu.expr
 
     for lhs, rhs, lhs_type, clock in zip(lhs_codes, rhs_codes, lhs_types, lhs_clocks):
         assign_code = assign_lhs_to_rhs_expr(lhs, rhs, [lhs_type], depth, syntaxUserOp)
@@ -646,12 +745,6 @@ def generate_userOp_guarantee(syntaxEquation, syntaxUserOp, code_generator: Gene
     return ""
 
 
-@register_userOp_handler("emission")
-def generate_userOp_emission(syntaxEquation, syntaxUserOp, code_generator: GenerateCode, depth=1):
-    code = ""
-    for signal in syntaxEquation.lhs:
-        code += f"{'    ' * depth}{signal} = kcg_true;\n"
-    return code
 
 
 @register_userOp_handler("control_block")
@@ -662,21 +755,43 @@ def generate_userOp_control_block(syntaxEquation, syntaxUserOp, code_generator, 
     # print("this is control_block", syntaxEquation.controlBlockID)
     if control_block.type == "automaton":
         return generate_automaton(control_block, code_generator, depth)
-    if control_block.type == "if_block":
+    elif control_block.type == "if_block":
         if_block = control_block.block
         return generate_if_block(if_block, code_generator, depth)
+    elif control_block.type=="match_block":
+        match_block=control_block.block
+        return generate_match_block(match_block, code_generator, depth)
 
 
 def generate_automaton(control_block, code_generator, depth) -> str:
     import syntax_tree.automaton_generate as automaton_generate
     code_generator.add_code_to_types_file(automaton_generate.generate_type(control_block))
-    control_block.get_my_userOp().hasInternalState=True
+    control_block.get_my_userOp().hasInternalState = True
     # print("HEAD:")
     # print(automaton_generate.generate_state_nxt_for_head(control_block))
     # print("INIT:")
     # print(automaton_generate.generate_init_symbol_for_init(control_block))
     return automaton_generate.generate_body(control_block, code_generator, depth)
 
+def generate_match_block(match_block, code_generator, depth):
+    genEqu = GenEqu(depth)
+
+    code = f"{'    ' * (depth)}switch({match_block.switchExpr.generate_code(match_block.scope,genEqu)}){{\n"
+
+    for case in match_block.matchList:
+        syntaxPattern = case[0]
+        sub_data_def:SyntaxDataDefScope = match_block.scope.get_childScope(case[1])
+        pattern_code = syntaxPattern.generate_code(match_block.scope, genEqu)
+        if pattern_code != '_':
+            code += f"{'    ' * (depth)}case {pattern_code}:\n"
+        else:
+            code += f"{'    ' * (depth)}default:\n"
+        code+=code_generator.generate_data_def(sub_data_def, depth + 1)
+        code+= f"{'    ' * (depth)}break;\n"
+    code += f"{'    ' * (depth)}}}\n"
+
+    code=f"{''.join(genEqu.preEquations)}"+code
+    return code
 
 def generate_if_block(block: 'SyntaxIfBlock', code_generator, depth) -> str:
     scope = block.scope
@@ -701,7 +816,6 @@ def generate_if_block(block: 'SyntaxIfBlock', code_generator, depth) -> str:
     code += else_code
     code += f"{'    ' * depth}}}\n"
     return code
-
 
 
 def SyntaxUserOp_generate(syntaxUserOp, code_generator, depth):
@@ -771,7 +885,7 @@ def generate_syntax_type_typevar(typeSymbol, rootPackage):
 
 
 @register_syntax_type_handler(r"^enum")
-def generate_syntax_type_enum(code_generator,typeSymbol, rootPackage):
+def generate_syntax_type_enum(code_generator, typeSymbol, rootPackage):
     global_name = rootPackage.get_global_name()
     var_name = f"{typeSymbol.name}_{global_name}"
     code = f"typedef enum {var_name} {{\n"
@@ -788,21 +902,21 @@ def generate_syntax_type_enum(code_generator,typeSymbol, rootPackage):
 
 
 @register_syntax_type_handler(r"^field_decl")
-def generate_syntax_type_field_decl(code_generator,typeSymbol, rootPackage):
+def generate_syntax_type_field_decl(code_generator, typeSymbol, rootPackage):
     global_name = rootPackage.get_global_name()
-    symbol_type=typeSymbol.syntaxType.get_real_type()
+    symbol_type = typeSymbol.syntaxType.get_real_type()
     var_name = symbol_type.change_name()
     precode = ""
     code = f"typedef struct {var_name} {{\n"
     for field in symbol_type.fields:
         k = field.name
-        v:SyntaxType = field.syntaxType
+        v: SyntaxType = field.syntaxType
         code_generator.check_and_add_special_types(v)
-        if v.type !="field_decl":
+        if v.type != "field_decl":
             code += f"{v.change_name()} {k};\n"
         else:
             tmpTypeSymbol = SyntaxTypeSymbol(f"tmp_struct_{k}", v.get_real_type(), "public")
-            precode = generate_type_symbol(code_generator,tmpTypeSymbol, rootPackage)
+            precode = generate_type_symbol(code_generator, tmpTypeSymbol, rootPackage)
             tmpName = f"tmp_struct_{k}" if len(global_name) == 0 else f"tmp_struct_{k}_{global_name}"
             code += f"{tmpName} {k};\n"
     code += f"\n}} {var_name};\n"
@@ -811,7 +925,7 @@ def generate_syntax_type_field_decl(code_generator,typeSymbol, rootPackage):
 
 
 @register_syntax_type_handler(r"^array")
-def generate_syntax_type_list(code_generator,typeSymbol, rootPackage):
+def generate_syntax_type_list(code_generator, typeSymbol, rootPackage):
     code_generator.check_and_add_special_types(typeSymbol.syntaxType)
     # print("this is array ", typeSymbol.name, typeSymbol.syntaxType.get_size(),
     #       typeSymbol.syntaxType.get_element_type_for_array())
@@ -823,7 +937,7 @@ def generate_syntax_type_list(code_generator,typeSymbol, rootPackage):
 
 
 @register_syntax_type_handler(r"(bool|char|int\d+|uint\d+|float\d+)")
-def generate_syntax_type_other(code_generator,typeSymbol, rootPackage):
+def generate_syntax_type_other(code_generator, typeSymbol, rootPackage):
     global_name = rootPackage.get_global_name()
     var_name = typeSymbol.name if len(global_name) == 0 else f"{typeSymbol.name}_{global_name}"
     code = f"typedef {typeSymbol.syntaxType.change_name()} {var_name};\n"
@@ -843,42 +957,57 @@ def write_file(file_path, content, mode):
     with open(file_path, mode) as target_file:
         target_file.write(content)
 
+def generate_const_symbol(code_generator,const_symbol):
+    global_name = const_symbol.scope.get_global_name()
+    symbol_type = const_symbol.syntaxType.change_name()
+    symbol_name = const_symbol.name if len(global_name) == 0 else f"{const_symbol.name}_{global_name}"
+    if symbol_name in code_generator.generated_const_symbol_names:
+        return "",""
+    code_generator.generated_const_symbol_names.add(symbol_name)
+    symbol_h = ""
+    symbol_c = ""
+    if const_symbol.isImported:
+        symbol_h += f'''
+        #ifndef {symbol_name}\n
+        #define {symbol_name} {symbol_name}\n
+        extern const {symbol_type} {symbol_name};\n
+        #endif\n
+       '''
+    else:
 
-def generate_const_equation(rootPackage):
+        symbol_h += f"extern const {symbol_type} {symbol_name};\n"
+        symbol_c += f"const {symbol_type} {symbol_name}={const_symbol.generate_code_const()};\n"
+    return symbol_h, symbol_c
+def generate_const_equation(code_generator, rootPackage):
     h_content = ""
     c_content = ""
-    global_name = rootPackage.get_global_name()
+
+
     for name, constSymbol in rootPackage.constSymbolTable.items():
         if not constSymbol.used: continue
         if constSymbol.syntaxType.get_real_type().type == "enum": continue
-        symbol_name = name if len(global_name) == 0 else f"{name}_{global_name}"
-        symbol_type = constSymbol.syntaxType.change_name()
-        if constSymbol.isImported == True:
-            h_content += f'''
-            #ifndef {symbol_name}\n
-            #define {symbol_name} {symbol_name}\n
-            extern const {symbol_type} {symbol_name};\n
-            #endif\n
-           '''
-        else:
-            h_content += f"extern const {symbol_type} {symbol_name};\n"
-            c_content += f"const {symbol_type} {symbol_name}={constSymbol.valueExpr.generate_code_const(rootPackage, GenEqu())};\n"
+        code_generator.check_and_add_special_types(constSymbol.syntaxType)
+        h, c = generate_const_symbol(code_generator,constSymbol)
+        h_content += h
+        c_content += c
+
     for _, packageScope in rootPackage.childScopeTable.items():
-        h, c = generate_const_equation(packageScope)
+        h, c = generate_const_equation(code_generator, packageScope)
         h_content += h
         c_content += c
 
     return h_content, c_content
 
-def generate_type_symbol(code_generator,typeSymbol, rootPackage):
-    real_type=typeSymbol.syntaxType.get_real_type()
+
+def generate_type_symbol(code_generator, typeSymbol, rootPackage):
+    real_type = typeSymbol.syntaxType.get_real_type()
     if real_type.change_name() in code_generator.specialTypes:
         return ""
 
     type_ = real_type.type
     for regex, func in generate_syntax_type_handlers.items():
         if regex.match(type_):
-            code = func(code_generator,typeSymbol, rootPackage)
+            code = func(code_generator, typeSymbol, rootPackage)
             code_generator.specialTypes.add(real_type.change_name())
             return code
 
@@ -886,24 +1015,27 @@ def generate_type_symbol(code_generator,typeSymbol, rootPackage):
         raise Exception(f"{type_}怎么没有啊")
 
 
-def generate_type_block(code_generator,rootPackage):
+def generate_type_block(code_generator, rootPackage):
     h_content = ""
     for _, packageScope in rootPackage.childScopeTable.items():
-        h_content += generate_type_block(code_generator,packageScope)
+        h_content += generate_type_block(code_generator, packageScope)
     for _, typeSymbol in rootPackage.typeSymbolTable.items():
-        h_content += generate_type_symbol(code_generator,typeSymbol, rootPackage)
+        h_content += generate_type_symbol(code_generator, typeSymbol, rootPackage)
     return h_content
 
-def generate(main_operator,root_scope,userOp_order, output_path,need_test_file):
+
+def generate(main_operator, root_scope, userOp_order, output_path, need_test_file):
     gen = GenerateCode(root_scope, main_operator, output_path)
-    gen.generate_const_file()
+
     # gen.generate_main_file()
     gen.generate_types_file()
 
     for op in userOp_order:
         gen.generate_node_file(op)
     gen.generate_imported_functions_file()
+    gen.generate_const_file(userOp_order)
     gen.add_code_to_types_file("#endif\n")  # 结束
+    gen.generate_macro_libmathext_file()
     if need_test_file:
         print(f"生成测试类:{userOp_order[-1].name}")
         gen.generate_test_file(userOp_order[-1])

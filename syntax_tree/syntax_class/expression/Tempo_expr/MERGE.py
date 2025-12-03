@@ -14,16 +14,22 @@ if TYPE_CHECKING:
     from syntax_tree.syntax_class.scope.scope import SyntaxScope
 class Tempo_expr_MERGE(SyntaxExpr):
     clk_symbol:SyntaxVariableSymbol
-    merge_case_list:list[[str,SyntaxExpr]]
-    # todo merge参数第一个为clock修饰的符号，允许枚举和bool
-    # todo 在scade中，按顺序而非指定clock对表达式进行merge，枚举类型按声明顺序，bool按先true后false来处理
+    merge_case_list:list[SyntaxExpr]
+    '''进行merge的表达式列表'''
+    allowed_clk_cases:list[str]
+    '''表达式需要符合的时钟'''
     def post_process(self, userOp:'SyntaxUserOp'):
-        self.returnNum = self.merge_case_list[0][1].returnNum # 太逆天了,其实就是拿第一个case的expr
-        self.rhsList = union_rhsLists([case[1].rhsList for case in self.merge_case_list])
+        self.returnNum = self.merge_case_list[0].returnNum # 太逆天了,其实就是拿第一个case的expr
+        self.rhsList = union_rhsLists([case.rhsList for case in self.merge_case_list])
 
-        self.clk_symbol=userOp.get_localVariable(self.objects[0])
+        # 从表达式中获取值
+        if self.objects[0].get_type()!="Id_expr_Path_id":
+            raise Exception(f"{self}的第一个参数必须是一个id指向clock变量")
+        self.clk_symbol=userOp.get_localVariable_InThisAndPreEnv(self.objects[0].name)
         if self.clk_symbol is None:
             raise UnknownIdentifierException(self.objects[0])
+        if not self.clk_symbol.isClock:
+            raise Exception(f"{self.objects[0]}需要是clock类型")
         self.rhsList=add_rhs_to_each([self.clk_symbol.name],self.rhsList)
     def type_inference(self, lhs_type_list: list['SyntaxType'], userOp:'SyntaxUserOp'):
         # 对merge情况，需要校验时钟条件是否与对应表达式匹配，是否能够拼凑成完整的时钟
@@ -32,21 +38,18 @@ class Tempo_expr_MERGE(SyntaxExpr):
         clk_type = self.clk_symbol.syntaxType.get_real_type()
         clk_name = self.clk_symbol.name
         if clk_type==SyntaxType("bool"):
-            allowed_clk_cases={"true","false"}
+            self.allowed_clk_cases=["true","false"]
         elif clk_type.type=="enum":
-            allowed_clk_cases={const_symbol.name for const_symbol in clk_type.enumList}
+            self.allowed_clk_cases=[const_symbol.name for const_symbol in clk_type.enumList]
         else:
             raise Exception(f"{self}的时钟变量只支持枚举类型和布尔类型")
-        actual_types = type_inference_on_groups([case[1] for case in self.merge_case_list], lhs_type_list, userOp)
+        actual_types = type_inference_on_groups([case for case in self.merge_case_list], lhs_type_list, userOp)
         self.set_lhs_type(actual_types)
-        for case in self.merge_case_list:
-            cond=case[0]
-            if cond in allowed_clk_cases:
-                allowed_clk_cases.remove(cond)
-            else:
-                raise Exception(f"{self}中，{cond}条件重复或类型与{self.clk_symbol.name}的类型不符")
-
-            sub_expr:SyntaxExpr=case[1]
+        if len(self.allowed_clk_cases)!=len(self.merge_case_list):
+            raise Exception(f"{self}中,有时钟的case没有补全，无法拼凑成为基础时钟流")
+        for allowed_clk,case in zip(self.allowed_clk_cases,self.merge_case_list):
+            cond=allowed_clk
+            sub_expr:SyntaxExpr=case
             sub_clk_list=sub_expr.lhsClockList
             if cond=="true":
                 is_fit=all([sub_clk.ID==clk_name and sub_clk.type=="ID" for sub_clk in sub_clk_list])
@@ -57,9 +60,6 @@ class Tempo_expr_MERGE(SyntaxExpr):
                             and sub_clk.enum_name==cond for sub_clk in sub_clk_list])
             if not is_fit:
                 raise TypeMismatchException(cond,clk_type,userOp)
-        if len(allowed_clk_cases) !=0:
-            # 有缺少的条件没有补全
-            raise Exception(f"{self}中,有时钟的case没有补全，无法拼凑成为基础时钟流")
         self.set_clock_list([SyntaxClockExpr.init_clock_base(userOp)] * self.returnNum)
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
@@ -70,10 +70,13 @@ class Tempo_expr_MERGE(SyntaxExpr):
 
         depth=genEqu.depth
         pre_code=f"{'    '*depth}switch({syntaxUserOp.var_change_name(self.clk_symbol.name)}){{\n"
-        for case in self.merge_case_list:
-            case_code=f"{'    '*depth}case {syntaxUserOp.var_change_name(case[0])}:\n"
+        for cond,case in zip(self.allowed_clk_cases,self.merge_case_list):
+            if cond in {'true','false'}:
+                case_code=f"{'    '*depth}case kcg_{cond}:\n"
+            else:
+                case_code = f"{'    ' * depth}case {syntaxUserOp.var_change_name(cond)}:\n"
             sub_gen_equ=GenEqu(depth+1)
-            sub_expr_code=case[1].generate_code(syntaxUserOp,sub_gen_equ)
+            sub_expr_code=case.generate_code(syntaxUserOp,sub_gen_equ)
 
             case_code+="".join(sub_gen_equ.preEquations)
             case_code+=assign_lhs_to_rhs_expr(tmp_name_list,sub_expr_code,self.lhsTypeList,depth+1,syntaxUserOp)

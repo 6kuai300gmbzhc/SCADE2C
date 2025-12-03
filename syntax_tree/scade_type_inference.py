@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from syntax_tree.syntax_class.Exceptions import *
 from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
+from syntax_tree.syntax_class.expression.pattern import SyntaxPattern
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 
 if TYPE_CHECKING:
@@ -14,7 +15,7 @@ if TYPE_CHECKING:
     from syntax_tree.syntax_class.scope.data_def import SyntaxDataDefScope
     from syntax_tree.syntax_class.equation import SyntaxEquation
     from syntax_tree.syntax_class.scope.automaton import SyntaxAutomaton, SyntaxState
-    from syntax_tree.syntax_class.scope.clocked_block import SyntaxIfBlock
+    from syntax_tree.syntax_class.scope.clocked_block import SyntaxIfBlock, SyntaxClockedScope, SyntaxMatchBlock
 inferenced_op = list()
 
 
@@ -34,7 +35,7 @@ def remove_unnecessary_applied_expr(data_def:'SyntaxUserOp' or 'SyntaxState'):
         if expr.get_applied_op() is not None:
             new_applied_exprs.append(expr)
     data_def.apply_exprs=new_applied_exprs
-
+inferenced_packages={}
 def type_inference_userOp(userOp: 'SyntaxUserOp'):
     """
     类型推导，如果是模板函数要实例化，遍历的时候靠调用的path来找下一个目标函数
@@ -44,7 +45,16 @@ def type_inference_userOp(userOp: 'SyntaxUserOp'):
     inferenced_op.append(userOp)
     print(f"开始进行{userOp.get_global_name()}的类型推导")
     type_inference_dataDef(userOp)
+    for out_param in userOp.outParams:
+        if out_param.lastExpr is not None:
+            out_param.lastExpr.type_inference([out_param.syntaxType],userOp)
     remove_unnecessary_applied_expr(userOp)
+    package=userOp.get_my_package()
+    if package not in inferenced_packages:
+        for const_symbol in package.constSymbolTable.values():
+            if const_symbol.used and const_symbol.valueExpr:
+                const_symbol.valueExpr.type_inference([const_symbol.syntaxType],package)
+
     print(f"{userOp.get_global_name()}的类型推导结束")
 
 
@@ -61,22 +71,90 @@ def type_inference_dataDef(data_def: 'SyntaxDataDefScope'):
             type_inference_control_block(control_block)
 
 
+type_inference_control_block_handlers = {}
+
+def type_inerence_control_block_handler(type_):
+    def decorator(func):
+        type_inference_control_block_handlers[type_] = func
+        return func
+    return decorator
+
+
 def type_inference_control_block(control_block):
-    # 目前就automaton
+    type_ = control_block.type
+    control_block_handler = type_inference_control_block_handlers[type_]
+    return control_block_handler(control_block)
+
+@type_inerence_control_block_handler("automaton")
+def type_inference_automaton(control_block):
     # 感觉只是遍历每个state就行了，重点是每个句子，别的不管
-    if control_block.type == "automaton":
-        for state in control_block.stateTable.values():
-            type_inference_dataDef(state)
-            # 然后是状态转移部分
-            for cond_expr, arrow in state.unlessTransitions:
-                type_inference_arrow(cond_expr, arrow, state)
-            for cond_expr, arrow in state.untilTransitions:
-                type_inference_arrow(cond_expr, arrow, state)
-            if state.synchroArrow is not None:
-                type_inference_arrow(None, state.synchroArrow, state)
-            remove_unnecessary_applied_expr(state)
+    for state in control_block.stateTable.values():
+        type_inference_dataDef(state)
+        # 然后是状态转移部分
+        for cond_expr, arrow in state.unlessTransitions:
+            type_inference_arrow(cond_expr, arrow, state)
+        for cond_expr, arrow in state.untilTransitions:
+            type_inference_arrow(cond_expr, arrow, state)
+        if state.synchroArrow is not None:
+            type_inference_arrow(None, state.synchroArrow, state)
+        remove_unnecessary_applied_expr(state)
+@type_inerence_control_block_handler("if_block")
+def type_inference_if_block(block:'SyntaxClockedScope'):
+    def inference_sub_block(if_block:"SyntaxIfBlock"):
+        if_block.conditionExpr.type_inference([SyntaxType("bool")],block)
+        for sub_block in [if_block.thenBlock, if_block.elseBlock]:
+            if isinstance(sub_block, str):
+                # 是一个data_def
+                data_def: SyntaxDataDefScope = block.get_childScope(sub_block)
+                type_inference_dataDef(data_def)
+            else:
+                inference_sub_block(sub_block)
+    return inference_sub_block(block.block)
+@type_inerence_control_block_handler("match_block")
+def type_inference_match_block(block:'SyntaxClockedScope'):
+    match_block:SyntaxMatchBlock=block.block
 
+    patterns=[case[0] for case in match_block.matchList]
+    # 这里加一个检测pattern是否覆盖全部领域
+    pattern_type=check_and_get_pattern_type(patterns,block)
+    pattern_type=match_block.switchExpr.type_inference([pattern_type],block)[0].get_real_type()
+    if pattern_type.type not in {"bool","enum"}:
+        raise Exception(f"{block.name}作为clocked block只支持枚举类型和布尔类型")
+    for case in match_block.matchList:
+        pattern:SyntaxPattern=case[0]
+        case_data_def:SyntaxDataDefScope=match_block.scope.get_childScope(case[1])
+        type_inference_dataDef(case_data_def)
 
+def check_and_get_pattern_type(patterns:list[SyntaxPattern],data_def:'SyntaxDataDefScope')->SyntaxType:
+    """返回这些pattern是否可以涵盖全部情况，并且返回一个共同的类型
+    如果不能涵盖全部情况则报错
+    """
+    pattern_type=SyntaxType("any")
+    covered_all=False
+    enum_names=None
+    for pattern in patterns:
+        if pattern.value=="_":
+            covered_all=True
+            continue
+        pattern.type_inference([SyntaxType("any")],data_def)
+        pattern.constValue=pattern.cal_const_value(pattern.lhsTypeList[0],data_def)
+        cur_type=pattern.constValue.type
+        if cur_type.get_real_type().type=="numeric":
+            cur_type=SyntaxType("integer")# 锁死了
+        elif cur_type.get_real_type().type=="enum" and not covered_all:
+            if enum_names is None:
+                enum_names=set([s.get_value() for s in cur_type.get_real_type().enumList])
+            enum_names.remove(pattern.constValue.value)
+            # 如果是某个枚举类型就需要确认是否涵盖所有情况
+        if cur_type<=pattern_type:
+            pattern_type=cur_type
+        else:
+            raise Exception(f"{data_def.get_global_name()}中，存在switch语句中case的pattern不是一个类型")
+    if enum_names is not None and len(enum_names)==0:
+        covered_all=True
+    if not covered_all:
+        raise Exception(f"{data_def.get_global_name()}中，存在switch语句无法涵盖所有情况")
+    return pattern_type
 def type_inference_arrow(cond_expr, arrow, data_def):
     if arrow is None: return
     if cond_expr is not None:

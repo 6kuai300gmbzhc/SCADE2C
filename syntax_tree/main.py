@@ -7,6 +7,8 @@ from .scade_generate import generate
 def get_final_order(order):
     final_order=list()
     for op in order:
+        if op.isTemplate() and not op.instantiatedOpList:
+            raise Exception(f"{op.get_global_name()}是模板函数但是没有实例化")
         if not op.instantiatedOpList:
             final_order.append(op)
         else:

@@ -1,4 +1,5 @@
-from syntax_tree.scade_postprocess import set_rhs_default
+from syntax_tree.scade_postprocess import set_rhs_default, flatten_list
+from syntax_tree.scade_type_inference import clock_inference_sync
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression import SyntaxExpr
 
@@ -23,7 +24,7 @@ class Bool_expr_HASHTAG(SyntaxExpr):
         sub_type = self.subType
         for sub_expr in self.objects[0]:
             sub_expr.type_inference([required_type], data_def)
-
+        self.set_clock_list(clock_inference_sync(flatten_list([sub_expr.lhsClockList for sub_expr in self.objects[0]])))
         self.set_lhs_type([required_type])
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):

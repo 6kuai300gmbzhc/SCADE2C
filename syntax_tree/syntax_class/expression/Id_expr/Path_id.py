@@ -29,9 +29,9 @@ class Id_expr_Path_id(SyntaxExpr):
         # 要求只能提供一个左值类型，所以需要校验
         if len(lhs_type_list) != 1:
             raise TypeMismatchException(self, lhs_type_list, userOp)
-        required_type = lhs_type_list[0]
+        required_type = lhs_type_list[0].get_real_type()
         symbol=self.syntaxSymbol
-        expr_type = symbol.syntaxType
+        expr_type = symbol.syntaxType.get_real_type()
         if expr_type <= required_type:
             self.set_lhs_type([expr_type])
         else:
@@ -53,6 +53,10 @@ class Id_expr_Path_id(SyntaxExpr):
     def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.name=objects[0]
+    def is_clock_expr(self):
+        if self.syntaxSymbol is None:
+            self.post_process(self.scope)
+        return self.syntaxSymbol.isClock
     def cal_const_value(self,required_type:'SyntaxType',scope:'SyntaxScope') -> 'ConstValue':
         path_id = self.objects[0]
         scope = self.scope

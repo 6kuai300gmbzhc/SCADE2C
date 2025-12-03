@@ -1,5 +1,5 @@
-from syntax_tree.syntax_class.Exceptions import TypeMismatchException
-from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
+from syntax_tree.syntax_class.Exceptions import TypeMismatchException, NumericConstraintViolateException
+from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr, int_can_fit_type, float_can_fit_type
 from syntax_tree.scade_postprocess import set_rhs_default
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 from typing import TYPE_CHECKING
@@ -21,6 +21,19 @@ class Arith_expr_cast(SyntaxExpr):
         # 需要两边均为numeric,这边和输出没关系，只要是numeric就行，别的不管
         tar_expr = self.objects[0]
         tar_type = tar_expr.type_inference([SyntaxType("numeric")], userOp)[0]
+
+        # 这里尝试计算一下表达式是否可以进行这样的转换
+        try:
+            value=tar_expr.cal_const_value(cast_type,userOp).value
+            if cast_type<=SyntaxType("integer"):
+                if not int_can_fit_type(value,cast_type.get_real_type().type):
+                    raise NumericConstraintViolateException(value,cast_type)
+            elif cast_type<=SyntaxType("float"):
+                if not float_can_fit_type(value,cast_type.get_real_type().type):
+                    raise NumericConstraintViolateException(value, cast_type)
+        except Exception as e:
+            if isinstance(e,NumericConstraintViolateException):
+                raise e
         self.set_clock_list(tar_expr.lhsClockList)
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):

@@ -1,11 +1,12 @@
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
 from syntax_tree.scade_postprocess import set_rhs_default
+from syntax_tree.syntax_class.syntaxType import SyntaxType
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from syntax_tree.scade_generate import GenEqu
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
-    from syntax_tree.syntax_class.syntaxType import SyntaxType
+
     from syntax_tree.syntax_class.scope.scope import SyntaxScope
 class Arith_expr_unary(SyntaxExpr):
     def post_process(self, userOp:'SyntaxUserOp'):

@@ -24,18 +24,34 @@ class Struct_expr_construct(SyntaxExpr):
                 rhs_set |= rhs
         self.set_rhs(rhs_set)
     def type_inference(self, lhs_type_list: list['SyntaxType'], userOp:'SyntaxUserOp'):
-        tar_struct=userOp.check_and_get_type_symbol(self.structName)
-        tar_type=tar_struct.syntaxType.get_real_type()
-        if tar_struct is None or tar_type.type!="field_decl":
-            raise UnknownIdentifierException(self.structName)
-        self.tarStruct=tar_struct
-        if len(lhs_type_list)!=1 or lhs_type_list[0]!=tar_type:
+        if len(lhs_type_list)!=1:
             raise TypeMismatchException(self, lhs_type_list, userOp)
+        required_type=lhs_type_list[0]
+        if required_type.get_real_type().type=='any':
+            # 如果是any类型就要去自己捏一个新的type并添加
+            pass
+            # p[0] = lex_value("field_decl")
+            # p[0].type = p[1].value
+            # type_symbol = SyntaxTypeSymbol(p[1].value, p[3])
+            # p[0].value = type_symbol
+
+            # p[0] = SyntaxType(tar_type="field_decl", scope=cur_scope)
+            # p[0].fields = list()
+            # p[0].fields.append(p[2].value)
+            # p[0].fields.extend(p[3].value)
+        #
+        #     p[0] = SyntaxTypeSymbol(name=p[2].value, syntaxType=p[3], visibility=visibility)
+        #     p[0].isImported = False
+        # global cur_scope
+        # cur_scope.add_typeSymbol(p[0])
+        else:
+            tar_type=required_type.get_real_type()
         sub_clock_list=list()
+        # todo 顺序必须和声明顺序一样 何意味
         for sub_type_symbol in tar_type.fields:
             corres_expr:SyntaxExpr=self.callDict.get(sub_type_symbol.name)
             if corres_expr is None:
-                continue
+                raise UnknownIdentifierException(sub_type_symbol.name)
             corres_expr.type_inference([sub_type_symbol.syntaxType],userOp)
             sub_clock_list.append(corres_expr.lhsClockList[0])
         self.set_lhs_type([tar_type])
@@ -44,7 +60,7 @@ class Struct_expr_construct(SyntaxExpr):
 
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
         struct_type=self.lhsTypeList[0]
-        struct_symbol,struct_name=generate_tmp_symbol_and_register(syntaxUserOp,struct_type,f"struct_{self.tarStruct.name}")
+        struct_symbol,struct_name=generate_tmp_symbol_and_register(syntaxUserOp,struct_type,f"struct_{struct_type.name}")
         for type_symbol in struct_type.fields:
             if (expr:=self.callDict.get(type_symbol.name)) is not None:
                 expr_code = expr.generate_code(syntaxUserOp, genEqu)
@@ -66,6 +82,5 @@ class Struct_expr_construct(SyntaxExpr):
         return code
     def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
-        self.structName=objects[0]
-        self.callDict=objects[1]
+        self.callDict=objects[0]
         ...

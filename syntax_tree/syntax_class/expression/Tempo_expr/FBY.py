@@ -1,12 +1,13 @@
-
-from syntax_tree.scade_type_inference import type_inference_on_groups
+from syntax_tree.scade_postprocess import flatten_list
+from syntax_tree.scade_type_inference import type_inference_on_groups, clock_inference_sync
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr, expression_factory
-
+from syntax_tree.syntax_class.syntaxType import SyntaxType
+from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register
+
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
-    from syntax_tree.syntax_class.syntaxType import SyntaxType
+
     from syntax_tree.syntax_class.scope.scope import SyntaxScope
 from .ARROW import Tempo_expr_ARROW
 class Tempo_expr_FBY(SyntaxExpr):
@@ -14,13 +15,13 @@ class Tempo_expr_FBY(SyntaxExpr):
     def post_process(self,data_def:'SyntaxUserOp'):
         self.rhsList=self.objects[2].rhsList
         self.returnNum = self.objects[0].returnNum
-        # 这里加一个优化，如果fby(a;1;b)则转为b->pre a
-        if self.objects[1].cal_const_value(SyntaxType("integer"),data_def).value==1:
-            pre_sub_expr=expression_factory("List_expr","List_expr",data_def,
-                                    objects=[[SyntaxExpr("Tempo_expr","PRE",data_def,[self.objects[0]])]])
-            pre_sub_expr.post_process(data_def)
-            self.subType="ARROW"
-            self.objects=[self.objects[2],pre_sub_expr]
+        # # 这里加一个优化，如果fby(a;1;b)则转为b->pre a
+        # if self.objects[1].cal_const_value(SyntaxType("integer"),data_def).value==1:
+        #     pre_sub_expr=expression_factory("List_expr","List_expr",data_def,
+        #                             objects=[[SyntaxExpr("Tempo_expr","PRE",data_def,[self.objects[0]])]])
+        #     pre_sub_expr.post_process(data_def)
+        #     self.subType="ARROW"
+        #     self.objects=[self.objects[2],pre_sub_expr]
         # # 这里加一个优化，转为b->pre a
         # pre_sub_expr = expression_factory("List_expr", "List_expr", userOp,
         #                           objects=[[expression_factory("Tempo_expr", "PRE", userOp, [self.objects[2]])]])
@@ -32,22 +33,20 @@ class Tempo_expr_FBY(SyntaxExpr):
         # 和pre预算非常的相似
         actual_types = type_inference_on_groups([self.objects[0], self.objects[2]], lhs_type_list, data_def)
         self.set_lhs_type(actual_types)
+        self.set_clock_list(clock_inference_sync(flatten_list([self.objects[0].lhsClockList,self.objects[2].lhsClockList])))
         return self.lhsTypeList
         # result=self.equivalent_expr.type_inference(lhs_type_list,userOp)
         # self.set_clock_list(self.equivalent_expr.lhsClockList)
         # self.set_lhs_type(result)
         # return result
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
-        idxVar, tmp_idx_var_name = generate_tmp_symbol_and_register(syntaxUserOp, SyntaxType("int32"), "idx")
-        idxVar.isOutput = True
+        idxVar, tmp_idx_var_name = generate_tmp_symbol_and_register(syntaxUserOp, SyntaxType("int32"), "idx",isOutPut=True)
 
-        arrSyntaxType = SyntaxType("array")
+        arrSyntaxType = SyntaxType("array",syntaxUserOp)
         arrSyntaxType.sizeExpr = self.objects[1]
         arrSyntaxType.arrayType = self.lhsTypeList[0]
-        arrSyntaxType.arrayType.scope = syntaxUserOp
 
-        arrVar, tmp_arr_var_name = generate_tmp_symbol_and_register(syntaxUserOp, arrSyntaxType, "arr")
-        arrVar.isOutput = True
+        arrVar, tmp_arr_var_name = generate_tmp_symbol_and_register(syntaxUserOp, arrSyntaxType, "arr",isOutPut=True)
 
         initVar = syntaxUserOp.set_init_var()
 

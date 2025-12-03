@@ -1,13 +1,14 @@
-from syntax_tree.scade_postprocess import set_rhs_default
+from syntax_tree.scade_postprocess import set_rhs_default, flatten_list
+from syntax_tree.scade_type_inference import clock_inference_sync
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression import SyntaxExpr
 
 from typing import TYPE_CHECKING
 
 from syntax_tree.syntax_class.syntaxType import SyntaxType
-
+from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr
 if TYPE_CHECKING:
-    from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr
+
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
 
     from syntax_tree.syntax_class.scope.scope import SyntaxScope
@@ -58,7 +59,7 @@ class Array_expr_getdefault(SyntaxExpr):
         elif given_default_type < given_element_type:
             given_arr_type = self.objects[0].type_inference([build_arr_type(given_default_type, len(idx_exprs))],
                                                  data_def)[0]
-
+        self.set_clock_list(clock_inference_sync([expr.lhsClockList[0] for expr in flatten_list(self.objects)]))
         self.set_lhs_type([given_default_type])
         return self.lhsTypeList
     def generate_code(self, data_def:'SyntaxUserOp', genEqu:'GenEqu'):

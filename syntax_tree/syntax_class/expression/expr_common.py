@@ -1,5 +1,6 @@
 import functools
 import re
+import struct
 from abc import ABC, abstractmethod, ABCMeta
 
 from syntax_tree.exclude_from_deepcopy import exclude_from_deepcopy
@@ -8,11 +9,12 @@ from ..Exceptions import *
 from typing import TYPE_CHECKING
 from ..hasRhs import HasRhs
 
+
 if TYPE_CHECKING:
     from ..syntaxType import SyntaxType
     from ..scope.scope import SyntaxScope
     from .const_value import ConstValue
-
+    from ..syntaxSymbol import SyntaxVariableSymbol
 def wrap_method(original_method):
     """包装原始方法，使其在执行前调用process_subexpr_default方法"""
     @functools.wraps(original_method)
@@ -45,7 +47,11 @@ def expression_factory(type:str,sub_type: str,scope:'SyntaxScope', objects=None,
         objects=list()
     return cls(type,sub_type,scope,objects,returnNum)
 def int_to_expression(number:int,scope)->'SyntaxExpr':
-    return expression_factory("Atom","typed_integer",scope,[str(number)])
+    return expression_factory("Atom","integernum",scope,[str(number)])
+def bool_to_expression(bool_value:bool,scope)->'SyntaxExpr':
+    return expression_factory("Atom","bool_atom",scope,[str(bool_value).lower()])
+# @exclude_from_deepcopy('appliedOp')
+# 不可以在父类使用，copy出来的会变成父类
 class SyntaxExpr(HasRhs,metaclass=ExpressionMeta):
     """保存expr，右值表达式，可以递归的自己包含自己"""
     type: str
@@ -69,7 +75,7 @@ class SyntaxExpr(HasRhs,metaclass=ExpressionMeta):
     scope: 'SyntaxScope'
     '''这个expr所处作用域'''
 
-    syntaxSymbol = None
+    syntaxSymbol: 'SyntaxVariableSymbol' = None
     '''Id_expr时，存储的对应symbol，会用到它的,ID没有，很合理'''
 
     idx_list: list[int]
@@ -143,6 +149,8 @@ class SyntaxExpr(HasRhs,metaclass=ExpressionMeta):
 
         self.post_processed=False
         self.__post_result=None
+    def get_type(self):
+        return self.type+"_"+self.subType
     def set_symbol(self, symbol):
         self.syntaxSymbol = symbol
     @abstractmethod
@@ -154,6 +162,10 @@ class SyntaxExpr(HasRhs,metaclass=ExpressionMeta):
     def set_param_expr(self,param_expr):
         """初始化时设置参数表达式，有时需要向下递归设置，不要忘了"""
         raise Exception("不行")
+
+    def is_clock_expr(self):
+        """是否是一个clock属性的变量"""
+        return True
 
 
     def __repr__(self):
@@ -176,11 +188,11 @@ class SyntaxExpr(HasRhs,metaclass=ExpressionMeta):
 
     @abstractmethod
     def post_process(self, userOp):
-        ...
+        raise Exception(f"{self}为何？")
 
     @abstractmethod
     def type_inference(self, lhs_type_list, userOp):
-        ...
+        raise Exception(f"{self}为何？{type(self)}")
 
     @abstractmethod
     def generate_code(self, syntaxUserOp, genEqu):
@@ -223,3 +235,34 @@ class SyntaxExpr(HasRhs,metaclass=ExpressionMeta):
             given_value = t[0]
         return given_type, given_value
 
+def can_fit_type(num:int or float,type_str:str)->bool:
+    if type_str.startswith("float"):
+        return float_can_fit_type(num,type_str)
+    elif type_str.startswith("uint") or type_str.startswith("int"):
+        return int_can_fit_type(num,type_str)
+    else:
+        raise Exception(f"为啥?{type_str}")
+def int_can_fit_type(int_num:int, type_str:str):
+
+    if type_str.startswith('uint'):
+        bits = int(type_str.lstrip('uint'))
+        return 0 <= int_num <= (1 << bits) - 1
+    else:
+        bits = int(type_str.lstrip('int'))
+        return -(1 << (bits - 1)) <= int_num < (1 << (bits - 1))
+def float_can_fit_type(float_num: float, type_str: str) -> bool:
+    type_str = type_str.lower()
+    if type_str == "float32":
+        try:
+            struct.pack('f', float_num)
+            return True
+        except OverflowError:
+            return False
+    elif type_str == "float64":
+        try:
+            struct.pack('d', float_num)
+            return True
+        except OverflowError:
+            return False
+    else:
+        raise ValueError("输入的类型不对，应该是'float32'或者'float64'.")

@@ -18,7 +18,7 @@ class generalized_get(SyntaxExpr):
     def type_inference(self, lhs_type_list: list['SyntaxType'], userOp:'SyntaxUserOp'):
         """给iterator等表达式使用，要求expr为数组，对其进行抽象的取数操作，即int[]变为int，可以对多返回值也生效"""
         # 组建对下层表达式需要的左值类型,获取lhs作为数组元素的类型
-        self.objects[1].type_inference([SyntaxType("int32")],userOp)
+        self.objects[1].type_inference([SyntaxType("integer")],userOp)
         sub_lhs_list = []
         array_size = self.objects[1].cal_const_value(SyntaxType("int32"),userOp).value
         map_index = self.objects[2]

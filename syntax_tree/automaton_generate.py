@@ -1,5 +1,6 @@
 import syntax_tree.scade_generate as scade_generate
 from syntax_tree.syntax_class.equation import LeftItemId
+from syntax_tree.syntax_class.expression import SyntaxExpr
 
 from syntax_tree.syntax_class.scope.automaton import SyntaxAutomaton, SyntaxState, SyntaxArrow
 from syntax_tree.syntax_class.syntaxType import SyntaxType
@@ -38,7 +39,7 @@ def get_state_nxt(automaton: SyntaxAutomaton) -> str:
     if automaton.stateNxtName != "":
         return automaton.stateNxtName
     op=automaton.get_my_userOp()
-    nxt_name=op.register_outC_name(f"{get_automaton_full_name(automaton)}_state_nxt")
+    nxt_name=op.generate_name_for_outC_and_register(f"{get_automaton_full_name(automaton)}_state_nxt")
     automaton.stateNxtName=nxt_name
     return nxt_name
 
@@ -78,16 +79,18 @@ def get_reset_act(automaton: SyntaxAutomaton) -> str:
     """生成状态机的reset_act变量名"""
     return f"{get_automaton_full_name(automaton)}_reset_act"
 
+def get_reset_nxt(automaton:SyntaxAutomaton)->str:
+    """生成一个状态机的reset_nxt变量名"""
+    if automaton.reset_nxt_symbol is None:
+        automaton.reset_nxt_symbol,symbol_name=scade_generate.generate_tmp_symbol_and_register(automaton, SyntaxType("bool"), f"{get_automaton_full_name(automaton)}_reset_nxt",isOutPut=True)
+    return automaton.var_change_name(automaton.reset_nxt_symbol.name)
+
 
 def generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth) -> (str, str):
     """将arrow的判断部分的代码生成出来"""
-    from syntax_tree.syntax_class.equation import SyntaxEquation
-    tmp_symbol, tmp_name = scade_generate.generate_tmp_symbol_and_register(from_state, SyntaxType("bool"))
-    equation = SyntaxEquation(type="simple_equation", lhs=[LeftItemId(from_state,tmp_name)], lineno=-1,scope=from_state)
-    equation.set_expr(sub_expr)
-    tmp_decls = f"{'    ' * depth}kcg_bool {tmp_name};\n"
-    tmp_decls += scade_generate.generate_userOp_simple_equation(equation, from_state, code_generator, depth)
-    return tmp_decls, tmp_name
+    gen_equ= scade_generate.GenEqu(depth)
+    code=sub_expr.generate_code(from_state,gen_equ)
+    return "".join(gen_equ.preEquations),code
 
 
 def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton: SyntaxAutomaton,
@@ -150,10 +153,11 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
         target_state = automaton.get_childScope(arrow.target)
         code += f"{'    ' * depth}outC->{get_state_nxt(automaton)} = {get_state_enum_name(target_state)};\n"
         # 以后还会用到他们的
-        # if arrow.type=="resume":
-        #     code+=f"{'     * depth}{get_reset_act(automaton)} = false;\n"
-        # else:
-        #     code += f"{'     * depth}{get_reset_act(automaton)} = true;\n"
+        # 现在就是以后！
+        if arrow.type=="resume":
+            code+=f"{'    '* depth}{get_reset_nxt(automaton)} = kcg_false;\n"
+        else:
+            code += f"{'    '* depth}{get_reset_nxt(automaton)} = kcg_true;\n"
         return code
     else:
         # 这里开始递归
@@ -181,20 +185,34 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
         code = tmp_decls + code  # 把临时变量插入
         return code
 
+def generate_default_expr_for_returned_in_actions(state,symbols,depth)->str:
+    code=""
+    gen_equ= scade_generate.GenEqu(depth)
+    for symbol in symbols:
+        expr:SyntaxExpr = symbol.defaultExpr if symbol.defaultExpr is not None else symbol.lastExpr
+        expr_code=expr.generate_code(state,gen_equ)
+        code+=scade_generate.assign_lhs_to_rhs_expr(state.var_change_name(symbol.name),expr_code,symbol.syntaxType,depth,state)
+    return "".join(gen_equ.preEquations)+code
 
 def generate_state_strong_transitions(automaton: SyntaxAutomaton, state: SyntaxState,
                                       code_generator: scade_generate.GenerateCode, depth: int = 1) -> str:
     """生成这个状态所对应的强转换语句
     注意到transitions和arrow的转移格式是一样的，所以这里把transtions捏成一个arrow然后进行生成会比较方便
     """
-    code = ""
 
-    tmp_arrow = SyntaxArrow(type="if", target=None, ifExpr=state.unlessTransitions, elseExpr=None)
+    code = ""
+    if state.hasInternalState:
+        initSymbol=state.set_init_var()
+        code += generate_init_code(state,get_reset_nxt(automaton),depth)
+    tmp_arrow = SyntaxArrow(type="if",state=state, target=None, ifExpr=state.unlessTransitions, elseExpr=None)
     # 将transitions变成一个arrow处理
     # else的情况要手动添加，也就是没有转移的时候
     code += generate_arrow_strong(tmp_arrow, state, automaton, code_generator, depth)
+    # 给返回值赋值
+
     if len(state.unlessTransitions) != 0:
         code += f"{'    ' * (depth)}else{{\n"
+        code += generate_default_expr_for_returned_in_actions(state, state.returnSymbolInUnlessActions,depth+1)
         code += f"{'    ' * (depth + 1)}{get_state_act(automaton)} = {get_state_enum_name(state)};\n" \
                 f"{'    ' * (depth + 1)}{get_fired_strong(automaton)} = {get_no_trans(automaton)};\n"
         code += f"{'    ' * (depth + 1)}{get_reset_act(automaton)} = kcg_false;\n"
@@ -203,6 +221,7 @@ def generate_state_strong_transitions(automaton: SyntaxAutomaton, state: SyntaxS
         code += f"{'    ' * (depth)}{get_state_act(automaton)} = {get_state_enum_name(state)};\n" \
                 f"{'    ' * (depth)}{get_fired_strong(automaton)} = {get_no_trans(automaton)};\n"
         code += f"{'    ' * (depth)}{get_reset_act(automaton)} = kcg_false;\n"
+
 
     return code
 
@@ -218,22 +237,27 @@ def generate_state_weak_transitions(automaton: SyntaxAutomaton, state: SyntaxSta
     # 这里要处理一下由强转移来的情况，加一层判断
     code += f"{'    ' * (depth)}if ({get_fired_strong(automaton)} != {get_no_trans(automaton)}){{\n" \
             f"{'    ' * (depth + 1)}outC->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n" \
+            f"{'    ' * (depth + 1)}{get_reset_nxt(automaton)} = kcg_false;\n" \
             f"{'    ' * (depth)}}}\n" \
             f"{'    ' * (depth)}else{{\n"  # 这样把下面的代码给接上
 
     if len(state.untilTransitions) != 0:
-        tmp_arrow = SyntaxArrow(type="if", target=None, ifExpr=state.untilTransitions, elseExpr=None)
+        tmp_arrow = SyntaxArrow(type="if", state=state,target=None, ifExpr=state.untilTransitions, elseExpr=None)
         # 将transitions变成一个arrow处理
         # else的情况要手动添加，也就是没有转移的情况
         code += generate_arrow_weak(tmp_arrow, state, automaton, code_generator, depth + 1)
         code += f"{'    ' * (depth + 1)}else{{\n"
         # 这里是有弱转移，但是并未触发的情况
         # 需要补充上弱转移action中的赋值语句，设置default，这里应该是在第二次遍历时的工作
+        code += generate_default_expr_for_returned_in_actions(state, state.returnSymbolInUntilActions,depth+2)
         code += f"{'    ' * (depth + 2)}outC->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n"
+        code += f"{'    ' * (depth + 2)}{get_reset_nxt(automaton)} = kcg_false;\n"
         code += f"{'    ' * (depth + 1)}}}\n"
     else:
         # 若无转移则不用处理action内部代码
+
         code += f"{'    ' * (depth + 1)}outC->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n"
+        code += f"{'    ' * (depth + 1)}{get_reset_nxt(automaton)} = kcg_false;\n"
 
     code += f"{'    ' * (depth)}}}\n"
 
@@ -273,8 +297,8 @@ def generate_body_nest(automaton: SyntaxAutomaton, code_generator: scade_generat
              f"{'    ' * (depth + 1)}{get_state_sel(automaton)} = outC->{get_state_nxt(automaton)};\n" \
              f"{'    ' * depth}}}\n"
     switch_state = f"{'    ' * depth}switch ({get_state_sel(automaton)}){{\n"
-    switch_state += generate_switch_state_body(automaton, code_generator, depth)
-    switch_act = generate_switch_act(automaton, code_generator, depth)
+    state_code,switch_act=generate_switch_state(automaton, code_generator, depth)
+    switch_state += state_code
     return decls + switch_state + switch_act
 
 
@@ -296,64 +320,74 @@ def generate_body_not_nest(automaton: SyntaxAutomaton, code_generator: scade_gen
 
     # 生成状态和转移枚举部分，然后开始强迁移部分的代码生成
     switch_state = f"{'    ' * depth}switch (outC->{get_state_nxt(automaton)}){{\n"  # 状态枚举，做强转移，处理reset_nxt（如果有）
-    switch_state += generate_switch_state_body(automaton, code_generator, depth)
-    switch_act = generate_switch_act(automaton, code_generator, depth)
+    state_code,switch_act=generate_switch_state(automaton, code_generator, depth)
+    switch_state += state_code
 
     code = decls + switch_state + switch_act
     return code
+def generate_switch_state(automaton: SyntaxAutomaton, code_generator: scade_generate.GenerateCode, depth)->(str,str):
+    act_code=f"{'    ' * (depth)}switch ({get_state_act(automaton)}){{\n"
+    body_code=""
+    for state in automaton.stateTable.values():
+        act_code+=generate_switch_act(state,automaton, code_generator, depth)
+        body_code+=generate_switch_state_body(state,automaton, code_generator, depth)
+    body_code+=f"{'    ' * (depth + 1)}default:break;\n{'    ' * depth}}}\n"
+    act_code+=f"{'    ' * (depth + 1)}default:break;\n{'    ' * depth}}}\n"
+    return body_code,act_code
 
-
-def generate_switch_state_body(automaton: SyntaxAutomaton, code_generator: scade_generate.GenerateCode, depth) -> str:
+def generate_switch_state_body(state:SyntaxState,automaton: SyntaxAutomaton, code_generator: scade_generate.GenerateCode, depth) -> str:
     """生成状态机body中，强转移部分的主体部分，此部分对嵌套与非嵌套的状态机逻辑是一样的"""
     body = ""
-    for state_name, state in automaton.stateTable.items():
-        body += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}: {{\n"
-        body += generate_state_strong_transitions(automaton, state, code_generator, depth + 2)
-        body += f"{'    ' * (depth + 2)}break;}}\n"
-    body += f"{'    ' * (depth + 1)}default:break;\n{'    ' * depth}}}\n"
+    body += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}: {{\n"
+    body += generate_state_strong_transitions(automaton, state, code_generator, depth + 2)
+    body += f"{'    ' * (depth + 2)}break;}}\n"
     return body
 
-
-def generate_switch_act(automaton: SyntaxAutomaton, code_generator: scade_generate.GenerateCode, depth) -> str:
+def generate_switch_act(state:SyntaxState,automaton: SyntaxAutomaton, code_generator: scade_generate.GenerateCode, depth) -> str:
     """生成状态机body中，状态内代码执行和弱转移部分的全部，此部分对嵌套与非嵌套的状态机逻辑是一样的"""
     # 行动枚举，执行当前状态下的代码，然后做弱转移
-    switch_act = f"{'    ' * (depth)}switch ({get_state_act(automaton)}){{\n"
-    for state_name, state in automaton.stateTable.items():
-        data_def_code = code_generator.generate_data_def(state, depth + 2)
-        switch_act += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}:{{\n"
+    # 顺序不可以变
+    state_body_code = code_generator.generate_data_def_src(state, depth + 2)
+    weak_transitions_code = generate_state_weak_transitions(automaton, state, code_generator, depth + 2)
+    state_decl_code = code_generator.generate_data_def_decl(state, depth + 2)
 
-        if state.hasInternalState or \
-                any([applied_expr.appliedOp.hasInternalState for applied_expr in state.apply_exprs]):
-            # 如果此状态有内存，则加上一个重置操作,即如果rest_act，则设置init为true，然后重置操作，然后将init为false
-            switch_act += f"{'    ' * (depth + 2)}if({get_reset_act(automaton)}){{\n"
+    switch_act = ""
+    switch_act += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}:{{\n"
 
-            for applied_expr in state.apply_exprs:
-                if not applied_expr.appliedOp.hasInternalState: continue
-                depth = 1
-                # todo 调用函数情况为数组的reset过程，参考array初始化
-                switch_act += f"{'    ' * (depth + 3)}{applied_expr.appliedOp.get_global_name()}_reset(&(outC->{applied_expr.appliedOpOutCName}));\n"
+    if state.hasInternalState or \
+            any([applied_expr.get_applied_op().hasInternalState for applied_expr in state.apply_exprs]):
+        switch_act+=generate_init_code(state,get_reset_act(automaton),depth+2)
 
-            for initSymbol in state.initSymbolSet:
-                switch_act += f"{'    ' * (depth + 3)}outC->{initSymbol.name} = kcg_true;\n"
-            if state.initVar:
-                switch_act += f"{'    ' * (depth + 3)}outC->{state.initVar.name} = kcg_true;\n"
-            switch_act += f"{'    ' * (depth + 2)}}}\n"
-            # 这里接如果为init则进行的初始化操作
-
-        # 这里添加代码，调用data_def的代码生成逻辑
-        switch_act += data_def_code
-        # 然后是弱转移部分
-        switch_act += generate_state_weak_transitions(automaton, state, code_generator, depth + 2)
-        if state.hasInternalState:
-            for initSymbol in state.initSymbolSet:
-                switch_act += f"{'    ' * (depth + 2)}outC->{initSymbol.name} = kcg_false;\n"
-            switch_act += f"{'    ' * (depth + 2)}outC->{state.initVar.name} = kcg_false;\n"
-            # 然后初始化结束
-        switch_act += f"{'    ' * (depth + 2)}break;}}\n"
-    switch_act += f"{'    ' * (depth + 1)}default:break;\n{'    ' * depth}}}\n"
+    # 这里添加代码，调用data_def的代码生成逻辑
+    switch_act += state_decl_code
+    switch_act += state_body_code
+    # 然后是弱转移部分
+    switch_act += weak_transitions_code
+    if state.hasInternalState:
+        for initSymbol in state.initSymbolSet:
+            switch_act += f"{'    ' * (depth + 2)}outC->{initSymbol.name} = kcg_false;\n"
+        switch_act += f"{'    ' * (depth + 2)}outC->{state.initVar.name} = kcg_false;\n"
+        # 然后初始化结束
+    switch_act += f"{'    ' * (depth + 2)}break;}}\n"
     return switch_act
 
+def generate_init_code(state:SyntaxState,init_cond:str,depth)->str:
+    code=""
+    # 如果此状态有内存，则加上一个重置操作,即如果rest_act，则设置init为true，然后重置操作，然后将init为false
+    code += f"{'    ' * (depth)}if({init_cond}){{\n"
+    # 这里接如果为init则进行的初始化操作
+    for applied_expr in state.apply_exprs:
+        if not applied_expr.get_applied_op().hasInternalState: continue
+        code += scade_generate.GenerateCode.call_func_recursive(depth + 1, applied_expr.appliedOpContextList,
+                                         f"{applied_expr.get_applied_op().get_global_name()}_reset",
+                                         f"outC->{applied_expr.appliedOpOutCName}")
 
+    for initSymbol in state.initSymbolSet:
+        code += f"{'    ' * (depth + 1)}outC->{initSymbol.name} = kcg_true;\n"
+    if state.initVar:
+        code += f"{'    ' * (depth + 1)}outC->{state.initVar.name} = kcg_true;\n"
+    code += f"{'    ' * (depth)}}}\n"
+    return code
 def generate_state_nxt_for_head(automaton: SyntaxAutomaton) -> str:
     """生成头文件，记录状态机的下一个状态"""
     code = f"    {get_automaton_state_type_name(automaton)}    {get_state_nxt(automaton)};\n"
@@ -364,9 +398,13 @@ def generate_state_nxt_for_init(automaton: SyntaxAutomaton) -> str:
     """生成对应的init函数
     只有第一层的状态机有它的init函数，嵌套的情况则不一样
     初始化最外层状态机的state_nxt
+    把初始状态的init变量也设置为true
     """
     code = f"    outC->{get_state_nxt(automaton)} = {get_state_enum_name(automaton.get_init_state())};\n"
-
+    # for state in automaton.stateTable.values():
+    #     initVar=state.initVar
+    #     if initVar is not None:
+    #         code += f"    outC->{initVar.name} = kcg_true;\n"
     return code
 
 

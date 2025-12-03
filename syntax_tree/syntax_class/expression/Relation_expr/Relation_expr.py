@@ -34,22 +34,25 @@ class Relation_expr_Relation_expr(SyntaxExpr):
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
         op = self.objects[1]
         sub_codes = self.subExpr.generate_code(syntaxUserOp, genEqu)
-        ele_type=self.subExpr.lhsTypeList[0]
-        if ele_type.is_basic_type() or ele_type.get_real_type().type=="enum":
+        ele_type=self.subExpr.lhsTypeList[0].get_real_type()
+        if ele_type.is_basic_type() or ele_type.type=="enum":
             if op == '<>':
                 op = '!='
             elif op == '=':
                 op = '=='
             return f"({sub_codes[0]} {op} {sub_codes[1]})"
-        # 如果是数组或结构体用memcpy
-        if op=='<>':
-            ans='1'
-        elif op=="=":
-            ans='0'
+        elif ele_type.type=="array" or ele_type.type=="field_decl":
+            # 如果是数组或结构体用memcpy
+            if op=='<>':
+                ans='1'
+            elif op=="=":
+                ans='0'
+            else:
+                raise Exception(f'{self.subExpr.lhsTypeList[0]}不支持{op}')
+            code=f"memcmp((const void *) &{sub_codes[0]}, (const void *) &{sub_codes[1]}, sizeof({self.subExpr.lhsTypeList[0].change_name()}))=={ans}"
+            return code
         else:
-            raise Exception(f'{self.subExpr.lhsTypeList[0]}不支持{op}')
-        code=f"memcmp((const void *) &{sub_codes[0]}, (const void *) &{sub_codes[1]}, sizeof({self.subExpr.lhsTypeList[0].change_name()}))=={ans}"
-        return code
+            raise Exception(f"{self}需要更精确的类型")
     def set_params(self,params:list['SyntaxExpr']):
         self.subExpr.objects[0]=[params[0],params[1]]
     def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):

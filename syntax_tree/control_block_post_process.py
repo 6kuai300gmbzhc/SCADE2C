@@ -8,7 +8,7 @@ from syntax_tree.syntax_class.hasRhs import add_rhs_to_each
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from syntax_tree.syntax_class.scope.automaton import SyntaxAutomaton, SyntaxState, SyntaxArrow
-    from syntax_tree.syntax_class.scope.clocked_block import SyntaxClockedScope, SyntaxIfBlock
+    from syntax_tree.syntax_class.scope.clocked_block import SyntaxClockedScope, SyntaxIfBlock,SyntaxMatchBlock
     from syntax_tree.syntax_class.scope.data_def import SyntaxDataDefScope
 def merge_dict(*dicts: dict[str, set[str]]) -> dict[str, set[str]]:
     # 按key融合对set取并集
@@ -29,6 +29,9 @@ def post_process_automaton(automaton: 'SyntaxAutomaton'):
     # equation，在遍历结束之后获取一个依赖单向图，应该通过这个单向图来找？
     # 单向图直接存储了equation之间的依赖关系
     # 最后的输出结果是rhs_dict这个东西
+    # todo 看测试用例automaton_062
+    # 第76页的例子
+    # todo 转移与状态内，转移与转移之间不能改相同变量
     rhs_dict = dict()
     for name, state in automaton.stateTable.items():
         rhs_dict=merge_dict(rhs_dict,post_process_state(state))
@@ -55,7 +58,18 @@ def post_process_cond_block(block: 'SyntaxIfBlock') -> dict:
     rhs_dict = dict(zip(
         rhs_dict.keys(), add_rhs_to_each(block.conditionExpr.rhsList, list(rhs_dict.values()))))
     return rhs_dict
-
+def post_process_match_block(clock_scope:'SyntaxClockedScope'):
+    match_block=clock_scope.block
+    match_block.switchExpr.post_process(match_block.scope)
+    rhs_dict=dict()
+    for match_case in match_block.matchList:
+        match_case[0].post_process(clock_scope)
+        sub_block=match_block.scope.get_childScope(match_case[1])
+        scade_postprocess.post_process_data_def(sub_block)
+        rhs_dict=merge_dict(rhs_dict,update_dependent_dict(sub_block))
+    rhs_dict = dict(zip(
+        rhs_dict.keys(), add_rhs_to_each(match_block.switchExpr.rhsList, list(rhs_dict.values()))))
+    return rhs_dict
 
 def post_process_state(state: 'SyntaxState')->dict[str,set[str]]:
     """对state进行后处理，处理state，和其内部的所有arrow，不需要给state进行排序
@@ -71,7 +85,9 @@ def post_process_state(state: 'SyntaxState')->dict[str,set[str]]:
     for cond_expr, arrow in state.unlessTransitions:
         arrow_rhs_set.update(post_process_arrow(cond_expr, arrow, state))
     for cond_expr, arrow in state.untilTransitions:
-        arrow_rhs_set.update(post_process_arrow(cond_expr, arrow, state))
+        arrow_set={rhs for rhs in post_process_arrow(cond_expr, arrow, state) if rhs not in state.returnSymbolsTable.keys()}
+
+        arrow_rhs_set.update(arrow_set)
     if state.synchroArrow is not None:
         arrow_rhs_set.update(post_process_arrow(None, state.synchroArrow, state))
 
@@ -109,11 +125,14 @@ def update_dependent_dict(data_def: 'SyntaxDataDefScope') -> dict[str,set[str]]:
     """更新state中输入输出参数的依赖列表，更新存储于dict中"""
     # returnSymbolsTable的key就是左值，感谢之前的我整理出来这个东西
     out_dict = dict()
+    out_scope=data_def.get_my_clocked_scope()
     for symbol_name in data_def.returnSymbolsTable:
         if data_def.get_equation_by_lhs(symbol_name) is None:continue
         out_dict[symbol_name] = set()
         dependent_params = scade_postprocess.find_non_intermediate_dependencies(data_def, symbol_name)
         for dependent_param_name in dependent_params:
-            if data_def.is_param_declared_externally(dependent_param_name):
+            if data_def.get_localVariable_InThisAndPreEnv_until_certain_scope(dependent_param_name,out_scope) is None:
                 out_dict[symbol_name].add(dependent_param_name)
     return out_dict
+
+

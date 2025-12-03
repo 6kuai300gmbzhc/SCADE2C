@@ -3,6 +3,7 @@ from syntax_tree.scade_generate import generate_tmp_symbol_and_register, assign_
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression import SyntaxExpr, expression_factory
 from syntax_tree.syntax_class.expression.expr_common import int_to_expression
+from syntax_tree.syntax_class.hasRhs import add_rhs_to_each
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 
 
@@ -15,17 +16,29 @@ class Operator_iterator(SyntaxExpr):
     '''迭代的数组长度'''
     map_index:int
     '''前n个参数视为fold，后面视为map'''
+    @property
+    def has_i(self):
+        return self.iterator_op.endswith("i")
+    @property
+    def is_fold(self):
+        return self.iterator_op.startswith("foldw")
+    @property
+    def is_map(self):
+        return self.iterator_op.startswith("mapw")
+    @property
+    def is_mapfold(self):
+        return self.iterator_op.startswith("mapfoldw")
     def post_process(self, data_def):
         # 很神奇吧，iterator不修改返回的参数数量
         # 他们会对调用的op有要求
         # 在类型推导里做具体的校验
         # 但是需要改变一下给subOp的参数
         result =self.sub_operator.post_process(data_def)
-        self.rhsList=self.sub_operator.rhsList
-        self.lhsClockList=self.lhsClockList
+        self.rhsList=add_rhs_to_each(self.array_length_expr.rhsList,self.sub_operator.rhsList)
+        self.returnNum=self.sub_operator.returnNum
         return result
     def type_inference(self, lhs_type_list, userOp):
-        self.array_length_expr.type_inference([SyntaxType("int32")], userOp)
+        self.array_length_expr.type_inference([SyntaxType("integer")], userOp)
         required_length = self.array_length_expr.cal_const_value(SyntaxType("int32"), self.scope).value
 
         non_map_lhs_list = lhs_type_list[:self.map_index]
@@ -48,6 +61,7 @@ class Operator_iterator(SyntaxExpr):
         apply_userOp = self.get_applied_op()
         if apply_userOp is not None:
             self.add_applied_Op(apply_userOp, context_list)
+        # todo 考虑到default表达式，可能返回值有不同的时钟？
         self.set_clock_list(self.sub_operator.lhsClockList)
         return self.lhsTypeList
     def generate_code(self, data_def, genEqu):
@@ -86,6 +100,8 @@ class Operator_iterator(SyntaxExpr):
                                                                    "map")
         sub_params = [symbol2expr(symbol, symbol.name, symbol.syntaxType, data_def) for symbol in
                       fold_symbols] + sub_params_map
+        if self.has_i:
+            sub_params.insert(0,symbol2expr(tmp_idx_symbol,tmp_idx,tmp_idx_symbol.syntaxType,data_def))
         sub_genEqu = GenEqu(depth + 1)
         self.sub_operator.set_applied_outC_name(f"{self.appliedOpOutCName}[{tmp_idx}]")
         self.sub_operator.set_params(sub_params)

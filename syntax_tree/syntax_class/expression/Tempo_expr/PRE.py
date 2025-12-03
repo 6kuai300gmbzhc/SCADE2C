@@ -16,14 +16,13 @@ class Tempo_expr_PRE(SyntaxExpr):
         self.set_clock_list(self.objects[0].lhsClockList)
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
-        init_var = syntaxUserOp.set_init_var()
+        syntaxUserOp.hasInternalState=True
         codes=self.objects[0].generate_code(syntaxUserOp, genEqu)
         if not isinstance(codes,list):
             codes=[codes]
         tmp_name_list=[]
         for post_code,lhs_type in zip(codes,self.lhsTypeList):
-            tmp_var, tmp_var_name = generate_tmp_symbol_and_register(syntaxUserOp, self.lhsTypeList[0],"pre_mem")
-            tmp_var.isOutput = True
+            tmp_var, tmp_var_name = generate_tmp_symbol_and_register(syntaxUserOp, self.lhsTypeList[0],"pre_mem",isOutPut=True)
             real_name=syntaxUserOp.var_change_name(tmp_var_name)
             tmp_name_list.append(real_name)
             tmp_var.postExpr = f"{assign_lhs_to_rhs_expr(real_name,post_code,[lhs_type],0,syntaxUserOp)}"

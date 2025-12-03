@@ -1,5 +1,6 @@
 from syntax_tree.graph import Graph
 from syntax_tree.syntax_class.Exceptions import UnknownIdentifierException
+from syntax_tree.syntax_class.expression.expr_common import bool_to_expression
 
 from syntax_tree.syntax_class.scope.package import SyntaxPackageScope
 from syntax_tree.syntax_class.scope.scope import SyntaxScope
@@ -24,20 +25,20 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
 
     visibility: str = "public"
     '''可见性，默认为public'''
-    equations: list
+    equations: list["SyntaxEquation"]
     '''该作用域中的scade语句，在data_def下的作用域才有语句，上层的作用域（package）只有声明'''
-    signalSymbolSet: set
+    signalSymbolSet: set[str]
     '''存放signal类型，保存signal的ID集合,signal的ID没有‘，只有ID本身的部分'''
-    localSymbolTable: dict
+    localSymbolTable: dict[str:SyntaxVariableSymbol]
     '''存放局部变量，变量名字->SyntaxVariableSymbol,signal不属于这个集合'''
-    returnSymbolsTable: dict
+    returnSymbolsTable: dict[str:SyntaxVariableSymbol]
     '''存放了当前及下级作用域修改的，外部作用域的变量，变量名字->SyntaxVariableSymbol'''
     initVar: SyntaxVariableSymbol
     '''时态算子使用的init,每个作用域只有一个init'''
     equationDependentGraph: Graph
     """标识语句依赖关系的单向图"""
-    lhs2EquationDict: dict
-    """左值名字找对应句子的dict，没有signal！！"""
+    lhs2EquationDict: dict[str:list["SyntaxEquation"]]
+    """左值名字找对应句子的dict"""
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
@@ -51,9 +52,14 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     def hasInternalState(self) -> bool:
         '''该作用域内是否存在内存，例如control_block与一些时态算子等'''
         return super().hasInternalState or self.initVar is not None
-
+    @hasInternalState.setter
+    def hasInternalState(self,value):
+        self._hasInternalState=value
     def is_param_declared_externally(self, param_name):
         """判断这个变量是不是在此作用域的外部定义的"""
+        # return \
+        #     self.get_my_op_or_state().get_localVariable_InThisAndPreEnv(param_name) is not None\
+        #     and self.get_localVariable(param_name) is None
         # 当前作用域找不到这个变量，但是上面的作用域找到了，说明是一个要返回的变量
         symbol = self.get_localVariable(param_name)
         if symbol is None:
@@ -71,6 +77,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         self.equations.append(input_equation)
         self.equationDependentGraph.addVertex(input_equation)
         input_equation.set_scope(self)
+        clocked_scope=self.get_my_clocked_scope()
         # 更新返回列表
         for lhs in input_equation.lhs:
             lhs_name=lhs.symbol_name
@@ -80,7 +87,11 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 # 信号部分单独处理一下,找不到就报错
                 if not self.have_signal_InThisAndPreEnv(lhs_name):
                     raise UnknownIdentifierException(lhs_name + " in " + str(input_equation))
-            if self.is_param_declared_externally(lhs_name):
+            if clocked_scope is not None:
+                is_param_declared_externally=self.get_localVariable_InThisAndPreEnv_until_certain_scope(lhs_name,clocked_scope) is None
+            else:
+                is_param_declared_externally=self.is_param_declared_externally(lhs_name)
+            if is_param_declared_externally:
                 self.returnSymbolsTable[lhs_name] = self.get_localVariable_InThisAndPreEnv(lhs_name)
             if self.lhs2EquationDict.get(lhs_name) is None:
                 self.lhs2EquationDict[lhs_name] = [input_equation]
@@ -94,7 +105,7 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
         if name not in self.localSymbolTable.keys():
             return self.get_tmpSymbol(name)
         else:
-            return self.localSymbolTable[name]
+            return self.localSymbolTable.get(name)
 
     def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
         '''递归的找局部变量'''
@@ -117,15 +128,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 # 上层是automaton或者control_block就跳过这一层
                 return self.prevScope.prevScope.have_signal_InThisAndPreEnv(name)
             return self.prevScope.have_signal_InThisAndPreEnv(name)
-
-    def generate_name_for_tmp(self, postfix="tmp"):
-        '''生成一个没有被用过的变量名，用来代码生成'''
-        count = 0
-        name = f"{postfix}"
-        while self.get_localVariable_InThisAndPreEnv(name) is not None:
-            count += 1
-            name = f"{postfix}_{str(count)}"
-        return name
 
     def generate_name_for_init(self, postfix="init"):
         count = 0
@@ -152,23 +154,6 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
                 cur_scope = cur_scope.prevScope
         return self.initVar
 
-    def var_change_name(self, name):
-        if name == "_": return name
-        symbol = self.get_localVariable_InThisAndPreEnv(name)
-        if symbol is None:
-            symbol = self.get_tmpSymbol(name)
-        if symbol is not None:
-            if symbol.isOutput:
-                return f"outC->{symbol.name}"
-            elif symbol.isInput:
-                return f"inC->{symbol.name}"
-            else:
-                return symbol.name
-        else:
-            symbol = self.check_and_get_constant_param(name)
-            if symbol is None:
-                raise ValueError(f"var_change_name error , name:{name}")
-            return symbol.change_name()
 
     def get_return_symbolTable(self):
         '''获取此作用域修改的上层作用域中的变量，不包括信号，path_id是只读的不用管他'''
@@ -176,6 +161,11 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
 
     def set_signalSymbolList(self, signalSymbolList: list):
         self.signalSymbolSet = set(signalSymbolList)
+        for name in signalSymbolList:
+            sig_symbol=SyntaxVariableSymbol(name,self,False,False)
+            sig_symbol.syntaxType=SyntaxType("bool")
+            sig_symbol.defaultExpr = bool_to_expression(False,self)
+            self.add_localSymbol(sig_symbol)
 
     def add_localSymbol(self, localSymbol):
         self.localSymbolTable[localSymbol.name] = localSymbol

@@ -23,12 +23,28 @@ class Arith_expr_binOp(SyntaxExpr):
         # 是最宽泛的类型需求，对非移位运算的情况，若子式发现可以更具体的话则要根据具体的类型再遍历一遍
         if len(lhs_type_list) != 1:
             raise TypeMismatchException(self, lhs_type_list, userOp)
+        bitwiseOp = {'lnot', 'land', 'lor', 'lxor'}
+        shiftOp = {'lsl', 'lsr'}
         op = self.objects[1]
         given_type = lhs_type_list[0]
-        required_given_type = SyntaxType("numeric")
-        min_type = min([required_given_type, given_type])
-        returned_type=type_inference_on_binop([min_type , min_type ], userOp, self.subExpr, False)[0]
-
+        if op in bitwiseOp:
+            required_given_type = SyntaxType("unsigned")
+            min_type = min([required_given_type, given_type])
+            first_type = min_type
+            second_type = min_type
+            returned_type = type_inference_on_binop([first_type, second_type], userOp, self.subExpr, True)[0]
+        elif op in shiftOp:
+            required_given_type = SyntaxType("unsigned")
+            min_type = min([required_given_type, given_type])
+            first_type = min_type
+            second_type = SyntaxType("integer")
+            returned_type = type_inference_on_binop([first_type, second_type], userOp, self.subExpr, False)[0]
+        else:
+            required_given_type = SyntaxType("numeric")
+            min_type = min([required_given_type, given_type])
+            first_type = min_type
+            second_type = min_type
+            returned_type = type_inference_on_binop([first_type, second_type], userOp, self.subExpr, True)[0]
         self.set_lhs_type([returned_type])
         self.set_clock_list(self.subExpr.lhsClockList)
         # 第一个子表达式，即左侧的那个表达式不管是什么操作符都是要返回的那个

@@ -1,3 +1,4 @@
+import copy
 import sys
 from .Exceptions import *
 from .scope.scope import SyntaxScope
@@ -7,7 +8,7 @@ if TYPE_CHECKING:
     from .expression.expr_common import SyntaxExpr
 class SyntaxType:
     """记录type类型"""
-    name: str
+    name: str = None
     '''type_block ，用于重命名之后以str格式保存的名字，type表示其真实类型，这个只是记录了在type_block中定义的别名
     对enum类型，则指具体enum的类型名称
     '''
@@ -63,6 +64,13 @@ class SyntaxType:
         'float': {'float32', 'float64'}
     }
 
+    def get_copy(self):
+        """获取自身的复制，与deepcopy不同，没有更换作用域的需要"""
+        _copy=copy.copy(self)
+        _copy.arrayType=copy.copy(self.arrayType)
+        _copy.sizeExpr=copy.copy(self.sizeExpr)
+        return _copy
+
     def __init__(self, tar_type: str, scope=None) -> None:
         self.type = tar_type
         self._size = None
@@ -115,6 +123,15 @@ class SyntaxType:
         if self.type == "enum":
             return f"{self.name}_{self.scope.get_global_name()}"
         if self.type == "field_decl":
+            if self.name is None:
+                tmp_name="tmp_struct"
+                count=0
+                while True:
+                    name=tmp_name if count==0 else f"{tmp_name}_{count}"
+                    count+=1
+                    if self.scope.check_and_get_type_symbol(name) is None:
+                        self.name=name
+                        break
             return self.name if self.scope.get_global_name() == "" else f"{self.name}_{self.scope.get_global_name()}"
         return f'kcg_{self.type}' if self.type in self.basic_type else self.value
 
@@ -295,3 +312,7 @@ class SyntaxTypeSymbol:
         else:
             s += str(self.syntaxType)
         return s
+    def __eq__(self, other):
+        if not isinstance(other,SyntaxTypeSymbol):
+            return NotImplemented
+        return self.name==other.name and self.syntaxType==other.syntaxType

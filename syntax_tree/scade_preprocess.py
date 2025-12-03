@@ -171,7 +171,6 @@ def p_type_def(p):
     for enum_value in p[3]:
         enum_symbol=SyntaxConstSymbol(name=enum_value,scope=cur_scope)
         enum_symbol.syntaxType=p[0]
-        enum_symbol.set_value(enum_value)
         cur_scope.add_constSymbol(enum_symbol)
         enum_list.append(enum_symbol)
     p[0].enumList=enum_list
@@ -487,11 +486,7 @@ def p_signal_block_zero_or_one(p):
 def p_signal_block(p):
     'Signal_block : SIG Id_one_or_more_with_comma SEMICOLON'
     global cur_scope
-    for sig_name in p[2]:
-        sig_symbol=SyntaxVariableSymbol(sig_name,cur_scope)
-        sig_symbol.syntaxType=SyntaxType("bool")
-        sig_symbol.defaultExpr=expression_factory("Atom","bool_atom",cur_scope,["false"])
-        cur_scope.add_localSymbol(sig_symbol)
+
     cur_scope.set_signalSymbolList(p[2])
 
 
@@ -622,7 +617,7 @@ def p_control_block(p):
             break
         if symbol_name not in lhs.keys():
             # 没有就报错
-            raise UnknownIdentifierException(symbol_name)
+            raise UnknownIdentifierException(f"{symbol_name}在returned变量中却没有被修改")
     lhs_items=[LeftItemId(cur_scope,id) for id in lhs.keys()]
     p[0] = SyntaxEquation(type="control_block", lhs=lhs_items, lineno=p.lineno(1),scope=cur_scope)
     p[0].controlBlockID = p[1]
@@ -830,19 +825,30 @@ def p_arrow(p):  # 给arrow添加actions并返回
         p[2].set_action(p[1])
         p[0] = p[2]
     else:
+        # 这里生成一个空data_def
+        global cur_scope
+        scope = SyntaxDataDefScope(type="data_def", name=cur_scope.generate_name_for_subScope(),
+                                   prevscope=cur_scope,
+                                   visibility="public")
+        cur_scope.add_childScope(scope)
+        cur_scope.add_action_subscope(scope)
+        p[1].set_action(scope.name)
         p[0] = p[1]
+
+
+
 
 
 def p_fork(p):  # 在这里就创建一个arrow对象
     '''Fork : Target
     | IF Expr Arrow Fork_1 Fork_2 END'''
     if len(p) == 2:
-        p[0] = SyntaxArrow(type=p[1]["type"], target=p[1]["target"])
+        p[0] = SyntaxArrow(type=p[1]["type"], state=cur_scope, target=p[1]["target"])
     else:
         ifList = list()
         ifList.append([p[2], p[3]])
         ifList += p[4]
-        p[0] = SyntaxArrow(type="if", ifExpr=ifList, elseExpr=p[5])
+        p[0] = SyntaxArrow(type="if", state=cur_scope,ifExpr=ifList, elseExpr=p[5])
 
 
 def p_fork_1(p):
@@ -913,7 +919,7 @@ def p_after_clocked_block(p):
 
 def p_match_block(p):
     '''Match_block : WHEN Expr MATCH Match_block_1'''
-    p[0] = SyntaxMatchBlock(expr=p[2], matchList=p[4])
+    p[0] = SyntaxMatchBlock(expr=p[2], matchList=p[4],scope=cur_scope)
 
 
 def p_match_block_1(p):
@@ -1099,7 +1105,7 @@ def p_tempo_expr(p):
     elif p[1].strs == "fby":
         p[0] = expression_factory(type="Tempo_expr", sub_type="FBY",scope=cur_scope,objects=[p[3],p[5],p[7]])
     elif p[1].strs == "merge":
-        p[0] = expression_factory(type="Tempo_expr", sub_type="MERGE",scope=cur_scope,objects=[p[3],[p[5],p[6]]])
+        p[0] = expression_factory(type="Tempo_expr", sub_type="MERGE",scope=cur_scope,objects=[p[3],[p[5]]+p[6]])
 
 
 def p_tempo_expr_1(p):
@@ -1254,9 +1260,10 @@ def p_struct_expr(p):
     if len(p) == 4:
         p[0] = expression_factory(type="Struct_expr", sub_type="get",scope=cur_scope,objects=[p[1],p[3].value])
     else:
-        labels = list()
-        labels.append(p[2])
-        labels += p[3]
+        labels = dict()
+        labels[p[2][0]]=p[2][1]
+        for label in p[3]:
+            labels[label[0]]=label[1]
         p[0] = expression_factory(type="Struct_expr", sub_type="construct",scope=cur_scope,objects=[labels])
 
 
@@ -1391,13 +1398,13 @@ def p_operator(p):
     elif length == 9:
         p[0] = expression_factory(type="Operator",sub_type="activateDefault",scope=cur_scope,objects=[p[3],p[5],p[7]])
     elif length == 10:
-        objects = [p[3], p[5], p[8]]
+
         if p[2].strs == "activate":
+            objects = [p[3], p[5], p[8]]
             p[0] = expression_factory(type="Operator",sub_type="activateInitDefault",scope=cur_scope,objects=objects)
-        elif p[2].strs == "foldw":
-            p[0] = expression_factory(type="Operator",sub_type="foldw",scope=cur_scope,objects=objects)
-        elif p[2].strs == "foldwi":
-            p[0] = expression_factory(type="Operator",sub_type="foldwi",scope=cur_scope,objects=objects)
+        else:
+            objects=[p[2].strs,1,p[3],p[5],p[8]]
+            p[0] = expression_factory(type="Operator",sub_type="iterator_mw",scope=cur_scope,objects=objects)
     elif length == 12:
         p[0] = expression_factory(type="Operator",sub_type="iterator_mw",scope=cur_scope,
                                   objects=[p[2][0],p[2][1],p[3],p[5],p[8],p[10]])
@@ -1466,9 +1473,9 @@ def p_iterator_mw(p):
     | MAPFOLDWI
     | MAPFOLDWI INTEGERNUM'''
     if len(p) == 2:
-        p[0] = [p[1],1]
+        p[0] = [p[1].value,1]
     else:
-        p[0] = [p[1],int(p[2].value)]
+        p[0] = [p[1].value,int(p[2].value)]
 
 
 def p_mixed_constructor(p):
@@ -1701,7 +1708,8 @@ def p_empty(p):
 
 
 def p_error(p):
-    print("error", p)
+    raise Exception(f"lex error: {p} at line {p.lineno}")
+    # print("error", p)
 
 
 def get_parse(input_path: str, root_operator: str):
@@ -1713,11 +1721,13 @@ def get_parse(input_path: str, root_operator: str):
     with open(input_path,"r",encoding=encoding) as f:
         strs = f.read()
 
+    strs = re.sub(r'(?s)#pragma\b.*?#end\b\s*','',strs,flags=re.DOTALL)
     strs = re.sub( r'--.*?$', '', strs,flags=re.MULTILINE)
     pattern1 = r'%[a-zA-Z0-9_!"$#%&\'()*+,\-./:;_<=>?@\\^`|{}~\s]*?%'
     strs = re.sub(pattern1, '', strs, flags=re.MULTILINE)
     pattern2 = r'\(\*.*?\*\)'
     strs = re.sub(pattern2,'',strs,flags=re.DOTALL)
+    strs = re.sub(r'#[A-Za-z0-9_]+','',strs)
 
     # pattern3 = re.compile(r'\*.*?\*',flags=re.MULTILINE)
     # strs = re.sub(pattern3, '', strs)

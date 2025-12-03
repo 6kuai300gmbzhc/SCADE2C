@@ -6,14 +6,15 @@ from typing import TYPE_CHECKING
 
 from syntax_tree.syntax_class.expression import SyntaxExpr
 from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
+from syntax_tree.syntax_class.expression.pattern import SyntaxPattern
 
 if TYPE_CHECKING:
     from syntax_tree.syntax_class.scope.package import SyntaxPackageScope
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
     from syntax_tree.syntax_class.scope.data_def import SyntaxDataDefScope
-    from syntax_tree.syntax_class.equation import SyntaxEquation
+    from syntax_tree.syntax_class.equation import SyntaxEquation, LeftItemId
     from syntax_tree.syntax_class.scope.automaton import SyntaxAutomaton
-    from syntax_tree.syntax_class.scope.clocked_block import SyntaxIfBlock
+    from syntax_tree.syntax_class.scope.clocked_block import SyntaxIfBlock, SyntaxMatchBlock, SyntaxClockedScope
 """
 后处理流程，在预处理过程完成对语法树的构建后，进行这个流程来进行排序，与其他相关的处理
 代码生成过程应该只生成代码，而不对语法树结构有任何过多的修改，所以后处理流程负责将语法树的结构修正为可以直接逐句生成代码的方式
@@ -70,24 +71,24 @@ def dependent_graph_str(graph):
     return out
 
 
-def post_process(root_scope: 'SyntaxPackageScope',main_operator_path:str):
+def post_process(root_scope: 'SyntaxPackageScope', main_operator_path: str):
     """后处理流程，遍历语法树，进行一些修改方便代码生成"""
     print("============postProcess Begin============")
 
     userOp_dependent_graph = Graph()
     # 现在要找到主节点
-    path=main_operator_path.split("::")
-    main_operator=root_scope.resolve_path(path[:-1]).get_userOp(path[-1])
+    path = main_operator_path.split("::")
+    main_operator = root_scope.resolve_path(path[:-1]).get_userOp(path[-1])
     if not main_operator:
-        raise UnknownIdentifierException("找不到主节点："+main_operator_path)
+        raise UnknownIdentifierException("找不到主节点：" + main_operator_path)
     # 从主节点开始建图
-    build_userOp_dependent_graph(main_operator,userOp_dependent_graph)
+    build_userOp_dependent_graph(main_operator, userOp_dependent_graph)
     sorted_order = userOp_dependent_graph.topological_sort()
     if not sorted_order:
         raise UserOpDependentException(dependent_graph_str(userOp_dependent_graph))
     print("函数拓扑排序完成，遍历顺序为:" + str([op.get_global_name() for op in sorted_order]))
 
-    post_process_package(root_scope,userOp_dependent_graph)
+    post_process_package(root_scope, userOp_dependent_graph)
     # 把没用到的userOp都删了
 
     for userOp in sorted_order:
@@ -95,23 +96,24 @@ def post_process(root_scope: 'SyntaxPackageScope',main_operator_path:str):
         # 按拓扑顺序去遍历各个函数，而非按package的顺序
         # 前面已经处理过open package，所以应该不会出现找不到引用的情况
     print("============postProcess END============")
-    return sorted_order,main_operator
+    return sorted_order, main_operator
 
 
-
-def post_process_package(package: 'SyntaxPackageScope',userOpGraph:Graph) -> None:
+def post_process_package(package: 'SyntaxPackageScope', userOpGraph: Graph) -> None:
     """package级别，即全局作用域和package作用域
     要处理open package"""
     open_package(package)
     for sub_name, sub_package in package.childScopeTable.items():
-        post_process_package(sub_package,userOpGraph)
+        post_process_package(sub_package, userOpGraph)
     # 去残留，只要用到OP
-    userOpTable=dict()
+    userOpTable = dict()
     for op_name, userOp in package.userOpTable.items():
         if userOpGraph.getVertex(userOp) is not None:
-            userOpTable[op_name]=userOp
-    package.userOpTable=userOpTable
-
+            userOpTable[op_name] = userOp
+    package.userOpTable = userOpTable
+    for const_symbol in package.constSymbolTable.values():
+        if const_symbol.valueExpr is not None:
+            const_symbol.valueExpr.post_process(package)
 
 
 def build_userOp_dependent_graph(userOp: 'SyntaxUserOp', userOp_dependent_graph: Graph) -> None:
@@ -123,7 +125,7 @@ def build_userOp_dependent_graph(userOp: 'SyntaxUserOp', userOp_dependent_graph:
         if not target_userOp:
             raise UnknownIdentifierException(f"{userOp.get_global_name()}找不到{dependent_path}")
         userOp_dependent_graph.addEdge(target_userOp, userOp)
-        build_userOp_dependent_graph(target_userOp,userOp_dependent_graph)
+        build_userOp_dependent_graph(target_userOp, userOp_dependent_graph)
 
 
 def open_package(package: 'SyntaxPackageScope') -> None:
@@ -145,6 +147,9 @@ def post_process_userOp(userOp: 'SyntaxUserOp') -> None:
     else:
         equation_graph = post_process_data_def(userOp)
         build_userOp_output2inputDependents(userOp, equation_graph)
+    for out_param in userOp.outParams:
+        if out_param.lastExpr is not None:
+            out_param.lastExpr.post_process(userOp)
     print(userOp.get_global_name(), "的输入输出参数之间因果关系为:", userOp.output2inputDependents)
 
 
@@ -170,20 +175,22 @@ def build_userOp_output2inputDependents(userOp: 'SyntaxUserOp', equation_graph):
     for out_index in range(len(userOp.outParams)):
         out_param = userOp.outParams[out_index]
         # 要先找到out_param所对应的equation，然后再根据其推出变量依赖的其他语句，直到找到in_param
-        dependent_params=find_non_intermediate_dependencies(userOp,out_param.name)
+        dependent_params = find_non_intermediate_dependencies(userOp, out_param.name)
         for in_index in range(len(userOp.inParams)):
             in_param = userOp.inParams[in_index]
             if in_param.name in dependent_params:
                 userOp.add_input_output_dependency(in_index, out_index)
 
 
-def find_non_intermediate_dependencies(data_def:'SyntaxDataDefScope',param_name:str)->list:
+def find_non_intermediate_dependencies(data_def: 'SyntaxDataDefScope', param_name: str) -> list:
     """在指定作用域里，找到指定变量名所依赖的全部非局部变量的名字"""
 
     out_equation_list = data_def.get_equation_by_lhs(param_name)
+    if out_equation_list is None:
+        raise Exception(f"{data_def.get_global_name()}没有以{param_name}为左值的句子，这不对")
     equation_stack = deque([out_equation_list])
     var_stack = deque([param_name])
-    out_list=list()
+    out_list = list()
     while equation_stack:
         cur_equation_list = equation_stack.pop()
         cur_var_name = var_stack.pop()
@@ -198,6 +205,7 @@ def find_non_intermediate_dependencies(data_def:'SyntaxDataDefScope',param_name:
                 equation_stack.extend([nxt_equation_list])
                 var_stack.append(rhs_name)
     return out_list
+
 
 def post_process_data_def(data_def: 'SyntaxDataDefScope') -> Graph:
     """对所有data_def类型，遍历其内部的所有语句，给出依赖关系，对语句进行拓扑排序,返回此作用域内的单向图
@@ -238,9 +246,13 @@ def post_process_equation(equation: 'SyntaxEquation', data_def) -> None:
     else:
         # controlblock要
         control_block = data_def.get_childScope(equation.controlBlockID)
-        rhs_dict=post_process_control_block(control_block)
+        rhs_dict = post_process_control_block(control_block)
         for lhs in equation.lhs:
             equation.add_rhs(rhs_dict[lhs.symbol_name])
+    if len(equation.lhs) == 0 and len(equation.rhsList) != 0:
+        # 填一下左值方便排序
+        from syntax_tree.syntax_class.equation import LeftItemId
+        equation.lhs = [LeftItemId(equation.scope, "_")] * len(equation.rhsList)
     if len(equation.lhs) != len(equation.rhsList):
         print("!!!不对")
         print(equation)
@@ -250,10 +262,13 @@ def post_process_equation(equation: 'SyntaxEquation', data_def) -> None:
         print(equation.lhs2RhsDict)
         raise Exception(f"equation{equation}的左右值长度不一样")
     for i in range(len(equation.lhs)):
-        symbol_name=equation.lhs[i].symbol_name
+        symbol_name = equation.lhs[i].symbol_name
         if equation.lhs2RhsDict.get(symbol_name) is None:
-            equation.lhs2RhsDict[symbol_name]=set()
+            equation.lhs2RhsDict[symbol_name] = set()
         equation.lhs2RhsDict[symbol_name].update(equation.rhsList[i])
+        if symbol_name in equation.rhsList[i]:
+            raise UserOpDependentException(data_def.get_global_name() + f"有句子{equation}依赖自身了")
+
 
 def set_rhs_default(expr):
     # 默认的情况下，expr的rhs是各子expr之和，合并成一个
@@ -261,16 +276,21 @@ def set_rhs_default(expr):
     flat_list = flatten_list(expr.objects)
     tar_rhs = set()
     for sub_expr in flat_list:
-        if not isinstance(sub_expr,SyntaxExpr): continue
+        if not isinstance(sub_expr, SyntaxExpr): continue
         for rhs in sub_expr.rhsList:
             tar_rhs |= rhs
     expr.set_rhs(tar_rhs)
+
+
 def process_subexpr_default(expr, data_def):
+    """默认的子expr后处理，就是挨个遍历一下，有clockExpr"""
     """默认的子expr后处理，就是挨个遍历一下，有clockExpr"""
     flat_list = flatten_list(expr.objects)
     for sub_expr in flat_list:
-        if isinstance(sub_expr,SyntaxExpr) or isinstance(sub_expr,SyntaxClockExpr):
+        if isinstance(sub_expr, SyntaxExpr) or isinstance(sub_expr, SyntaxClockExpr) or isinstance(sub_expr,
+                                                                                                   SyntaxPattern):
             sub_expr.post_process(data_def)
+
 
 def flatten_list(input_list: list) -> list:
     """把嵌套列表展开，不是列表的输入也返回一个列表"""
@@ -285,6 +305,8 @@ def flatten_list(input_list: list) -> list:
         else:
             output.append(item)
     return output
+
+
 post_process_control_block_handlers = {}
 
 
@@ -304,10 +326,17 @@ def post_process_control_block(control_block):
 
 @post_control_block_handler('automaton')
 def post_automaton(automaton: 'SyntaxAutomaton'):
-    #返回一个字典{左值变量名字->[依赖的右值变量名字]}
+    # 返回一个字典{左值变量名字->[依赖的右值变量名字]}
     return control_block_post_process.post_process_automaton(automaton)
 
+
 @post_control_block_handler('if_block')
-def post_if_block(if_block: 'SyntaxIfBlock'):
-    #返回一个字典{左值变量名字->[依赖的右值变量名字]}
+def post_if_block(if_block: 'SyntaxClockedScope'):
+    # 返回一个字典{左值变量名字->[依赖的右值变量名字]}
     return control_block_post_process.post_process_if_block(if_block)
+
+
+@post_control_block_handler('match_block')
+def post_match_block(match_block: 'SyntaxClockedScope'):
+    # 返回一个字典{左值变量名字->[依赖的右值变量名字]}
+    return control_block_post_process.post_process_match_block(match_block)
