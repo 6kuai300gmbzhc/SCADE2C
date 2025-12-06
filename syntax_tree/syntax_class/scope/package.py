@@ -1,11 +1,13 @@
 from .scope import SyntaxScope
-
+from ..Exceptions import UnknownIdentifierException
 
 from ..syntaxType import SyntaxTypeSymbol
 from syntax_tree.exclude_from_deepcopy import exclude_from_deepcopy
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from .userOp import SyntaxUserOp
+
 
 @exclude_from_deepcopy('prevScope')
 class SyntaxPackageScope(SyntaxScope):
@@ -33,8 +35,9 @@ class SyntaxPackageScope(SyntaxScope):
     userOpTable: dict
     '''函数，node的自定义符号表，因为path寻路只寻package所以独立出来，userop名字->SyntaxUserOpSymbol'''
 
-    openPackageList: list
+    openPackageNames: list
     '''打开的其他package列表，存一个到目标package的路径，需要根据当前package的位置去寻找离他最近的那个'''
+    openPackages: list["SyntaxPackageScope"]
 
     def __init__(self, type, name, prevscope, visibility):
         super().__init__(type, name, prevscope, visibility)
@@ -43,7 +46,8 @@ class SyntaxPackageScope(SyntaxScope):
         self.sensorSymbolTable = dict()
         self.groupSymbolTable = dict()
         self.userOpTable = dict()
-        self.openPackageList = list()
+        self.openPackageNames = list()
+        self.openPackages = list()
 
     def scope2str(self, depth=0):
         s = "    " * depth
@@ -59,9 +63,9 @@ class SyntaxPackageScope(SyntaxScope):
         s += ""
         s += "\n"
         depth = depth + 1
-        if self.openPackageList:
+        if self.openPackageNames:
             s += "    " * depth + "open packages:\n"
-            for package in self.openPackageList:
+            for package in self.openPackageNames:
                 s += "    " * depth + "    " + package + "\n"
         if self.typeSymbolTable:
             s += "    " * depth + "typeSymbolTable:\n"
@@ -91,8 +95,10 @@ class SyntaxPackageScope(SyntaxScope):
 
     def __repr__(self):
         return self.scope2str()
+
     def get_localVariable_InThisAndPreEnv(self, name) -> 'SyntaxVariableSymbol' or None:
         raise Exception(f"{self.get_global_name()}是package")
+
     def add_typeSymbol(self, typeSymbol: SyntaxTypeSymbol) -> None:
         self.typeSymbolTable[typeSymbol.name] = typeSymbol
 
@@ -110,8 +116,8 @@ class SyntaxPackageScope(SyntaxScope):
         # self.childScopeTable[userOp.name]=userOp
 
     def add_open_package(self, path) -> None:
-        if path not in self.openPackageList:
-            self.openPackageList.append(path)
+        if path not in self.openPackageNames:
+            self.openPackageNames.append(path)
 
     def var_change_name(self, name):
         # generate_id_expr_path_id函数中syntaxUserOp可能为UserOp，此时需要添加inC，outC，可能是package，为了防止package情况下，没有var_change_name。
@@ -119,9 +125,6 @@ class SyntaxPackageScope(SyntaxScope):
 
     def get_package(self, package_name):
         return self.childScopeTable.get(package_name)
-
-    def get_userOp(self, userOp_name):
-        return self.userOpTable.get(userOp_name)
 
     def get_package_InThisAndPreEnv(self, package_name):
         tar_package = self.get_package(package_name)
@@ -132,19 +135,59 @@ class SyntaxPackageScope(SyntaxScope):
     def is_global(self):
         return self.name == "*global"
 
-    def open(self, tar_package):
+    def open_packages(self):
         """打开对应package，将各种symbol复制到此处"""
-        print(f"{self.name}打开了{tar_package.name}")
-        self.typeSymbolTable |= tar_package.typeSymbolTable
-        self.constSymbolTable |= tar_package.constSymbolTable
-        self.sensorSymbolTable |= tar_package.sensorSymbolTable
-        self.groupSymbolTable |= tar_package.groupSymbolTable
+        for package_name in self.openPackageNames:
+            package = self.resolve_path(package_name.split("::"))
+            if package is None:
+                raise UnknownIdentifierException(package_name)
+            else:
+                print(f"{self.name}打开了{package.name}")
+                self.openPackages.append(package)
+        # self.typeSymbolTable |= tar_package.typeSymbolTable
+        # self.constSymbolTable |= tar_package.constSymbolTable
+        # self.sensorSymbolTable |= tar_package.sensorSymbolTable
+        # self.groupSymbolTable |= tar_package.groupSymbolTable
 
     def get_const_symbol(self, symbol_name):
-        const_symbol = self.constSymbolTable.get(symbol_name)
-        if const_symbol is not None:
-            const_symbol.used = True
-        return const_symbol
+        symbol = self._get_symbol_all_reachable_scope("constSymbolTable", symbol_name)
+        if symbol is not None:
+            symbol.used = True
+        return symbol
 
     def get_type_symbol(self, type_name):
-        return self.typeSymbolTable.get(type_name)
+        return self._get_symbol_all_reachable_scope("typeSymbolTable", type_name)
+
+    def get_sensor_symbol(self,sensor_name):
+        return self._get_symbol_all_reachable_scope("sensorSymbolTable",sensor_name)
+
+    def get_userOp(self, userOp_name):
+        return self._get_symbol_all_reachable_scope("userOpTable", userOp_name)
+
+    def _get_symbol_all_reachable_scope(self, table_name, symbol_name):
+        """真正的找symbol方法，找自己的下层package, 上层package，和自己"""
+        reachable_scope = [self] + list(self.childScopeTable.values())
+        prev_package = self.prevScope
+        while prev_package is not None:
+            reachable_scope.append(prev_package)
+            prev_package = prev_package.prevScope
+        for scope in reachable_scope:
+            if symbol := scope.get_symbol_self_and_open_scope(table_name, symbol_name):
+                return symbol
+        return None
+
+    def get_symbol_self_and_open_scope(self, table_name, symbol_name):
+        """找自己的，与open的"""
+        packages = [self] + self.openPackages
+        for package in packages:
+            symbol = self._get_symbol_by_dynamic_call(package, table_name, symbol_name)
+            if symbol is not None:
+                return symbol
+        return None
+
+    @staticmethod
+    def _get_symbol_by_dynamic_call(package, table_name, symbol_name):
+        tar_table: dict = getattr(package, table_name, None)
+        if tar_table is None:
+            raise Exception(f"没有这个表 {table_name} 这不对吧")
+        return tar_table.get(symbol_name)

@@ -98,13 +98,13 @@ def instantiate_template_function(userOp: SyntaxUserOp, lhs_type_list: list[Synt
     # 如果长度不一样，说明不是所有模板参数都在输入参数中提及
     if len(instantiate_dict) != len(userOp.typeVarSymbolTable):
         raise CanNotInstantiateException(userOp, param_expr, "有模板参数并未在输入参数中涉及")
-    if not all(t.is_basic_type() for t in instantiate_dict.values()):
+    if not all(t.is_type_determined() for t in instantiate_dict.values()):
         raise CanNotInstantiateException(userOp, param_expr, "有模板参数无法推导为基本类型")
     print(f"获取的实例化字典为:{instantiate_dict}")
 
     instantiate_sizes = list()
     for size_expr, size_param in zip(size_exprs, userOp.sizeParams):
-        const_value = size_expr.cal_const_value(SyntaxType('unsigned'), userOp)
+        const_value = size_expr.cal_const_value(SyntaxType('integer'), userOp)
         instantiate_sizes.append(const_value)
 
     if (instantiated_op := get_instantiated_op(userOp, instantiate_dict, instantiate_sizes)) is not None:
@@ -263,7 +263,13 @@ class Operator_Path_id(SyntaxExpr):
             param_code = ", ".join(param.generate_code(syntaxUserOp, genEqu) for param in parameters)
             applied_code = GenerateCode.generate_imported_function_name(self.appliedOp)
             applied_code += f"({param_code})"
-            return applied_code
+
+            # 把参数赋值
+            # 这里把是否需要&给处理了，要不然后面会很麻烦
+            out_type=self.appliedOp.outParams[0].syntaxType
+            out_param,out_name=generate_tmp_symbol_and_register(syntaxUserOp,out_type)
+            genEqu.add_preEquations(assign_lhs_to_rhs_expr(out_name,applied_code,out_type,genEqu.depth,syntaxUserOp,rhs_need_address_list=[False]))
+            return out_name
 
         code = ""
         # inC需要自己进行构造，outC可能出现在此函数的outC中

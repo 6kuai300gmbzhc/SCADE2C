@@ -407,6 +407,11 @@ class GenerateCode:
                 if para.isOutput:
                     print("para init ", para.name)
                     code += generate_init_code(para.syntaxType, cur_node.var_change_name(para.name), 1)
+            if issubclass(type(cur_node),SyntaxDataDefScope):
+                for para in cur_node.localSymbolTable.values():
+                    if para.isOutput:
+                        print("para init ", para.name)
+                        code += generate_init_code(para.syntaxType, cur_node.var_change_name(para.name), 1)
         code += "}\n" \
                 "#endif\n"
         return code
@@ -647,21 +652,22 @@ def _ensure_list(x: T or Iterable[T]) -> list[T]:
         return list(cast(Iterable[T], x))
     return [x]
 
-def assign_lhs_to_rhs_expr(lhs, rhs, types, depth: int, data_def) -> str:
+def assign_lhs_to_rhs_expr(lhs, rhs, types, depth: int, data_def,rhs_need_address_list:list[bool]=None) -> str:
     lhs_l   = _ensure_list(lhs)
     rhs_l   = _ensure_list(rhs)
     types_l = _ensure_list(types)
-
+    if rhs_need_address_list is None:
+        rhs_need_address_list=[True]*len(rhs_l)
     if not (len(lhs_l) == len(rhs_l) == len(types_l)):
         raise ValueError(f"长度不一致: {lhs_l} / {rhs_l} / {types_l}")
 
     indent = '    ' * depth
     lines = []
-    for l, r, t in zip(lhs_l, rhs_l, types_l):
+    for l, r, t,need_address in zip(lhs_l, rhs_l, types_l,rhs_need_address_list):
         if l == '_':
             continue
         if t.get_real_type().type == "array":
-            lines.append(f'{indent}memcpy(&{l}, &({r}), sizeof({t.change_name()}));')
+            lines.append(f'{indent}memcpy(&{l}, {f"&({r})" if need_address else r}, sizeof({t.change_name()}));')
         else:
             lines.append(f'{indent}{l} = {r};')
     return '\n'.join(lines) + '\n'

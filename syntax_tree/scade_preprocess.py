@@ -279,8 +279,7 @@ def p_sensor_decl(p):
     'Sensor_decl : Id_one_or_more_with_comma COLON Type_expr'
     global cur_scope
     for ID in p[1]:
-        sensor_symbol = SyntaxSensorSymbol(name=ID)
-        sensor_symbol.syntaxType = p[3]
+        sensor_symbol = SyntaxSensorSymbol(name=ID,scope=cur_scope,syntax_type=p[3])
         cur_scope.add_sensorSymbol(sensor_symbol)
 
 

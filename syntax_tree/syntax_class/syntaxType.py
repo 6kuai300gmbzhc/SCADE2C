@@ -221,6 +221,12 @@ class SyntaxType:
     def is_basic_type(self):
         return self.get_real_type().type in self.basic_type
 
+    def is_type_determined(self):
+        real_type=self.get_real_type()
+        if real_type.type=="array":
+            return real_type.get_element_type_for_array().is_type_determined()
+        return real_type.type not in self.extend_type
+
     def resolve_path_id(self) -> 'SyntaxType':
         if self.type != "path_id" and self.type != "typevar":
             raise Exception(f"{self}不是pathId或者typevar,而是{self.type}")

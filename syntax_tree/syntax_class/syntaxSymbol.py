@@ -176,15 +176,20 @@ class SyntaxSensorSymbol:
 
     syntaxType: SyntaxType
     '''组合的类型类别,一直有效'''
-
-    def __init__(self, name: str):
+    scope: 'SyntaxScope'
+    '''此变量声明时所处于的scope，应该是package'''
+    def __init__(self, name: str,scope:SyntaxScope,syntax_type:'SyntaxType'):
         self.name = name
+        self.scope=scope
+        self.syntaxType=syntax_type
 
     def __repr__(self):
         s = ""
         s += self.name + " "
         s += str(self.syntaxType)
         return s
+    def change_name(self):
+        return f"{self.name}_{self.scope.get_global_name()}"
 class SyntaxGroupSymbol:
     name: str
     '''自定义变量名字'''

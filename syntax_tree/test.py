@@ -35,16 +35,11 @@ main_node_dict={
     "templateTest":"a::templateTest",
     "Automaton":"Automaton",
     "aircraft_brake_system":"aircraft_brake_system::brake_system",
-    # # "aircraft_brake_system":"wheelmodel::wheelmodel",
-    # "aircraft_brake_system":"airdynamic::airdynamic",
-    # "aircraft_brake_system":"lugrerunwaymodel::runwaymodel",
-    # "aircraft_brake_system":"pbtb::pbtb",
-    # "aircraft_brake_system":"slidratio::slidratio",
-    # "aircraft_brake_system":"aircraft_brake_system::t",
     "cruise_control":"System::SystemSimul",
     "Fighter":"World::Fighter::Fighter",
     "RollControl":"RollControl::RollControl",
-    "flight_control":"FlightControlSimulation::World"
+    "flight_control":"FlightControlSimulation::World",
+    "Pilot":"Pilot::Pilot"
 }
 class ScadeException(AssertionError):
     def __init__(self, value):
@@ -131,7 +126,7 @@ class MyTestCase(unittest.TestCase):
                     self.logger.error(f"{path} failed: {e}")
                     raise  # 让 unittest 记录失败
 
-    def test_one(self,path="aircraft_brake_system"):
+    def test_one(self,path="Fighter"):
         try:
             run_and_compile(self.test_dir, path)
             # 如果 test_one 没抛异常，说明通过了

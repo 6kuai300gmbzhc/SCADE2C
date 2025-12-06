@@ -99,10 +99,10 @@ class SyntaxUserOp(SyntaxDataDefScope):
     def hasInternalState(self,value):
         self._hasInternalState=value
     def set_sizeDecl(self, sizeDecl: list):
-        # 所有的sizeDecl都是正整数，设置成unsigned类型
+        # 所有的sizeDecl都是正整数，但是得设置成int类型，我觉得有问题，但是这就是残酷的现实
         for name in sizeDecl:
             const_symbol = SyntaxConstSymbol(name=name, scope=self)
-            const_symbol.syntaxType = SyntaxType(tar_type="unsigned")
+            const_symbol.syntaxType = SyntaxType(tar_type="integer")
             self.sizeParams.append(const_symbol)
 
     def get_size_symbol(self, name):

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from syntax_tree.syntax_class.expression import SyntaxExpr
 from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
 from syntax_tree.syntax_class.expression.pattern import SyntaxPattern
+from syntax_tree.syntax_class.hasRhs import HasRhs
 
 if TYPE_CHECKING:
     from syntax_tree.syntax_class.scope.package import SyntaxPackageScope
@@ -81,6 +82,8 @@ def post_process(root_scope: 'SyntaxPackageScope', main_operator_path: str):
     main_operator = root_scope.resolve_path(path[:-1]).get_userOp(path[-1])
     if not main_operator:
         raise UnknownIdentifierException("找不到主节点：" + main_operator_path)
+    # 处理openpackage
+    open_packages(root_scope)
     # 从主节点开始建图
     build_userOp_dependent_graph(main_operator, userOp_dependent_graph)
     sorted_order = userOp_dependent_graph.topological_sort()
@@ -98,11 +101,13 @@ def post_process(root_scope: 'SyntaxPackageScope', main_operator_path: str):
     print("============postProcess END============")
     return sorted_order, main_operator
 
-
+def open_packages(root_package: 'SyntaxPackageScope'):
+    root_package.open_packages()
+    for sub_package in root_package.childScopeTable.values():
+        open_packages(sub_package)
 def post_process_package(package: 'SyntaxPackageScope', userOpGraph: Graph) -> None:
     """package级别，即全局作用域和package作用域
     要处理open package"""
-    open_package(package)
     for sub_name, sub_package in package.childScopeTable.items():
         post_process_package(sub_package, userOpGraph)
     # 去残留，只要用到OP
@@ -126,18 +131,6 @@ def build_userOp_dependent_graph(userOp: 'SyntaxUserOp', userOp_dependent_graph:
             raise UnknownIdentifierException(f"{userOp.get_global_name()}找不到{dependent_path}")
         userOp_dependent_graph.addEdge(target_userOp, userOp)
         build_userOp_dependent_graph(target_userOp, userOp_dependent_graph)
-
-
-def open_package(package: 'SyntaxPackageScope') -> None:
-    """处理open package情况"""
-    open_list = package.openPackageList
-
-    if not open_list: return
-    for open_path in open_list:
-        tar_package = package.resolve_path(open_path.split("::"))
-        # 找到对应package后进行打开操作
-        package.open(tar_package)
-
 
 def post_process_userOp(userOp: 'SyntaxUserOp') -> None:
     """在这里，遍历内部所有语句，对语句进行拓扑排序，并更新此函数的输入输出参数之间的依赖关系"""
@@ -233,8 +226,25 @@ def post_process_data_def(data_def: 'SyntaxDataDefScope') -> Graph:
     # 在这里进行拓扑排序！在整理完其内部所有的依赖关系后进行排序
     if not data_def.equations:
         raise UserOpDependentException(data_def.get_global_name())
+    make_symbol_output_again(data_def.equations,data_def)
     return graph
 
+def make_symbol_output_again(equations:list["SyntaxEquation"],data_def):
+    '''想出来这个名字，我真应该少上点网了
+    因为时态算子等原因，右值变量并不一定与左值变量存在因果关系
+    所以在进行拓扑排序后，可能会有变量先使用再赋值的关系
+    所以这个环节把这种变量设置为output，这样就没问题了（确信）
+    '''
+    for i in range(len(equations)):
+        src_equation=equations[i]
+        used_symbol_names=src_equation.allUsedSymbolNames
+        for j in range(i+1,len(equations)):
+            dst_equation=equations[j]
+            lhs=[l.symbol_name for l in dst_equation.lhs]
+            for l in lhs:
+                if l in used_symbol_names:
+                    symbol=data_def.get_localVariable_InThisAndPreEnv(l)
+                    symbol.isOutput=True
 
 def post_process_equation(equation: 'SyntaxEquation', data_def) -> None:
     """这里要处理所有语句的变量依赖关系，从预处理阶段挪到这里了"""
@@ -268,6 +278,8 @@ def post_process_equation(equation: 'SyntaxEquation', data_def) -> None:
         equation.lhs2RhsDict[symbol_name].update(equation.rhsList[i])
         if symbol_name in equation.rhsList[i]:
             raise UserOpDependentException(data_def.get_global_name() + f"有句子{equation}依赖自身了")
+    if equation.expr:
+        equation.allUsedSymbolNames=equation.expr.allUsedSymbolNames
 
 
 def set_rhs_default(expr):
@@ -291,7 +303,12 @@ def process_subexpr_default(expr, data_def):
                                                                                                    SyntaxPattern):
             sub_expr.post_process(data_def)
 
-
+def after_post_process(expr:SyntaxExpr,data_def):
+    '''后处理的后处理，这里统计expr所有用到的变量之类的'''
+    flat_list = flatten_list(expr.objects)
+    for sub_expr in flat_list:
+        if issubclass(type(sub_expr),HasRhs):
+            expr.allUsedSymbolNames.update(sub_expr.allUsedSymbolNames)
 def flatten_list(input_list: list) -> list:
     """把嵌套列表展开，不是列表的输入也返回一个列表"""
     if not type(input_list) == list:

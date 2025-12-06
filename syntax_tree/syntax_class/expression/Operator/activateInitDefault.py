@@ -65,4 +65,4 @@ class Operator_activateInitDefault(SyntaxExpr):
         self.paramExprs=params
         self.sub_operator.set_params(params)
     def get_applied_op(self):
-        return self.appliedOp
+        return self.sub_operator.get_applied_op()

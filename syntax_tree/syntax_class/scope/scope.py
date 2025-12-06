@@ -167,11 +167,7 @@ class SyntaxScope:
             path_id: 带::的路径，指向某个userop
         """
         target_package, op_name = self.resolve_path_id(path_id)
-        tar_op = None
-        while tar_op is None and target_package is not None:
-            tar_op = target_package.get_userOp(op_name)
-            target_package: SyntaxPackageScope = target_package.prevScope
-        return tar_op
+        return target_package.get_userOp(op_name)
 
     def check_and_get_constant_param(self, param_path_id):
         """检查这个参数是不是一个常数，如果是则返回syntaxconstSymbol，否则返回None
@@ -192,6 +188,10 @@ class SyntaxScope:
         tar_package, name = self.resolve_path_id(type_path_id)
         return tar_package.get_type_symbol(name)
 
+    def check_and_get_sensor_symbol(self,sensor_path_id)->'SyntaxSensorSymbol':
+        tar_package, name = self.resolve_path_id(sensor_path_id)
+        return tar_package.get_sensor_symbol(name)
+
     def get_const_symbol(self, symbol_name):
         raise Exception(f"{self.name} 作为{self.type}没有const")
 
@@ -201,8 +201,6 @@ class SyntaxScope:
     def var_change_name(self, name):
         if name == "_": return name
         symbol = self.get_localVariable_InThisAndPreEnv(name)
-        if symbol is None:
-            symbol = self.get_tmpSymbol(name)
         if symbol is not None:
             if symbol.isOutput:
                 return f"outC->{symbol.name}"
@@ -212,6 +210,8 @@ class SyntaxScope:
                 return symbol.name
         else:
             symbol = self.check_and_get_constant_param(name)
+            if symbol is None:
+                symbol = self.check_and_get_sensor_symbol(name)
             if symbol is None:
                 raise ValueError(f"var_change_name error , name:{name}")
             return symbol.change_name()

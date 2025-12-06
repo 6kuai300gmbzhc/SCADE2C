@@ -21,9 +21,10 @@ def wrap_method(original_method):
     def wrapper(self, *args, **kwargs):
         if self.post_processed:
             return self.__post_result
-        from syntax_tree.scade_postprocess import process_subexpr_default
+        from syntax_tree.scade_postprocess import process_subexpr_default,after_post_process
         process_subexpr_default(self, *args, **kwargs)
         result = original_method(self, *args, **kwargs)
+        after_post_process(self, *args, **kwargs)
         self.post_processed=True
         self.__post_result=result
         return result

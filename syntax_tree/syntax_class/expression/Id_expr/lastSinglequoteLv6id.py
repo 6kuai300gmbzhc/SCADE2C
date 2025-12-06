@@ -25,6 +25,7 @@ class Id_expr_lastSinglequoteLv6id(SyntaxExpr):
             raise UnknownIdentifierException(self.name)
         if self.tar_symbol.lastExpr:
             self.tar_symbol.lastExpr.post_process(userOp)
+        self.allUsedSymbolNames={self.name}
     def type_inference(self, lhs_type_list: list['SyntaxType'], data_def:'SyntaxUserOp'):
         # 要求只能提供一个左值类型，所以需要校验
         if len(lhs_type_list) != 1:

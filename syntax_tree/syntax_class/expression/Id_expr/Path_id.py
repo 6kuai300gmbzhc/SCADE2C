@@ -4,7 +4,7 @@ from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
 from typing import TYPE_CHECKING
 
 from syntax_tree.syntax_class.Exceptions import *
-from syntax_tree.syntax_class.syntaxSymbol import SyntaxConstSymbol
+from syntax_tree.syntax_class.syntaxSymbol import SyntaxConstSymbol, SyntaxSensorSymbol, SyntaxVariableSymbol
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 if TYPE_CHECKING:
     from syntax_tree.scade_generate import GenEqu
@@ -19,12 +19,17 @@ class Id_expr_Path_id(SyntaxExpr):
         if symbol is not None:
             self.set_rhs([])
         else:
-            symbol = userOp.get_localVariable_InThisAndPreEnv(self.name)
+            symbol = userOp.get_my_package().get_sensor_symbol(self.name)
             if symbol is None:
-                raise UnknownIdentifierException(
-                    self.name + " " + str(self) + f"在{userOp.get_global_name()}")  # 有枚举类型，可恶,把枚举类型给放到常数变量里了
-            self.set_rhs([self.name])
+                symbol = userOp.get_localVariable_InThisAndPreEnv(self.name)
+                if symbol is None:
+                    raise UnknownIdentifierException(
+                        self.name + " " + str(self) + f"在{userOp.get_global_name()}")  # 有枚举类型，可恶,把枚举类型给放到常数变量里了
+                self.set_rhs([self.name])
+            else:
+                self.set_rhs(([]))
         self.set_symbol(symbol)
+        self.allUsedSymbolNames={self.name}
     def type_inference(self, lhs_type_list: list['SyntaxType'], userOp:'SyntaxUserOp'):
         # 要求只能提供一个左值类型，所以需要校验
         if len(lhs_type_list) != 1:
@@ -37,7 +42,7 @@ class Id_expr_Path_id(SyntaxExpr):
         else:
             raise TypeMismatchException(f"{self}有type为{expr_type.get_real_type()}", required_type.get_real_type(),
                                         userOp)
-        if isinstance(symbol,SyntaxConstSymbol):
+        if isinstance(symbol,SyntaxConstSymbol) or isinstance(symbol,SyntaxSensorSymbol):
             self.set_clock_list([SyntaxClockExpr.init_clock_base(userOp)])
         else:
             self.set_clock_list([symbol.whenExpr])
@@ -56,6 +61,8 @@ class Id_expr_Path_id(SyntaxExpr):
     def is_clock_expr(self):
         if self.syntaxSymbol is None:
             self.post_process(self.scope)
+        if not isinstance(self.syntaxSymbol,SyntaxVariableSymbol):
+            return False
         return self.syntaxSymbol.isClock
     def cal_const_value(self,required_type:'SyntaxType',scope:'SyntaxScope') -> 'ConstValue':
         path_id = self.objects[0]
