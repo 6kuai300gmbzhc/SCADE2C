@@ -126,7 +126,7 @@ class MyTestCase(unittest.TestCase):
                     self.logger.error(f"{path} failed: {e}")
                     raise  # 让 unittest 记录失败
 
-    def test_one(self,path="Fighter"):
+    def test_one(self,path="aa"):
         try:
             run_and_compile(self.test_dir, path)
             # 如果 test_one 没抛异常，说明通过了

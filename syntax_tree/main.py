@@ -1,8 +1,8 @@
 import argparse
-from .scade_preprocess import get_parse
-from .scade_postprocess import post_process
-from .scade_type_inference import type_inference
-from .scade_generate import generate
+from syntax_tree.scade_preprocess import get_parse
+from syntax_tree.scade_postprocess import post_process
+from syntax_tree.scade_type_inference import type_inference
+from syntax_tree.scade_generate import generate
 
 def get_final_order(order):
     final_order=list()

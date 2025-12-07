@@ -17,6 +17,12 @@ from typing import TypeVar, cast
 if TYPE_CHECKING:
     from syntax_tree.syntax_class.scope.clocked_block import SyntaxIfBlock
 
+if getattr(sys, 'frozen', False):
+    # 打包后的路径
+    template_path = os.path.join(sys._MEIPASS, 'template')
+else:
+    # 开发环境下的路径
+    template_path = './template'
 
 class GenerateCode:
     def __init__(self, rootNode, mainNode, outputDir):
@@ -72,7 +78,7 @@ class GenerateCode:
         pass
 
     def generate_types_file(self):
-        src_file = "./template/kcg_types.h"
+        src_file = os.path.join(template_path, 'kcg_types.h')
         target_file = f"{self.outputDir}/kcg_types.h"
         # write_file_from_src_to_target(src_file,target_file)
 
@@ -89,7 +95,7 @@ class GenerateCode:
     # write_file(target_file,content,"a")
 
     def generate_assign_file(self):
-        src_file = "./template/kcg_assign.h"
+        src_file =os.path.join(template_path, 'kcg_assign.h')
         target_file = f"{self.outputDir}/kcg_assign.h"
         # write_file_from_src_to_target(src_file,target_file)
 
@@ -126,8 +132,8 @@ class GenerateCode:
             target.write(code)
 
     def generate_macro_libmathext_file(self):
-        path_dict = {"./template/macro_libmathext32.h": f"{self.outputDir}/macro_libmathext32.h",
-                     "./template/macro_libmathext64.h": f"{self.outputDir}/macro_libmathext64.h"}
+        path_dict = {os.path.join(template_path, 'macro_libmathext32.h'): f"{self.outputDir}/macro_libmathext32.h",
+                     os.path.join(template_path, 'macro_libmathext64.h'): f"{self.outputDir}/macro_libmathext64.h"}
         for k, v in path_dict.items():
             write_file_from_src_to_target(k, v)
 
