@@ -26,6 +26,7 @@ class SyntaxClockExpr(HasRhs):
     ignore_clock_check:bool=False
     '''是否忽略检查，应用在常量表达式的时钟上'''
     def __init__(self, ID: str, type: str,scope:'SyntaxUserOp'):
+        super().__init__()
         self.ID = ID
         self.type = type
         self.scope=scope

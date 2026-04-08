@@ -588,13 +588,78 @@ class GenerateCode:
             file.write(test_code)
 
     def generate_compile_bash(self, nodes: list[SyntaxUserOp]):
-        """生成一个编译bash"""
+        """生成一个编译bash
+        额外再生成一个cmake文件用于代码覆盖率测试"""
         node_names = [node.get_global_name() + '.c' for node in nodes if not node.isImported]
         content = "set - x\n" \
                   "if [ -z ${C_COMPILER} ]; then C_COMPILER=gcc; fi\n" \
                   f"$C_COMPILER -w -o {nodes[-1].name}.exec {' '.join(node_names)} kcg_consts.c" \
                   f" -lpthread test_{nodes[-1].get_global_name()}.c -lm ${{C_LIBS}}\n"
         file_name = f"{self.outputDir}/kcg_compile.sh"
+        with open(file_name, "w", newline='\n') as file:
+            file.write(content)
+        node_names = [node.get_global_name() + '.c' for node in nodes if not node.isImported]
+        target_name = nodes[-1].name
+        target_global = nodes[-1].get_global_name()
+
+        content = f"""#!/bin/bash
+        set -e
+
+        # ========== 1. 编译 ==========
+        echo "=== 编译插桩版本 ==="
+        export C_COMPILER=clang
+        export COVERAGE_FLAGS="-fprofile-instr-generate -fcoverage-mapping"
+
+        # 清理旧数据
+        rm -f {target_name}.exec *.profraw *.profdata
+        rm -rf coverage_report
+
+        clang -w $COVERAGE_FLAGS \\
+            -o {target_name}.exec \\
+            {' '.join(node_names)} kcg_consts.c test_{target_global}.c \\
+            -lpthread -lm ${{C_LIBS}}
+
+        # ========== 2. 运行程序 ==========
+        echo "=== 运行测试 ==="
+        # 设置输出文件名（避免多进程冲突可加 %p 表示 PID）
+        export LLVM_PROFILE_FILE="{target_name}_%p.profraw"
+        ./{target_name}.exec
+
+        # ========== 3. 合并数据 ==========
+        echo "=== 处理覆盖率数据 ==="
+        # 查找所有生成的 .profraw 文件并合并
+        profraw_files=$(ls *.profraw 2>/dev/null)
+        if [ -z "$profraw_files" ]; then
+            echo "错误：未生成 .profraw 文件"
+            exit 1
+        fi
+
+        llvm-profdata merge -sparse *.profraw -o {target_name}.profdata
+
+        # ========== 4. 生成报告 ==========
+        echo "=== 生成覆盖率报告 ==="
+
+        # 4.1 命令行摘要
+        echo "--- 覆盖率摘要 ---"
+        llvm-cov report ./{target_name}.exec -instr-profile={target_name}.profdata \\
+            -ignore-filename-regex='(/usr/include|/usr/lib)'
+
+        # 4.2 HTML 报告（推荐）
+        echo "--- 生成 HTML 报告 ---"
+        llvm-cov show ./{target_name}.exec -instr-profile={target_name}.profdata \\
+            -format=html \\
+            -output-dir=./coverage_report \\
+            -show-line-counts-or-regions \\
+            -show-instantiations \\
+            -ignore-filename-regex='(/usr/include|/usr/lib|test_)'
+
+        echo "========================================"
+        echo "覆盖率分析完成！"
+        echo "HTML 报告位置: coverage_report/index.html"
+        echo "========================================"
+        """
+
+        file_name = f"{self.outputDir}/kcg_coverage.sh"
         with open(file_name, "w", newline='\n') as file:
             file.write(content)
 

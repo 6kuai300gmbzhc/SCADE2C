@@ -65,7 +65,6 @@ class Tempo_expr_FBY(SyntaxExpr):
 
         return f"{syntaxUserOp.var_change_name(tmp_arr_var_name)}[{syntaxUserOp.var_change_name(tmp_idx_var_name)}]"
         #
-        # # 这边都没有代码生成了，已经变成pre了
         # return self.equivalent_expr.generate_code(syntaxUserOp,genEqu)
     def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)

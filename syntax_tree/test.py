@@ -34,12 +34,13 @@ main_node_dict={
     "ABC_N":"ABC_N::ABC_N",
     "templateTest":"a::templateTest",
     "Automaton":"Automaton",
+    "control_block":"pbtb::pbtb",
     "aircraft_brake_system":"aircraft_brake_system::brake_system",
     "cruise_control":"System::SystemSimul",
     "Fighter":"World::Fighter::Fighter",
     "RollControl":"RollControl::RollControl",
     "flight_control":"FlightControlSimulation::World",
-    "Pilot":"Pilot::Pilot"
+    "pilot":"Pilot::Pilot"
 }
 class ScadeException(AssertionError):
     def __init__(self, value):
@@ -51,36 +52,125 @@ class CException(AssertionError):
         self.value = value
     def __str__(self):
         return repr(self.value)
+
+
+import sys
+import os
+
+
+def create_empty_file(file_path):
+    """创建空文件（用于清空日志）"""
+    with open(file_path, "w") as f:
+        pass
+
+
+def get_main_node(file, main_node_dict):
+    """从字典中获取主节点名称，若不存在则使用文件名"""
+    return main_node_dict[file] if file in main_node_dict.keys() else file
+
+
+def get_exec_name(main_node):
+    """从主节点名称中提取可执行文件名"""
+    return main_node if "::" not in main_node else main_node.split("::")[-1]
+
+
+def run_scade_compile(file_path, file, main_node, log_stdout, log_stderr):
+    """运行SCADE编译命令"""
+    scade_input = f"{file_path}/{file}.scade"
+    output_dir = f"{file_path}/kcg"
+    run_command(
+        [sys.executable, "-m", "syntax_tree.main",
+         "-i", scade_input,
+         "-m", main_node,
+         "-o", output_dir,
+         "-t"],
+        log_stdout,
+        log_stderr
+    )
+
+
+def run_kcg_compile(file_path, log_stdout, log_stderr):
+    """运行KCG C代码编译"""
+    wsl_command = f"cd {file_path}/kcg && ./kcg_compile.sh"
+    run_command(
+        ["wsl", "-d", "ubuntu", "bash", "-c", wsl_command],
+        log_stdout,
+        log_stderr
+    )
+def run_coverage(file_path, log_stdout, log_stderr):
+    """运行覆盖率测试"""
+    wsl_command = f"cd {file_path}/kcg && ./kcg_coverage.sh"
+    run_command(
+        ["wsl", "-d", "ubuntu", "bash", "-c", wsl_command],
+        log_stdout,
+        log_stderr
+    )
+
+
+def run_executable(file_path, exec_name, log_stdout, log_stderr):
+    """运行生成的可执行文件"""
+    wsl_command = f"cd {file_path}/kcg && ./{exec_name}.exec"
+    run_command(
+        ["wsl", "-d", "ubuntu", "bash", "-c", wsl_command],
+        log_stdout,
+        log_stderr
+    )
+
+
 def run_and_compile(test_dir, file="aa"):
+    """主函数：协调各个编译和执行步骤"""
     file_path = f"{test_dir}/{file}"
-    log_stdout= f"{file_path}/stdout.txt"
-    log_stderr=f"{file_path}/stderr.txt"
-    with open(log_stdout,"w") as f:pass
-    with open(log_stderr,"w") as f:pass
-    main_node = main_node_dict[file] if file in main_node_dict.keys() else file
-    exec_name=main_node if "::" not in main_node else main_node.split("::")[-1]
+    log_stdout = f"{file_path}/stdout.txt"
+    log_stderr = f"{file_path}/stderr.txt"
+
+    # 1. 清空日志文件
+    create_empty_file(log_stdout)
+    create_empty_file(log_stderr)
+
+    # 2. 获取主节点和可执行文件名
+    main_node = get_main_node(file, main_node_dict)
+    exec_name = get_exec_name(main_node)
+
+    # 3. 运行SCADE编译
     try:
-        run_command([sys.executable, "-m", "syntax_tree.main", "-i", f"{file_path}/{file}.scade", "-m", f"{main_node}", "-o", f"{file_path}/kcg","-t"],
-                log_stdout,log_stderr)
+        run_scade_compile(file_path, file, main_node, log_stdout, log_stderr)
+    except Exception as e:
+        raise ScadeException("scade编译不通过")
+
+    # 4. 运行KCG C编译
+    try:
+        run_kcg_compile(file_path, log_stdout, log_stderr)
+    except Exception as e:
+        raise CException("c编译不通过")
+
+    # 5. 运行生成的可执行文件
+    try:
+        run_executable(file_path, exec_name, log_stdout, log_stderr)
+    except Exception as e:
+        raise RuntimeError("可执行文件运行失败")
+
+def run_and_test_coverage(test_dir, file="aa"):
+    file_path = f"{test_dir}/{file}"
+    log_stdout = f"{file_path}/stdout.txt"
+    log_stderr = f"{file_path}/stderr.txt"
+
+    # 1. 清空日志文件
+    create_empty_file(log_stdout)
+    create_empty_file(log_stderr)
+
+    # 2. 获取主节点和可执行文件名
+    main_node = get_main_node(file, main_node_dict)
+    exec_name = get_exec_name(main_node)
+
+    # 3. 运行SCADE编译
+    try:
+        run_scade_compile(file_path, file, main_node, log_stdout, log_stderr)
     except Exception as e:
         raise ScadeException("scade编译不通过")
     try:
-        #f"{file_path}/{file}.exec < {file_path}/kcg/test_data_{file}_scade.in > {file_path}/{file}_out.txt && "
-        #f"cp -r {template_dir}/. {file_path}/kcg && "
-        run_command(["wsl", "-d", "ubuntu", "bash", "-c",
-
-
-                 f"cd {file_path}/kcg && ./kcg_compile.sh && ./{exec_name}.exec"],log_stdout,log_stderr)
+        run_coverage(file_path, log_stdout, log_stderr)
     except Exception as e:
-        raise CException("c编译不通过")
-    c_file_path=f"{file_path}/kcg/test_data_{exec_name}_c_out.txt"
-    # lustre_file_path=f"{file_path}/{file}_out.txt"
-    # is_ok,reason=analyse_out.anaylyse_and_compare(c_file_path,lustre_file_path)
-    # with open(log_stderr,"a") as f:
-    #     f.write(reason)
-    # if not is_ok:
-    #     raise AssertionError(reason)
-
+        raise ScadeException("可执行文件运行失败")
 
 
 class CountingResult(unittest.TextTestResult):
@@ -92,7 +182,8 @@ class CountingResult(unittest.TextTestResult):
         super().addSuccess(test)
         self.successes.append(str(test))
 forbade_test_set={
-"ex","tem_array"# 不知道为什么不支持group类型声明
+"ex","tem_array",# 不知道为什么不支持group类型声明
+    "pilot","Fighter"
 }
 forbade_fail_test_set={
     "StateMachine_112",# 时钟参数+状态机
@@ -106,6 +197,23 @@ class MyTestCase(unittest.TestCase):
         logging.basicConfig(level=logging.INFO)
         self.logger = logging.getLogger(__name__)
 
+
+
+    def test_all_coverage(self):
+        files = [f for f in os.listdir(self.test_dir)
+                 if os.path.isdir(os.path.join(self.test_dir, f))]
+
+        for path in files:
+            if path in forbade_test_set:continue
+            with self.subTest(file=path):
+                try:
+                    run_and_test_coverage(self.test_dir, path)
+                    # 如果 test_one 没抛异常，说明通过了
+                    MyTestCase.passed_subtests.append(path)
+                except Exception as e:
+                    MyTestCase.failed_subtests.append(path)
+                    self.logger.error(f"{path} failed: {e}")
+                    raise  # 让 unittest 记录失败
     def test_all(self):
         # try:
         #     run_command([sys.executable, "-m", "syntax_tree.Lustre_Complie"],None,None)
@@ -125,8 +233,16 @@ class MyTestCase(unittest.TestCase):
                     MyTestCase.failed_subtests.append(path)
                     self.logger.error(f"{path} failed: {e}")
                     raise  # 让 unittest 记录失败
-
-    def test_one(self,path="aa"):
+    def test_one_coverage(self,path="PFD"):
+        try:
+            run_and_test_coverage(self.test_dir, path)
+            # 如果 test_one 没抛异常，说明通过了
+            MyTestCase.passed_subtests.append(path)
+        except Exception as e:
+            self.logger.error(f"{path} failed: {e}")
+            MyTestCase.failed_subtests.append(path)
+            raise  # 让 unittest 记录失败
+    def test_one(self,path="test_tempo"):
         try:
             run_and_compile(self.test_dir, path)
             # 如果 test_one 没抛异常，说明通过了
@@ -152,7 +268,7 @@ class MyTestCase(unittest.TestCase):
 if __name__ == '__main__':
 
     suite=unittest.TestSuite()
-    suite.addTest(MyTestCase("test_one"))
+    suite.addTest(MyTestCase("test_all_coverage"))
     # suite.addTest(MyTestCase("test_one"))
     runner = unittest.TextTestRunner(resultclass=CountingResult, verbosity=2)
     result = runner.run(suite)

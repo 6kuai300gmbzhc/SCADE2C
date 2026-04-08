@@ -2,7 +2,7 @@
 #define _KCG_TYPES_H_
 
 #include "stddef.h"
-
+#include <string.h>
 #define KCG_MAPW_CPY
 
 // #include "./user_macros.h"

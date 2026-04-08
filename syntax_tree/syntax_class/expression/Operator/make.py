@@ -18,7 +18,7 @@ class Operator_make(SyntaxExpr):
             raise UnknownIdentifierException(tar_type_name)
         self.paramExpr.post_process(data_def)
         rhs=list(set())
-        add_rhs_to_each(self.paramExpr.rhsList,rhs)
+        rhs=add_rhs_to_each(self.paramExpr.rhsList,rhs)
         self.set_rhs(rhs)
     def type_inference(self, lhs_type_list, data_def):
         required_type = lhs_type_list[0].get_real_type()

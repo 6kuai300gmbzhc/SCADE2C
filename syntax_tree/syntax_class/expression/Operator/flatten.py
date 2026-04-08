@@ -20,7 +20,7 @@ class Operator_flatten(SyntaxExpr):
         self.paramExpr.post_process(data_def)
         param_rhs=[set.union(*self.paramExpr.rhsList)]
         rhs=param_rhs*len(self.struct_type.fields)
-        add_rhs_to_each(self.paramExpr.rhsList,rhs)
+        rhs=add_rhs_to_each(self.paramExpr.rhsList,rhs)
         self.returnNum=len(self.struct_type.fields)
         self.rhsList=rhs
     def type_inference(self, lhs_type_list, data_def):
