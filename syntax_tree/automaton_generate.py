@@ -94,7 +94,7 @@ def generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, dep
 
 
 def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton: SyntaxAutomaton,
-                          code_generator: scade_generate.GenerateCode, depth: int = 1) -> str:
+                          code_generator: scade_generate.GenerateCode, depth: int = 1) -> (str,bool):
     """给arrow生成强转移代码，可以嵌套的生成代码"""
     code = ""
     # 生成arrow中action部分的代码
@@ -110,10 +110,11 @@ def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton
             code += f"{'    ' * depth}{get_reset_act(automaton)} = kcg_false;\n"
         else:
             code += f"{'    ' * depth}{get_reset_act(automaton)} = kcg_true;\n"
-        return code
+        return code,False
     else:
         # 这里开始递归
         tmp_decls = ""  # 临时变量声明
+        must_trigger=False # 是不是一定会触发某个状态转移
         for i in range(len(arrow.ifExprList)):
             # 给判断表达式生成一个句子，这样即使是复杂情况也可以正确执行
             # tmp_n = 表达式
@@ -125,23 +126,37 @@ def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton
             sub_arrow = arrow.ifExprList[i][1]
 
             tmp_decls, tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
-
-            if i == 0:
-                code += f"{'    ' * depth}if({tmp_name}){{\n"
+            if tmp_decls=="kcg_true":
+                if i==0:
+                    code_arrow,_=generate_arrow_strong(sub_arrow, from_state, automaton, code_generator, depth)
+                    code += code_arrow
+                else:
+                    code += f"{'    ' * depth}else{{\n"
+                    code_arrow,_=generate_arrow_strong(sub_arrow, from_state, automaton, code_generator, depth+1)
+                    code += code_arrow
+                    code += f"{'    ' * depth}}}\n"
+                must_trigger=True
+                break
             else:
-                code += f"{'    ' * depth}else if({tmp_name}){{\n"
-            code += generate_arrow_strong(sub_arrow, from_state, automaton, code_generator, depth + 1)
-            code += f"{'    ' * depth}}}\n"
-        if arrow.elseExpr:
+                if i == 0:
+                    code += f"{'    ' * depth}if({tmp_name}){{\n"
+                else:
+                    code += f"{'    ' * depth}else if({tmp_name}){{\n"
+                code_arrow,_=generate_arrow_strong(sub_arrow, from_state, automaton, code_generator, depth + 1)
+                code += code_arrow
+                code += f"{'    ' * depth}}}\n"
+        if not must_trigger and arrow.elseExpr:
             code += f"{'    ' * depth}else{{\n"
-            code += generate_arrow_strong(arrow.elseExpr, from_state, automaton, code_generator, depth + 1)
+            code_arrow,_ =generate_arrow_strong(arrow.elseExpr, from_state, automaton, code_generator, depth + 1)
+            code += code_arrow
             code += f"{'    ' * depth}}}\n"
+            must_trigger=True
         code = tmp_decls + code  # 把临时变量插入
-        return code
+        return code,must_trigger
 
 
 def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: SyntaxAutomaton,
-                        code_generator: scade_generate.GenerateCode, depth: int = 1) -> str:
+                        code_generator: scade_generate.GenerateCode, depth: int = 1) -> (str,bool):
     """生成弱转移的代码，也是可以嵌套生成代码"""
     code = ""
     # 生成arrow中action部分的代码
@@ -158,10 +173,11 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
             code+=f"{'    '* depth}{get_reset_nxt(automaton)} = kcg_false;\n"
         else:
             code += f"{'    '* depth}{get_reset_nxt(automaton)} = kcg_true;\n"
-        return code
+        return code,False
     else:
         # 这里开始递归
         tmp_decls = ""  # 临时变量声明
+        must_trigger=False
         for i in range(len(arrow.ifExprList)):
             # 给判断表达式生成一个句子，这样即使是复杂情况也可以正确执行
             # tmp_n = 表达式
@@ -171,19 +187,34 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
             sub_expr = arrow.ifExprList[i][0]
             sub_arrow = arrow.ifExprList[i][1]
             tmp_decl, tmp_name = generate_expr_for_arrow_conditions(from_state, code_generator, sub_expr, depth)
-            tmp_decls += tmp_decl
-            if i == 0:
-                code += f"{'    ' * depth}if({tmp_name}){{\n"
+            if tmp_name=="kcg_true":
+                if i==0:
+                    code_arrow,_=generate_arrow_weak(sub_arrow, from_state, automaton, code_generator, depth)
+                    code += code_arrow
+                else:
+                    code += f"{'    ' * depth}else{{\n"
+                    code_arrow,_=generate_arrow_weak(sub_arrow, from_state, automaton, code_generator, depth+1)
+                    code += code_arrow
+                    code += f"{'    ' * depth}}}\n"
+                must_trigger=True
+                break
             else:
-                code += f"{'    ' * depth}else if({tmp_name}){{\n"
-            code += generate_arrow_weak(sub_arrow, from_state, automaton, code_generator, depth + 1)
-            code += f"{'    ' * depth}}}\n"
-        if arrow.elseExpr:
+                tmp_decls += tmp_decl
+                if i == 0:
+                    code += f"{'    ' * depth}if({tmp_name}){{\n"
+                else:
+                    code += f"{'    ' * depth}else if({tmp_name}){{\n"
+                code_arrow,_=generate_arrow_weak(sub_arrow, from_state, automaton, code_generator, depth + 1)
+                code += code_arrow
+                code += f"{'    ' * depth}}}\n"
+        if not must_trigger and arrow.elseExpr:
             code += f"{'    ' * depth}else{{\n"
-            code += generate_arrow_weak(arrow.elseExpr, from_state, automaton, code_generator, depth + 1)
+            code_arrow,_=generate_arrow_weak(arrow.elseExpr, from_state, automaton, code_generator, depth + 1)
+            code += code_arrow
             code += f"{'    ' * depth}}}\n"
+            must_trigger=True
         code = tmp_decls + code  # 把临时变量插入
-        return code
+        return code,must_trigger
 
 def generate_default_expr_for_returned_in_actions(state,symbols,depth)->str:
     code=""
@@ -207,22 +238,21 @@ def generate_state_strong_transitions(automaton: SyntaxAutomaton, state: SyntaxS
     tmp_arrow = SyntaxArrow(type="if",state=state, target=None, ifExpr=state.unlessTransitions, elseExpr=None)
     # 将transitions变成一个arrow处理
     # else的情况要手动添加，也就是没有转移的时候
-    code += generate_arrow_strong(tmp_arrow, state, automaton, code_generator, depth)
+    code_arrow,must_trigger=generate_arrow_strong(tmp_arrow, state, automaton, code_generator, depth)
+    code += code_arrow
     # 给返回值赋值
-
-    if len(state.unlessTransitions) != 0:
-        code += f"{'    ' * (depth)}else{{\n"
-        code += generate_default_expr_for_returned_in_actions(state, state.returnSymbolInUnlessActions,depth+1)
-        code += f"{'    ' * (depth + 1)}{get_state_act(automaton)} = {get_state_enum_name(state)};\n" \
-                f"{'    ' * (depth + 1)}{get_fired_strong(automaton)} = {get_no_trans(automaton)};\n"
-        code += f"{'    ' * (depth + 1)}{get_reset_act(automaton)} = kcg_false;\n"
-        code += f"{'    ' * (depth)}}}\n"
-    else:
-        code += f"{'    ' * (depth)}{get_state_act(automaton)} = {get_state_enum_name(state)};\n" \
-                f"{'    ' * (depth)}{get_fired_strong(automaton)} = {get_no_trans(automaton)};\n"
-        code += f"{'    ' * (depth)}{get_reset_act(automaton)} = kcg_false;\n"
-
-
+    if not must_trigger:
+        if len(state.unlessTransitions) != 0:
+            code += f"{'    ' * (depth)}else{{\n"
+            code += generate_default_expr_for_returned_in_actions(state, state.returnSymbolInUnlessActions,depth+1)
+            code += f"{'    ' * (depth + 1)}{get_state_act(automaton)} = {get_state_enum_name(state)};\n" \
+                    f"{'    ' * (depth + 1)}{get_fired_strong(automaton)} = {get_no_trans(automaton)};\n"
+            code += f"{'    ' * (depth + 1)}{get_reset_act(automaton)} = kcg_false;\n"
+            code += f"{'    ' * (depth)}}}\n"
+        else:
+            code += f"{'    ' * (depth)}{get_state_act(automaton)} = {get_state_enum_name(state)};\n" \
+                    f"{'    ' * (depth)}{get_fired_strong(automaton)} = {get_no_trans(automaton)};\n"
+            code += f"{'    ' * (depth)}{get_reset_act(automaton)} = kcg_false;\n"
     return code
 
 
@@ -245,14 +275,16 @@ def generate_state_weak_transitions(automaton: SyntaxAutomaton, state: SyntaxSta
         tmp_arrow = SyntaxArrow(type="if", state=state,target=None, ifExpr=state.untilTransitions, elseExpr=None)
         # 将transitions变成一个arrow处理
         # else的情况要手动添加，也就是没有转移的情况
-        code += generate_arrow_weak(tmp_arrow, state, automaton, code_generator, depth + 1)
-        code += f"{'    ' * (depth + 1)}else{{\n"
-        # 这里是有弱转移，但是并未触发的情况
-        # 需要补充上弱转移action中的赋值语句，设置default，这里应该是在第二次遍历时的工作
-        code += generate_default_expr_for_returned_in_actions(state, state.returnSymbolInUntilActions,depth+2)
-        code += f"{'    ' * (depth + 2)}outC->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n"
-        code += f"{'    ' * (depth + 2)}{get_reset_nxt(automaton)} = kcg_false;\n"
-        code += f"{'    ' * (depth + 1)}}}\n"
+        code_arrow,must_trigger=generate_arrow_weak(tmp_arrow, state, automaton, code_generator, depth + 1)
+        code += code_arrow
+        if not must_trigger:
+            code += f"{'    ' * (depth + 1)}else{{\n"
+            # 这里是有弱转移，但是并未触发的情况
+            # 需要补充上弱转移action中的赋值语句，设置default，这里应该是在第二次遍历时的工作
+            code += generate_default_expr_for_returned_in_actions(state, state.returnSymbolInUntilActions,depth+2)
+            code += f"{'    ' * (depth + 2)}outC->{get_state_nxt(automaton)} = {get_state_enum_name(state)};\n"
+            code += f"{'    ' * (depth + 2)}{get_reset_nxt(automaton)} = kcg_false;\n"
+            code += f"{'    ' * (depth + 1)}}}\n"
     else:
         # 若无转移则不用处理action内部代码
 

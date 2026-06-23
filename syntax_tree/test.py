@@ -233,7 +233,7 @@ class MyTestCase(unittest.TestCase):
                     MyTestCase.failed_subtests.append(path)
                     self.logger.error(f"{path} failed: {e}")
                     raise  # 让 unittest 记录失败
-    def test_one_coverage(self,path="PFD"):
+    def test_one_coverage(self,path="StateMachine_1"):
         try:
             run_and_test_coverage(self.test_dir, path)
             # 如果 test_one 没抛异常，说明通过了
@@ -242,7 +242,7 @@ class MyTestCase(unittest.TestCase):
             self.logger.error(f"{path} failed: {e}")
             MyTestCase.failed_subtests.append(path)
             raise  # 让 unittest 记录失败
-    def test_one(self,path="test_tempo"):
+    def test_one(self,path="StateMachine_1"):
         try:
             run_and_compile(self.test_dir, path)
             # 如果 test_one 没抛异常，说明通过了
@@ -268,7 +268,7 @@ class MyTestCase(unittest.TestCase):
 if __name__ == '__main__':
 
     suite=unittest.TestSuite()
-    suite.addTest(MyTestCase("test_all_coverage"))
+    suite.addTest(MyTestCase("test_all"))
     # suite.addTest(MyTestCase("test_one"))
     runner = unittest.TextTestRunner(resultclass=CountingResult, verbosity=2)
     result = runner.run(suite)

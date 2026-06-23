@@ -49,15 +49,21 @@ class Switch_expr_IF(SyntaxExpr):
             if lhs_type.get_real_type().type == "array":
                 tmp_symbol, tmp_name = generate_tmp_symbol_and_register(syntaxUserOp, lhs_type)
                 depth=genEqu.depth
-                pre_code=f"{'    '*depth}if({cond_code}){{\n" \
-                         f"{assign_lhs_to_rhs_expr(tmp_name,ele_1,[lhs_type],depth+1,syntaxUserOp)}" \
-                         f"{'    '*depth}}}else{{\n" \
-                         f"{assign_lhs_to_rhs_expr(tmp_name,ele_2,[lhs_type],depth+1,syntaxUserOp)}" \
-                         f"{'    '*depth}}}\n"
+                if cond_code == "kcg_true":
+                    pre_code = f"{assign_lhs_to_rhs_expr(tmp_name,ele_1,[lhs_type],depth,syntaxUserOp)}"
+                else:
+                    pre_code=f"{'    '*depth}if({cond_code}){{\n" \
+                             f"{assign_lhs_to_rhs_expr(tmp_name,ele_1,[lhs_type],depth+1,syntaxUserOp)}" \
+                             f"{'    '*depth}}}else{{\n" \
+                             f"{assign_lhs_to_rhs_expr(tmp_name,ele_2,[lhs_type],depth+1,syntaxUserOp)}" \
+                             f"{'    '*depth}}}\n"
                 genEqu.add_preEquations(pre_code)
                 out_code.append(tmp_name)
             else:
-                out_code.append(f"({cond_code} ? {ele_1} : {ele_2})")
+                if cond_code=="kcg_true":
+                    out_code.append(f"{ele_1}")
+                else:
+                    out_code.append(f"({cond_code} ? {ele_1} : {ele_2})")
 
         if self.returnNum==1:
             out_code =out_code[0]
