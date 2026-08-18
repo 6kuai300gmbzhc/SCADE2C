@@ -46,6 +46,9 @@ def expression_factory(type:str,sub_type: str,scope:'SyntaxScope', objects=None,
         raise ValueError(f"Unknown expression: {type}_{sub_type}")
     if objects is None:
         objects=list()
+    # # 将type参数记录到日志文件
+    # with open("expr_factory_log.txt", "a", encoding="utf-8") as f:
+    #     f.write(f"{type}\n")
     return cls(type,sub_type,scope,objects,returnNum)
 def int_to_expression(number:int,scope)->'SyntaxExpr':
     return expression_factory("Atom","integernum",scope,[str(number)])

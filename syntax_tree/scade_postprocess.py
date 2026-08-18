@@ -153,7 +153,7 @@ def build_userOp_output2inputDependents(userOp: 'SyntaxUserOp', equation_graph):
     如果这个uesrOp没有返回值的话，也要添加参数之间的依赖关系！！！！就是说这些返回值会有默认的依赖
     """
     if not userOp.inParams:
-        userOp.output2inputDependents = [[] * len(userOp.outParams)]
+        userOp.output2inputDependents =[[] for _ in range(len(userOp.outParams))]
         # 没有输入参数，则依赖表就是空，输出完全不依赖输入
         return  # 没有输入参数，非常好，直接返回
     # 如果这个函数没有输出呢？

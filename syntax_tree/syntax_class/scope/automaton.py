@@ -1,3 +1,5 @@
+import os
+
 from syntax_tree.graph import Graph
 from syntax_tree.scade_generate import generate_tmp_symbol_and_register
 from syntax_tree.syntax_class.Exceptions import NoInitialStateException, ManyInitialStateException, \
@@ -304,6 +306,17 @@ class SyntaxAutomaton(SyntaxScope):
         self.transferGraph = Graph()
         self.stateTable = dict()
         self.reset_nxt_symbol=None
+        # # 每次创建 SyntaxAutomaton 实例时，计数器加一
+        # counter_file = os.path.join(os.path.dirname(__file__), '..', '..', '..', 'automaton_counter.txt')
+        # counter_file = os.path.normpath(counter_file)
+        # try:
+        #     with open(counter_file, 'r+') as f:
+        #         count = int(f.read().strip()) + 1
+        #         f.seek(0)
+        #         f.write(str(count))
+        #         f.truncate()
+        # except (FileNotFoundError, ValueError, OSError):
+        #     pass
 
     def add_state(self, state: SyntaxState):
         self.transferGraph.addVertex(state.name)

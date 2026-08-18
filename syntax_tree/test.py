@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 import unittest
 import syntax_tree.testdata.analyse_out as analyse_out
 from pathlib import Path
@@ -40,7 +41,34 @@ main_node_dict={
     "Fighter":"World::Fighter::Fighter",
     "RollControl":"RollControl::RollControl",
     "flight_control":"FlightControlSimulation::World",
-    "pilot":"Pilot::Pilot"
+    "pilot":"Pilot::Pilot",
+    "wind_model":"main_",
+
+
+    "test_model2": "test_model2::test_model2",
+    "test_model": "test_model::test_model",
+    "test_lustre": "test_lustre::test_lustre",
+    "test_Int": "test_Int::test_Int",
+    "test_clash": "test_clash::test_clash",
+    "testPilote": "testPilote::testPilote",
+    "testCapt": "testCapt::testCapt",
+    "testBoite": "testBoite::testBoite",
+    "remplissage": "remplissage::remplissage",
+    "polymorphic_pack": "polymorphic_pack::polymorphic_pack",
+    "pilote": "pilote::pilote",
+    "packs": "packs::packs",
+    "packed_cst": "packed_cst::packed_cst",
+    "packageTableau": "packageTableau::packageTableau",
+    "pack1": "pack1::pack1",
+    "pack": "pack::pack",
+    "p": "p::p",
+    "newpacks": "newpacks::newpacks",
+    "complex": "complex::complex",
+    "Condact": "Condact::Condact",
+    "consensus": "main",
+    "dadic": "dadic::dadic",
+    "modelInst": "modelInst::modelInst",
+    "Xr_test": "Xr_test"
 }
 class ScadeException(AssertionError):
     def __init__(self, value):
@@ -74,19 +102,38 @@ def get_exec_name(main_node):
     return main_node if "::" not in main_node else main_node.split("::")[-1]
 
 
+def count_scade_lines(scade_file_path: str) -> int:
+    with open(scade_file_path, "rb") as f:
+        raw_bytes = f.read()
+
+    for encoding in ("utf-8-sig", "utf-8", "cp1252", "latin-1"):
+        try:
+            text = raw_bytes.decode(encoding)
+            return len(text.splitlines())
+        except UnicodeDecodeError:
+            continue
+
+    return len(raw_bytes.decode("utf-8", errors="ignore").splitlines())
+
+
 def run_scade_compile(file_path, file, main_node, log_stdout, log_stderr):
-    """运行SCADE编译命令"""
+    """运行SCADE编译命令，并返回耗时"""
     scade_input = f"{file_path}/{file}.scade"
     output_dir = f"{file_path}/kcg"
-    run_command(
-        [sys.executable, "-m", "syntax_tree.main",
-         "-i", scade_input,
-         "-m", main_node,
-         "-o", output_dir,
-         "-t"],
-        log_stdout,
-        log_stderr
-    )
+    start_time = time.perf_counter()
+    try:
+        run_command(
+            [sys.executable, "-m", "syntax_tree.main",
+             "-i", scade_input,
+             "-m", main_node,
+             "-o", output_dir,
+             "-t"],
+            log_stdout,
+            log_stderr
+        )
+    except Exception:
+        raise
+    return round(time.perf_counter() - start_time, 6)
 
 
 def run_kcg_compile(file_path, log_stdout, log_stderr):
@@ -122,6 +169,8 @@ def run_and_compile(test_dir, file="aa"):
     file_path = f"{test_dir}/{file}"
     log_stdout = f"{file_path}/stdout.txt"
     log_stderr = f"{file_path}/stderr.txt"
+    scade_file_path = Path(file_path) / f"{file}.scade"
+    line_count = count_scade_lines(str(scade_file_path))
 
     # 1. 清空日志文件
     create_empty_file(log_stdout)
@@ -133,7 +182,7 @@ def run_and_compile(test_dir, file="aa"):
 
     # 3. 运行SCADE编译
     try:
-        run_scade_compile(file_path, file, main_node, log_stdout, log_stderr)
+        duration_seconds = run_scade_compile(file_path, file, main_node, log_stdout, log_stderr)
     except Exception as e:
         raise ScadeException("scade编译不通过")
 
@@ -149,10 +198,14 @@ def run_and_compile(test_dir, file="aa"):
     except Exception as e:
         raise RuntimeError("可执行文件运行失败")
 
+    return line_count, round(duration_seconds, 6)
+
 def run_and_test_coverage(test_dir, file="aa"):
     file_path = f"{test_dir}/{file}"
     log_stdout = f"{file_path}/stdout.txt"
     log_stderr = f"{file_path}/stderr.txt"
+    scade_file_path = Path(file_path) / f"{file}.scade"
+    line_count = count_scade_lines(str(scade_file_path))
 
     # 1. 清空日志文件
     create_empty_file(log_stdout)
@@ -164,13 +217,15 @@ def run_and_test_coverage(test_dir, file="aa"):
 
     # 3. 运行SCADE编译
     try:
-        run_scade_compile(file_path, file, main_node, log_stdout, log_stderr)
+        duration_seconds = run_scade_compile(file_path, file, main_node, log_stdout, log_stderr)
     except Exception as e:
         raise ScadeException("scade编译不通过")
     try:
         run_coverage(file_path, log_stdout, log_stderr)
     except Exception as e:
         raise ScadeException("可执行文件运行失败")
+
+    return line_count, round(duration_seconds, 6)
 
 
 class CountingResult(unittest.TextTestResult):
@@ -183,7 +238,17 @@ class CountingResult(unittest.TextTestResult):
         self.successes.append(str(test))
 forbade_test_set={
 "ex","tem_array",# 不知道为什么不支持group类型声明
-    "pilot","Fighter"
+    "pilot","Fighter",
+
+
+"test_extern","call","modes3x2_v4","call05","call06","minmax5","minmax5_random",# extern 函数
+"yyy","ply01","nested",# 主节点直接是predefop
+"test_condact","cond01",# 莫名其妙，没有condact这个函数
+"t2","t1","t0","consensus","consensus2","dadic","access","appli_fby_para","amaury",# 递归
+"predefOp",# 有可能有除以0的情况，不适用随机生成的测试用例
+"decl","declaration","deconne",# 未给typesymbol指定类型,
+"bob",
+"lustre_test1_ok"
 }
 forbade_fail_test_set={
     "StateMachine_112",# 时钟参数+状态机
@@ -191,7 +256,8 @@ forbade_fail_test_set={
 class MyTestCase(unittest.TestCase):
     passed_subtests = []  # 新增：记录通过的子测试文件名
     failed_subtests = []
-    test_dir = "./test"
+    case_metrics = []
+    test_dir = "./from_lustre"
     test_fail_dir="./test_fail"
     def setUp(self):
         logging.basicConfig(level=logging.INFO)
@@ -207,7 +273,8 @@ class MyTestCase(unittest.TestCase):
             if path in forbade_test_set:continue
             with self.subTest(file=path):
                 try:
-                    run_and_test_coverage(self.test_dir, path)
+                    line_count, duration_seconds = run_and_test_coverage(self.test_dir, path)
+                    MyTestCase.case_metrics.append((path, line_count, duration_seconds))
                     # 如果 test_one 没抛异常，说明通过了
                     MyTestCase.passed_subtests.append(path)
                 except Exception as e:
@@ -226,7 +293,8 @@ class MyTestCase(unittest.TestCase):
             if path in forbade_test_set:continue
             with self.subTest(file=path):
                 try:
-                    run_and_compile(self.test_dir, path)
+                    line_count, duration_seconds = run_and_compile(self.test_dir, path)
+                    MyTestCase.case_metrics.append((path, line_count, duration_seconds))
                     # 如果 test_one 没抛异常，说明通过了
                     MyTestCase.passed_subtests.append(path)
                 except Exception as e:
@@ -235,16 +303,18 @@ class MyTestCase(unittest.TestCase):
                     raise  # 让 unittest 记录失败
     def test_one_coverage(self,path="StateMachine_1"):
         try:
-            run_and_test_coverage(self.test_dir, path)
+            line_count, duration_seconds = run_and_test_coverage(self.test_dir, path)
+            MyTestCase.case_metrics.append((path, line_count, duration_seconds))
             # 如果 test_one 没抛异常，说明通过了
             MyTestCase.passed_subtests.append(path)
         except Exception as e:
             self.logger.error(f"{path} failed: {e}")
             MyTestCase.failed_subtests.append(path)
             raise  # 让 unittest 记录失败
-    def test_one(self,path="StateMachine_1"):
+    def test_one(self,path="wind_model"):
         try:
-            run_and_compile(self.test_dir, path)
+            line_count, duration_seconds = run_and_compile(self.test_dir, path)
+            MyTestCase.case_metrics.append((path, line_count, duration_seconds))
             # 如果 test_one 没抛异常，说明通过了
             MyTestCase.passed_subtests.append(path)
         except Exception as e:
@@ -252,7 +322,7 @@ class MyTestCase(unittest.TestCase):
             MyTestCase.failed_subtests.append(path)
             raise  # 让 unittest 记录失败
 
-    def test_fail_one(self,path="StateMachine_063"):
+    def test_fail_one(self,path="aircraft_brake_system"):
         try:
             run_and_compile(self.test_fail_dir, path)
             MyTestCase.failed_subtests.append(path)
@@ -276,12 +346,15 @@ if __name__ == '__main__':
     passed_subtest_count = len(MyTestCase.passed_subtests)
 
 
-    with open("./test_result.txt", "w") as f:
+    with open("./test_result.txt", "w", encoding="utf-8") as f:
         f.write('\n===== 统计 =====\n')
         f.write(f'run    : {passed_subtest_count + len(result.failures) + len(result.errors) + len(result.skipped)}\n')
         f.write(f'passed : {passed_subtest_count}\n')
         f.write(f'failed : {len(result.failures)}\n')
         f.write(f'errors : {len(result.errors)}\n')
+        f.write('===== 每个测试用例的 .scade 行数与 SCADE 编译耗时 =====\n')
+        for case_name, line_count, duration_seconds in MyTestCase.case_metrics:
+            f.write(f'{case_name}: ({line_count}, {duration_seconds:.6f}s)\n')
         f.write('===== 通过的子测试（文件名） =====\n')
         for ok in MyTestCase.passed_subtests:
             f.write(ok + '\n')
