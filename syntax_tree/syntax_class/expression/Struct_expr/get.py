@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
 from syntax_tree.scade_postprocess import set_rhs_default
@@ -32,7 +33,7 @@ class Struct_expr_get(SyntaxExpr):
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
         struct = self.objects[0].generate_code(syntaxUserOp, genEqu)
         return f"{struct}.{self.objects[1]}"
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
 

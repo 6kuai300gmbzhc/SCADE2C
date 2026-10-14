@@ -2,7 +2,7 @@ import copy
 import sys
 from .Exceptions import *
 from .scope.scope import SyntaxScope
-
+from typing import Optional
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .expression.expr_common import SyntaxExpr
@@ -13,7 +13,7 @@ class SyntaxType:
     对enum类型，则指具体enum的类型名称
     '''
 
-    scope: 'SyntaxScope' or None
+    scope: Optional['SyntaxScope'] = None
     '''这个type所属的scope,在大部分情况下是没用的，但是如果是path_id与typevar类型就需要依靠他来找到真实的type,
     并且enum类型需要依靠他在代码生成时生成名字
     所以对于以上两种来说是必填，其他的随便
@@ -30,10 +30,10 @@ class SyntaxType:
     必须在编译时可知，并且是严格大于0
     '''
 
-    fields: list['SyntaxTypeSymbol'] or None
+    fields: Optional[list['SyntaxTypeSymbol']] = None
     '''类型为field_decl时有效，按顺序存储了SyntaxTypeSymbol'''
 
-    enumList: list['SyntaxConstSymbol'] = None
+    enumList: Optional[list['SyntaxConstSymbol']] = None
     '''类型为enum时有效，存储了枚举类型的ID列表'''
 
     value: str = None
@@ -44,7 +44,7 @@ class SyntaxType:
     arrayType: 'SyntaxType' = None
     '''类型为array时有效，存储了数组的类型'''
 
-    _size: int or None
+    _size: Optional[int] = None
 
     min_size: int = sys.maxsize
     '''作为类型推导的参数传递时，表达了可以允许的最低数组长度'''
@@ -301,7 +301,7 @@ class SyntaxTypeSymbol:
     '''类型为imported时有效，存储了引用的类型'''
     const_expr:'SyntaxExpr'=None
 
-    def __init__(self, name: str, syntaxType: SyntaxType or None, visibility: str = "public", isImported=False):
+    def __init__(self, name: str, syntaxType: Optional[SyntaxType] = None, visibility: str = "public", isImported=False):
         self.name = name
         self.syntaxType = syntaxType
         self.visibility = visibility

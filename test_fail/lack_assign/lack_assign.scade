@@ -1,0 +1,8 @@
+node lack_assign(i: bool)
+	returns (o1,o2: int64)
+let
+	activate Act if i
+	then o1 = 1;
+	else o1 = 2;
+	returns o1,o2;
+tel

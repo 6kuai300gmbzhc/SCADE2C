@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_type_inference import type_inference_on_binop, clock_inference_sync
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr, expression_factory
@@ -35,7 +36,7 @@ class Bool_expr_binOp(SyntaxExpr):
             return f"({sub_codes[0]} {op} {sub_codes[1]})"
     def set_params(self,params:list['SyntaxExpr']):
         self.subExpr.objects[0]=[params[0],params[1]]
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.subExpr = expression_factory("List_expr", "List_expr", scope, [self.objects[0]])
         ...

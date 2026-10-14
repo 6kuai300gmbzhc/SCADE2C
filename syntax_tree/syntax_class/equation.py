@@ -1,7 +1,7 @@
 from abc import abstractmethod,ABC
 from functools import cache
 from typing import TYPE_CHECKING
-
+from typing import Optional
 from .Exceptions import UnknownIdentifierException
 from .expression.clock_expr import SyntaxClockExpr
 from .hasRhs import HasRhs
@@ -184,7 +184,7 @@ class SyntaxEquation(HasRhs):
             if param_name in ls: return True
         return False
 
-    def dependent_on_equation_directly_and_get_correspond_lhs(self, tar_equation) -> str or None:
+    def dependent_on_equation_directly_and_get_correspond_lhs(self, tar_equation) -> Optional['LeftItem']:
         """判断自己是否直接依赖tar，即检测自己的右值是否和tar的左值重合,如果依赖的话则返回对应的lhs，否则返回None"""
         for lhs in tar_equation.lhs:
             if self.dependent_on_param_directly(lhs.symbol_name): return lhs

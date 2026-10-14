@@ -1,0 +1,29 @@
+node helper_composition(input: int32) returns(output: int32)
+let
+	output = clamp_result(add_offset(double_value(input)));
+tel
+
+function double_value(value: int32) returns(result: int32)
+let
+	result = value * 2;
+tel
+
+function add_offset(value: int32) returns(result: int32)
+let
+	result = value + choose_offset(value);
+tel
+
+function choose_offset(value: int32) returns(result: int32)
+let
+	result = if value > 10 then 1 else 3;
+tel
+
+function clamp_result(value: int32) returns(result: int32)
+let
+	result = if value > 100 then 100 else value;
+tel
+
+function is_valid(value: int32) returns(result: bool)
+let
+	result = value >= 0 and value <= 100;
+tel

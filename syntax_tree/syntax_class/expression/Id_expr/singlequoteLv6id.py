@@ -1,3 +1,4 @@
+from typing import Optional
 
 from syntax_tree.syntax_class.Exceptions import UnknownIdentifierException,TypeMismatchException
 from syntax_tree.syntax_class.expression import SyntaxExpr
@@ -39,6 +40,6 @@ class Id_expr_singlequoteLv6id(SyntaxExpr):
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
         # 把signal的第一个字符也就是'去掉
         return self.name[1:]
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.name=objects[0]

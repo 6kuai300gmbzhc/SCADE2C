@@ -1,3 +1,4 @@
+from typing import Optional
 import logging
 import os
 import subprocess
@@ -37,9 +38,9 @@ main_node_dict={
     "Automaton":"Automaton",
     "control_block":"pbtb::pbtb",
     "aircraft_brake_system":"aircraft_brake_system::brake_system",
-    "cruise_control":"System::SystemSimul",
+    "cruise_control":"System::SystemSimul_",
     "Fighter":"World::Fighter::Fighter",
-    "RollControl":"RollControl::RollControl",
+    "RollControl":"RollControl_::RollControl_",
     "flight_control":"FlightControlSimulation::World",
     "pilot":"Pilot::Pilot",
     "wind_model":"main_",
@@ -68,7 +69,8 @@ main_node_dict={
     "consensus": "main",
     "dadic": "dadic::dadic",
     "modelInst": "modelInst::modelInst",
-    "Xr_test": "Xr_test"
+    "Xr_test": "Xr_test",
+    "test_bool":"test_bool_"
 }
 class ScadeException(AssertionError):
     def __init__(self, value):
@@ -237,21 +239,8 @@ class CountingResult(unittest.TextTestResult):
         super().addSuccess(test)
         self.successes.append(str(test))
 forbade_test_set={
-"ex","tem_array",# 不知道为什么不支持group类型声明
-    "pilot","Fighter",
-
-
-"test_extern","call","modes3x2_v4","call05","call06","minmax5","minmax5_random",# extern 函数
-"yyy","ply01","nested",# 主节点直接是predefop
-"test_condact","cond01",# 莫名其妙，没有condact这个函数
-"t2","t1","t0","consensus","consensus2","dadic","access","appli_fby_para","amaury",# 递归
-"predefOp",# 有可能有除以0的情况，不适用随机生成的测试用例
-"decl","declaration","deconne",# 未给typesymbol指定类型,
-"bob",
-"lustre_test1_ok"
 }
 forbade_fail_test_set={
-    "StateMachine_112",# 时钟参数+状态机
 }
 class MyTestCase(unittest.TestCase):
     passed_subtests = []  # 新增：记录通过的子测试文件名
@@ -311,7 +300,7 @@ class MyTestCase(unittest.TestCase):
             self.logger.error(f"{path} failed: {e}")
             MyTestCase.failed_subtests.append(path)
             raise  # 让 unittest 记录失败
-    def test_one(self,path="wind_model"):
+    def test_one(self,path="activate_merge"):
         try:
             line_count, duration_seconds = run_and_compile(self.test_dir, path)
             MyTestCase.case_metrics.append((path, line_count, duration_seconds))

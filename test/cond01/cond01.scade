@@ -1,0 +1,9 @@
+
+
+node cond01(c: bool; x,y:int32) returns (o: int32)
+var
+ cc:bool;
+let
+  cc = fby(false;1;c);
+  o = cc and x<y;
+tel

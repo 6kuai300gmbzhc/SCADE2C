@@ -1,18 +1,18 @@
 from syntax_tree.syntax_class.expression import expression_factory,SyntaxExpr
 from syntax_tree.syntax_class.expression.const_value import ConstValue
 from syntax_tree.syntax_class.hasRhs import HasRhs
-
+from typing import Optional
 
 class SyntaxPattern(HasRhs):
     '''pattern类'''
 
-    constExpr:SyntaxExpr or None
+    constExpr:Optional[SyntaxExpr] = None
     '''等价的常量表达式'''
 
     value:str
     '''存储内容'''
 
-    constValue: ConstValue or None
+    constValue: Optional[ConstValue] = None
     '''计算出的常量value'''
 
     def __init__(self, _type, value,scope):

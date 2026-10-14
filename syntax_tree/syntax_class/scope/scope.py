@@ -1,3 +1,4 @@
+from typing import Optional
 import typing
 from abc import abstractmethod
 
@@ -59,7 +60,7 @@ class SyntaxScope:
     def add_childScope(self, childScope: 'SyntaxScope') -> None:
         self.childScopeTable[childScope.name] = childScope
 
-    def get_childScope(self, scopeName) -> 'SyntaxScope' or None:
+    def get_childScope(self, scopeName) -> Optional['SyntaxScope']:
         if scopeName in self.childScopeTable.keys():
             return self.childScopeTable[scopeName]
         else:
@@ -98,7 +99,7 @@ class SyntaxScope:
             if symbol.name == tmpSymbolName: return symbol
         return None
 
-    def get_localVariable_InThisAndPreEnv(self, name) -> 'SyntaxVariableSymbol' or None:
+    def get_localVariable_InThisAndPreEnv(self, name) -> Optional['SyntaxVariableSymbol']:
         if symbol := self.get_localVariable(name):
             return symbol
         return self.prevScope.get_localVariable_InThisAndPreEnv(name)
@@ -110,7 +111,7 @@ class SyntaxScope:
             return symbol
         return self.prevScope.get_localVariable_InThisAndPreEnv_until_certain_scope(name,certain_scope)
 
-    def get_localVariable(self, name: str) -> 'SyntaxVariableSymbol' or None:
+    def get_localVariable(self, name: str) -> Optional['SyntaxVariableSymbol']:
         for symbol in self.tmpParams:
             if name == symbol.name:
                 return symbol

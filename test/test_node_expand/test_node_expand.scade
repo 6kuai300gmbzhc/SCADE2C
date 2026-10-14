@@ -1,0 +1,18 @@
+
+
+node n(x,y: int32) returns (a,b: int32)
+var 
+  v1,v2: int32;
+let
+  v1 = x+y;
+  v2 = x*y;
+  a = v1*x;
+  b = v2*y;
+tel
+
+
+node test_node_expand(x,y: int32) returns (o1, o2: int32)
+let
+  -- to avoid overflow during automated test generation
+  o1,o2 = n(x, y);
+tel

@@ -1,0 +1,5 @@
+type Color=enum{Blue,Red,Yellow,Brown};
+node test_case(in1,in2,in3:int64;in4:Color) returns(out1:int64)
+let
+	out1=(case in4 of | Blue:in1 | Red:in2 | Yellow:in3 | _:1_i64);
+tel

@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
 from syntax_tree.scade_postprocess import set_rhs_default
@@ -30,7 +31,7 @@ class Array_expr_get(SyntaxExpr):
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
         idx = self.idx_list[0]
         return f"{self.objects[0].generate_code(syntaxUserOp, genEqu)}[{idx}]"
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
 

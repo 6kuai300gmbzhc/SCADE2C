@@ -1,0 +1,23 @@
+
+
+node n(x,y: int32) returns (a,b: int32)
+var 
+  v1,v2: int32;
+let
+  v1 = x+y;
+  v2 = x*y;
+  a = v1*x;
+  b = v2*y;
+--  assert(x>v1+a);
+tel
+
+node f(i: int32) returns (o: int32)
+let
+  o = i+1;
+tel
+
+node test_node_expand2(i: int32^2) returns (o1, o2: int32)
+let
+  o1,o2 = n(i[0], f(f(i[1])+i[0]));
+  --  assert(i[1]<=o1+o2);
+tel

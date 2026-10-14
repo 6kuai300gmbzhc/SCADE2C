@@ -1,0 +1,5 @@
+node real_ex (x:float32) returns (y:float32)
+let
+  y=x;
+tel
+

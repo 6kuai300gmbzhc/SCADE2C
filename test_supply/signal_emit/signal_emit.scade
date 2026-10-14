@@ -1,0 +1,34 @@
+node signal_emit(input: int32) returns(signal_seen, urgent, positive_event, active: bool)
+sig
+	updated;
+let
+	automaton notification
+	initial state Quiet
+	unless if is_positive(input) resume Active;
+	let
+		signal_seen = false;
+		urgent = false;
+		positive_event = false;
+		active = false;
+	tel
+	state Active
+	let
+		emit 'updated;
+		signal_seen = 'updated;
+		urgent = is_urgent(input, signal_seen);
+		positive_event = signal_seen and is_positive(input);
+		active = true;
+	tel
+	until if not is_positive(input) resume Quiet;
+	returns ..;
+tel
+
+function is_positive(value: int32) returns(result: bool)
+let
+	result = value > 0;
+tel
+
+function is_urgent(value: int32; signal: bool) returns(result: bool)
+let
+	result = signal and value > 10;
+tel

@@ -1,0 +1,25 @@
+const N: int32 = 3;
+
+node iterator_fold(values: int32^N; offset: int32) returns(total: int32; average, normalized: int32; reached, target_met: bool)
+let
+	total = (fold $+$ <<N>>)(seed(offset), values);
+	average = nonnegative(total / 3);
+	normalized = nonnegative(total);
+	reached = reached_target(total, 10);
+	target_met = reached_target(total, 20);
+tel
+
+function seed(offset: int32) returns(result: int32)
+let
+	result = if offset < 0 then 0 else offset;
+tel
+
+function nonnegative(value: int32) returns(result: int32)
+let
+	result = if value < 0 then 0 else value;
+tel
+
+function reached_target(value, target: int32) returns(result: bool)
+let
+	result = value >= target;
+tel

@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
 from syntax_tree.syntax_class.expression.const_value import ConstValue
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
@@ -55,7 +56,7 @@ class Id_expr_Path_id(SyntaxExpr):
             return f"{self.cal_const_value(SyntaxType('any'),scope).value}"
         else:
             return self.generate_code(scope,None)# 反正用不到
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.name=objects[0]
     def is_clock_expr(self):

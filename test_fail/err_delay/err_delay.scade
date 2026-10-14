@@ -1,0 +1,10 @@
+node ex4(aI1: int32)
+	returns (rO1: float32)
+let
+	rO1 = (fold N <<3>>)(0.0,aI1^3);
+tel
+node err_delay(rI1: float32; iI2: int32)
+	returns (rO1: float32)
+let
+	rO1 = pre rI1 - pre (iI2:float32);
+tel

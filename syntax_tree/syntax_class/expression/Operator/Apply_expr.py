@@ -1,3 +1,4 @@
+from typing import Optional
 import copy
 
 from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
@@ -8,9 +9,9 @@ from typing import TYPE_CHECKING
 from syntax_tree.syntax_class.Exceptions import *
 from syntax_tree.syntax_class.syntaxSymbol import SyntaxConstSymbol
 from syntax_tree.syntax_class.syntaxType import SyntaxType
-
+from syntax_tree.scade_generate import GenEqu, assign_lhs_to_rhs_expr, symbol2expr, generate_tmp_symbol_and_register
 if TYPE_CHECKING:
-    from syntax_tree.scade_generate import GenEqu, assign_lhs_to_rhs_expr, symbol2expr, generate_tmp_symbol_and_register
+
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
 
     from syntax_tree.syntax_class.scope.scope import SyntaxScope
@@ -81,7 +82,7 @@ class Operator_Apply_expr(SyntaxExpr):
     def set_param_expr(self, param_expr):
         self.operator.set_param_expr(param_expr)
 
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type, subtype, scope, objects, returnNum)
         self.operator = objects[0]
         self.paramExpr = objects[1]

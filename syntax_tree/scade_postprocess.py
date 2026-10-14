@@ -1,3 +1,4 @@
+from typing import Optional
 from collections import deque
 from syntax_tree.graph import Graph
 import syntax_tree.control_block_post_process as control_block_post_process

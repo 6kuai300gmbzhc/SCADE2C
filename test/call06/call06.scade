@@ -1,0 +1,4 @@
+node call06(x : bool;y:bool) returns (z : bool;t:bool)
+let
+  z,t = (x or y,y xor x);
+tel

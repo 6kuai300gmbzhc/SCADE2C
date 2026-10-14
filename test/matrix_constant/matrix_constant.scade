@@ -1,0 +1,14 @@
+
+
+const f:bool = false;
+const t:bool = true;
+const mask:bool^7^4=[
+	[f,t,f,f,f,f,t],
+	[t,f,t,f,f,f,f],
+	[f,t,f,t,f,f,f],
+	[t,f,f,f,f,t,f]];
+
+node matrix_constant(x:bool^7^4) returns (z:bool^7^4)
+let
+  z =  (map (map $or$ <<7>>)<<4>>)(mask, x);
+tel

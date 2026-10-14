@@ -1,0 +1,7 @@
+type pair = {a:int32, b:int32};
+type pairpair = {a:pair, b:pair};
+
+node mm(a,b: int32) returns (min,max: int32)
+let
+  min,max = if(a>b) then (b,a) else (a,b);
+tel

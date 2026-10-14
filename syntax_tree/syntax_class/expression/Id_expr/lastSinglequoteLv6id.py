@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_generate import generate_tmp_symbol_and_register
 from syntax_tree.scade_postprocess import set_rhs_default
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException, UnknownIdentifierException
@@ -61,5 +62,5 @@ class Id_expr_lastSinglequoteLv6id(SyntaxExpr):
         tmp_var.lastExpr = self.tar_symbol.lastExpr
         out_name = syntaxUserOp.var_change_name(tmp_var_name)
         return out_name
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)

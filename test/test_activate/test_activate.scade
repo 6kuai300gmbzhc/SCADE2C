@@ -1,0 +1,11 @@
+type T={a:int32,b:bool};
+node test_activate(clock c:bool;clock d:bool;clock e:bool) returns(out1:T;out2:T;out3:T)
+var
+	tmp1:T when c;
+let
+	tmp1=(activate (make T) every c)(1,false);
+	out1=merge(c;tmp1;{a:0,b:true} when not c);
+
+	out2=(activate (make T) every d default {a:1,b:true})(0,true);
+	out3=(activate (make T) every e initial default {a:10,b:true})(90,true);
+tel

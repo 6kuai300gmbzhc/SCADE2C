@@ -1,0 +1,20 @@
+node conditional_arithmetic(left, right: int32; use_sum: bool) returns(result: int32; in_range: bool)
+let
+	result = if use_sum then bounded_sum(left, right) else distance(left, right);
+	in_range = within_limit(result);
+tel
+
+function bounded_sum(left, right: int32) returns(result: int32)
+let
+	result = if left > 1000 then 1000 else if left + right < -1000 then -1000 else left + right;
+tel
+
+function distance(left, right: int32) returns(result: int32)
+let
+	result = if left >= right then left - right else right - left;
+tel
+
+function within_limit(value: int32) returns(result: bool)
+let
+	result = value >= -1000 and value <= 1000;
+tel

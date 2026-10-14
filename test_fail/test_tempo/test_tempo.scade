@@ -1,0 +1,8 @@
+node test_tempo(in1:int32;clock c:bool) returns(out1:int32;out2:int32;out3:int32;out4:bool;out5:bool)
+let
+	out1=1->4;
+	out2=fby(0;3;in1);
+	out3=merge(c;1 when c;2 when not c);
+	out4=true-> pre c;
+	out5=4 times c;
+tel

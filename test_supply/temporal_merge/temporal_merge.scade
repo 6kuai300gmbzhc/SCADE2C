@@ -1,0 +1,20 @@
+node temporal_merge(left, right: int32; select: bool) returns(output: int32; previous_select: bool; changed: bool; delta: int32; settled, same_branch: bool; transitions: int32)
+let
+	output = choose_value(select, left, right);
+	previous_select = false -> pre select;
+	changed = select_changed(select, previous_select);
+	delta = output - choose_value(not select, left, right);
+	settled = not changed and delta = 0;
+	same_branch = select = previous_select;
+	transitions = 0 -> pre transitions + (if changed then 1 else 0);
+tel
+
+function choose_value(select: bool; left, right: int32) returns(result: int32)
+let
+	result = if select then left else right;
+tel
+
+function select_changed(current, previous: bool) returns(result: bool)
+let
+	result = current <> previous;
+tel

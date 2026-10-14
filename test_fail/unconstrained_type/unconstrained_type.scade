@@ -1,0 +1,6 @@
+function f(idx:'t; i: float32) returns (o: float32) where 't integer
+	o = i + (idx: float32);
+function unconstrained_type(aI1: float32^3) returns (aO1: float32^3)
+let
+	aO1 = (mapi f <<3>>)(aI1);
+tel

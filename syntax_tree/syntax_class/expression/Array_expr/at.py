@@ -1,3 +1,4 @@
+from typing import Optional
 import copy
 
 from syntax_tree.scade_type_inference import type_inference_on_groups, clock_inference_sync
@@ -47,7 +48,7 @@ class Array_expr_at(SyntaxExpr):
                                            depth, syntaxUserOp)
         genEqu.add_preEquations(pre_code)
         return tmp_name
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
 

@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
 from syntax_tree.scade_postprocess import set_rhs_default
@@ -42,9 +43,9 @@ class Array_expr_slice(SyntaxExpr):
         slice_type_name = self.lhsTypeList[0].change_name()
 
         genEqu.add_preEquations(
-            f"{'    ' * depth}kcg_assign_array(&({tmp_name}),  ({slice_type_name} *) &(({sliced_code})[{self.idx_list[0]}]), sizeof ({slice_type_name}));\n")
+            f"{'    ' * depth}(void)kcg_assign_array(&({tmp_name}),  ({slice_type_name} *) &(({sliced_code})[{self.idx_list[0]}]), sizeof ({slice_type_name}));\n")
         return tmp_name
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
 

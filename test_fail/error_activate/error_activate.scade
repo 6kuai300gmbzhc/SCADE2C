@@ -1,0 +1,10 @@
+type T = enum{a, b, c};
+node error_activate(bI1: T)
+	returns (iO1: int32)
+let
+	iO1 = (activate N every (bI1 match a) default 3)(bI1);
+tel
+function N(i1:T) returns(o:int32)
+let
+	o=1;
+tel

@@ -1,0 +1,20 @@
+node nested_condition(value: int32; positive, enabled: bool) returns(result: int32; negative: bool)
+let
+	result = if enabled then select_sign(value, positive) else disabled_value();
+	negative = result < 0;
+tel
+
+function select_sign(value: int32; positive: bool) returns(result: int32)
+let
+	result = if positive then abs_value(value) else -abs_value(value);
+tel
+
+function abs_value(value: int32) returns(result: int32)
+let
+	result = if value >= 0 then value else -value;
+tel
+
+function disabled_value() returns(result: int32)
+let
+	result = 0;
+tel

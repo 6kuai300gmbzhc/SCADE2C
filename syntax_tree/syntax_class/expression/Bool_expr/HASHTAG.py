@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_postprocess import set_rhs_default, flatten_list
 from syntax_tree.scade_type_inference import clock_inference_sync
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
@@ -28,12 +29,12 @@ class Bool_expr_HASHTAG(SyntaxExpr):
         self.set_lhs_type([required_type])
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
-        code = "(("
-        for idx, obj in enumerate(self.objects[0]):
-            if idx != 0:
-                code += "+"
-            code += obj.generate_code(syntaxUserOp, genEqu)
-        code += ") <= 1)"
-        return code
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+        values = [obj.generate_code(syntaxUserOp, genEqu) for obj in self.objects[0]]
+        constraints = [
+            f"(!(({values[left]}) && ({values[right]})))"
+            for left in range(len(values))
+            for right in range(left + 1, len(values))
+        ]
+        return f"({' && '.join(constraints)})" if constraints else "kcg_true"
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type, subtype, scope, objects, returnNum)

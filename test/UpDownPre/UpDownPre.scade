@@ -1,0 +1,15 @@
+node UpDownPre() returns(x:int16)
+let
+    automaton SSM
+    initial state Up
+    let
+        x = 0 -> pre(x) + 1;
+    tel
+    until if (x>=3) resume Down;
+    state Down
+    let
+        x = 2 -> pre(x) -1;
+    tel
+    until if (x<=-3) resume Up;
+    returns x;
+tel

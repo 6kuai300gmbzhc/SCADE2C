@@ -1,0 +1,21 @@
+node typed_conversion(input: int64) returns(as_int32: int32; as_int64: int64; fits: bool)
+let
+	as_int32 = narrow(input);
+	as_int64 = add_wide(input, 12);
+	fits = fits_int32(input);
+tel
+
+function narrow(value: int64) returns(result: int32)
+let
+	result = (value:int32);
+tel
+
+function add_wide(value, offset: int64) returns(result: int64)
+let
+	result = value + offset;
+tel
+
+function fits_int32(value: int64) returns(result: bool)
+let
+	result = value >= -2147483648 and value <= 2147483647;
+tel

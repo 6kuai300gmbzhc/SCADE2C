@@ -1,0 +1,7 @@
+type s =  { f1 : int32 , f2 : int32^2 };
+
+node bug2(x:s) returns (i: s^2)
+let 
+
+  i = { f1 : 42, f2 : [5, 6] } ^ 2;
+tel

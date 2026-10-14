@@ -1,0 +1,20 @@
+node logic_mux(select: bool; left, right: int32) returns(value: int32; selected_left: bool)
+let
+	value = if select then max_value(left, right) else min_value(left, right);
+	selected_left = select and is_greater(left, right);
+tel
+
+function max_value(left, right: int32) returns(result: int32)
+let
+	result = if left >= right then left else right;
+tel
+
+function min_value(left, right: int32) returns(result: int32)
+let
+	result = if left <= right then left else right;
+tel
+
+function is_greater(left, right: int32) returns(result: bool)
+let
+	result = left > right;
+tel

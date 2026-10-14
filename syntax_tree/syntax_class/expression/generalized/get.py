@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.expression import SyntaxExpr
 
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
@@ -41,6 +42,6 @@ class generalized_get(SyntaxExpr):
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp, genEqu):
         raise Exception("不应该执行到这里,需要用set_params替换参数")
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...

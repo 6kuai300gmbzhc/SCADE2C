@@ -1,0 +1,25 @@
+node arithmetic_chain(a, b, c: int32) returns(result: int32; positive: bool)
+let
+	result = combine_terms(scale_sum(a, b), c, safe_remainder(a, b));
+	positive = is_positive(result);
+tel
+
+function scale_sum(left, right: int32) returns(result: int32)
+let
+	result = (left + right) * 2;
+tel
+
+function safe_remainder(dividend, divisor: int32) returns(result: int32)
+let
+	result = dividend mod (if divisor = 0 then 1 else divisor);
+tel
+
+function combine_terms(value, multiplier, remainder: int32) returns(result: int32)
+let
+	result = value * multiplier - remainder;
+tel
+
+function is_positive(value: int32) returns(result: bool)
+let
+	result = value > 0;
+tel

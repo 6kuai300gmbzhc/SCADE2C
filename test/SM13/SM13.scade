@@ -1,0 +1,13 @@
+node SM13(v:bool)returns(S:bool)
+sig
+S1,S2;
+let
+automaton SM13
+initial state A
+unless
+if not v do let emit 'S1; tel resume B;
+if v do let emit 'S2; tel restart B;
+state B
+returns .. ;
+S=#('S1,'S2);
+tel

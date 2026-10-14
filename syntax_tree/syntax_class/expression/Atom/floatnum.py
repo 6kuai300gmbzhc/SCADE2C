@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_postprocess import set_rhs_default
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException, NumericConstraintViolateException
 from syntax_tree.syntax_class.expression import SyntaxExpr
@@ -39,7 +40,7 @@ class Atom_floatnum(SyntaxExpr):
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
         _type: SyntaxType = self.lhsTypeList[0]
         return f"{_type.change_name_cast()}({self.objects[0]})"
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
     def cal_const_value(self,required_type:'SyntaxType',scope:'SyntaxScope') -> 'ConstValue':
         if not required_type<=SyntaxType("float"):

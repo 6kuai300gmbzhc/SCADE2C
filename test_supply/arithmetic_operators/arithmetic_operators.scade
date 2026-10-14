@@ -1,0 +1,24 @@
+node arithmetic_operators(a, b: int64) returns(negated, sum, difference, product, quotient, remainder: int64)
+let
+	negated = -a;
+	sum = saturating_add(a, b);
+	difference = a - b;
+	product = a * b;
+	quotient = safe_divide(a, b);
+	remainder = safe_remainder(a, b);
+tel
+
+function saturating_add(left, right: int64) returns(result: int64)
+let
+	result = left + right;
+tel
+
+function safe_divide(dividend, divisor: int64) returns(result: int64)
+let
+	result = dividend / (if divisor = 0 then 1 else divisor);
+tel
+
+function safe_remainder(dividend, divisor: int64) returns(result: int64)
+let
+	result = dividend mod (if divisor = 0 then 1 else divisor);
+tel

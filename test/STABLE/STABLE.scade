@@ -1,0 +1,9 @@
+node STABLE (set: bool; delay: int32) returns (level: bool)
+var count: int32;
+let
+  level = (count > 0);
+  count = 
+      if set then delay
+      else if false -> pre(level) then pre(count)-1
+      else 0;
+tel

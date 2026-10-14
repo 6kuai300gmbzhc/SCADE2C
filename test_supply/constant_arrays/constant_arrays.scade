@@ -1,0 +1,20 @@
+const SIZE: int32 = 3;
+const VALUES: int32^SIZE = [2, 4, 6];
+
+node constant_arrays(index: uint16) returns(values: int32^SIZE; selected, total: int32; all_positive: bool)
+let
+	values = VALUES;
+	selected = add_offset((VALUES.[index] default 0));
+	total = array_total(values);
+	all_positive = values[0] > 0 and values[1] > 0 and values[2] > 0;
+tel
+
+function add_offset(value: int32) returns(result: int32)
+let
+	result = value + 10;
+tel
+
+function array_total(items: int32^3) returns(result: int32)
+let
+	result = items[0] + items[1] + items[2];
+tel

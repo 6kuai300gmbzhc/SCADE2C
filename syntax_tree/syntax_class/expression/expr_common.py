@@ -8,7 +8,7 @@ from .clock_expr import SyntaxClockExpr
 from ..Exceptions import *
 from typing import TYPE_CHECKING
 from ..hasRhs import HasRhs
-
+from typing import Optional
 
 if TYPE_CHECKING:
     from ..syntaxType import SyntaxType
@@ -134,11 +134,11 @@ class SyntaxExpr(HasRhs,metaclass=ExpressionMeta):
     unary_op_set = {"+", "-", "lnot"}
     relation_dict = {"=": "==", "<>": "!=", "<": "<", ">": ">", "<=": "<=", ">=": ">="}
     bool_unary_set = {"not", "#"}
-    bool_binary_dict = {"and": " & ", "or": " | ", "xor": " ^ "}
+    bool_binary_dict = {"and": "&&", "or": "||", "xor": "!="}
     other = {"reverse", "times", "@"}
 
     # apply_Expr中的prefixOP接受以上所有类型的运算，除了#，且运算规则也是完全相同的
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__()
         self.type = type
         self.subType = subtype

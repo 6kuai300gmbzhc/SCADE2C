@@ -1,0 +1,4 @@
+function incorrect_range (i: int8) returns (o: int8)
+let
+  o = i + 128;
+tel

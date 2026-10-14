@@ -1,3 +1,4 @@
+from typing import Optional
 # 先把基类和工厂方法暴露出去
 from .expr_common import SyntaxExpr, expression_factory
 from .Arith_expr.binOp import Arith_expr_binOp

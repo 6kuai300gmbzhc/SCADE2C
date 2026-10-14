@@ -1,0 +1,21 @@
+node matrix_transpose(input: int32^2^3) returns(output: int32^3^2)
+let
+	output = transpose_matrix(input);
+tel
+
+function matrix_transpose_detail(matrix: int32^2^3) returns(diagonal_sum: int32; balanced: bool)
+let
+	diagonal_sum = matrix[0][0] + matrix[1][1];
+	balanced = matrix[0][1] = matrix[1][0];
+tel
+
+function matrix_transpose_combine(left, right: int32) returns(total, difference: int32)
+let
+	total = left + right;
+	difference = left - right;
+tel
+
+function transpose_matrix(input: int32^2^3) returns(output: int32^3^2)
+let
+	output = transpose(input; 1; 2);
+tel

@@ -1,0 +1,12 @@
+type A_int_2 = int32^2;
+node zzz2(i1:int32; i2:A_int_2) returns (o:int32)
+var
+   _acc1:int32;
+   _v1:int32;
+   _v2:int32;
+let
+   _acc1 = i1 + _v1;
+   _v1 = i2[0];
+   o = _acc1 + _v2;
+   _v2 = i2[1];
+tel

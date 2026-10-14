@@ -1,0 +1,15 @@
+node SM11(i:bool)returns(o:bool)
+let
+automaton SM1
+initial state EVEN
+unless if i restart ODD;
+let
+	o = true;
+tel
+state ODD
+unless if i restart EVEN;
+let
+	o = false;
+tel
+returns o;
+tel

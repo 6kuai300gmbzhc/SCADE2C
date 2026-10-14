@@ -1,0 +1,10 @@
+function clock_id(iI1: int16; clock clk1: bool)
+	returns(iO1: int16 when clk1)
+let
+	iO1 = N1(iI1 when clk1, not clk1);
+tel
+function N1(iI1: int16 when clk1; clock clk1: bool)
+	returns(iO1: int16 when clk1)
+let
+	iO1 = iI1;
+tel

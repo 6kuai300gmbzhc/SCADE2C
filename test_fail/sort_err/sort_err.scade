@@ -1,0 +1,14 @@
+node sort_err() returns ()
+sig
+	s;
+var
+	x:bool;
+	y:int32;
+let
+	emit's if x;
+ 	x = if y > 0 then false else true -> pre(x);
+ 	activate if x
+ 		then y = 1;
+ 		else y = if's then 0 else 0 -> pre(y);
+ 	returns y;
+tel;

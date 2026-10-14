@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_postprocess import set_rhs_default
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException, NumericConstraintViolateException
 from syntax_tree.syntax_class.expression import SyntaxExpr
@@ -47,7 +48,7 @@ class Atom_integernum(SyntaxExpr):
         if not self.lhsTypeList:
             self.type_inference([required_type],scope)
         return ConstValue(syntax_type=self.lhsTypeList[0], value=int(self.objects[0]))
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         s = objects[0].strip()
         if s.startswith('0x') or s.startswith('0X'):

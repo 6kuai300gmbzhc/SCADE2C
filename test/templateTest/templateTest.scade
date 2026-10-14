@@ -1,0 +1,16 @@
+package a
+	function templateTest() returns (a:int32;b:float32)
+	var
+		intv:int32;
+		floatv:float32;
+	let
+		floatv=3.0;
+		intv=2;
+	    b=tem(1,floatv);
+		a=tem(1,intv);
+	tel
+	function tem(in1,in2:'T) returns (out:'T) where 'T numeric
+	let
+		out=in1+in2;
+	tel
+end;

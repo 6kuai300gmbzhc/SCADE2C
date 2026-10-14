@@ -1,0 +1,20 @@
+node TWO_state_S(set,reset,init:bool) returns (state_:bool)
+let
+	state_ = init -> if set and not pre(state_) then true
+						else if reset and pre(state_) then false
+						else pre(state_);
+tel
+
+
+node TWO_BUTTONS(on, off,init:bool) returns (state_:bool)
+let
+	state_ = init -> if on then true else if off then false else pre(state_);
+tel
+
+node cminus (e1,e2,e3,init:bool) returns (ok:bool)
+var s1,s2:bool;
+let
+	s1= TWO_state_S(e1,e2,init);
+	s2= TWO_BUTTONS(e1,e2,init);
+	ok =(s1=s2) ;
+tel

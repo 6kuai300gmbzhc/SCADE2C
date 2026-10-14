@@ -1,0 +1,22 @@
+type Result = {value: int32};
+
+node activation_default(value: Result; clock enable: bool) returns(output: Result; valid: bool)
+let
+	output = (activate (make Result) every enable default {value: 0})(double_value(prepare(value.value)));
+	valid = value_valid(value.value);
+tel
+
+function prepare(value: int32) returns(result: int32)
+let
+	result = if value < 0 then 0 else value;
+tel
+
+function double_value(value: int32) returns(result: int32)
+let
+	result = value * 2;
+tel
+
+function value_valid(value: int32) returns(result: bool)
+let
+	result = value >= 0 and value <= 100;
+tel

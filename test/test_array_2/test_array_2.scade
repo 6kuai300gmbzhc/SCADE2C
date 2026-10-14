@@ -1,0 +1,12 @@
+const
+	aC1: int32^2 = [1,1];
+ 	aC2: int32^1 = [0];
+function test_array_2(aI1, aI2: int32^2; i: uint16)
+	returns (aO1, aO2, aO3, aO4: int32^4; aO5: int32^2^3)
+let
+	aO1 = reverse aI2 @ reverse aI1;
+	aO2 = aC2 @ [[1,2,3],[2,3,4]][2*3 - 5];
+ 	aO3 = aO2 [1 .. 2] @ aI2;
+ 	aO4 = aI1 @ ([aI1,aI2].[i] default aC1);
+ 	aO5 = [[0,1],[2,3],[4,5]];
+tel

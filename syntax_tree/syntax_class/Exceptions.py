@@ -1,3 +1,4 @@
+from typing import Optional
 class EquationDependentException(Exception):
     def __init__(self, value):
         self.value = value

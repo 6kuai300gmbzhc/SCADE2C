@@ -1,0 +1,27 @@
+node clocked_merge(left, right: int32^2; select: bool) returns(output: int32^2; sampled: bool)
+let
+	automaton input_selector
+	initial state LeftInput
+	unless if select resume RightInput;
+	let
+		output = scale_pair(left);
+		sampled = false;
+	tel
+	state RightInput
+	let
+		output = scale_pair(right);
+		sampled = true;
+	tel
+	until if not select resume LeftInput;
+	returns ..;
+tel
+
+function scale_pair(values: int32^2) returns(result: int32^2)
+let
+	result = [values[0] * 2, values[1] * 2];
+tel
+
+function pair_total(values: int32^2) returns(result: int32)
+let
+	result = values[0] + values[1];
+tel

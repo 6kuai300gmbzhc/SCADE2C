@@ -1,3 +1,4 @@
+from typing import Optional
 import argparse
 from syntax_tree.scade_preprocess import get_parse
 from syntax_tree.scade_postprocess import post_process
@@ -15,6 +16,7 @@ def get_final_order(order):
             final_order.extend(op.instantiatedOpList)
     return final_order
 def scade_parse(input_path: str, main_operator_path: str, output_path: str, need_test_file: bool):
+    main_operator_path="::".join(map(lambda s:s+"_" if s[-1]=='l' else s,main_operator_path.split("::")))
     root_scope=get_parse(input_path, main_operator_path)
     post_order,main_operator=post_process(root_scope, main_operator_path)
     # 后处理流程，在这里进行拓扑排序

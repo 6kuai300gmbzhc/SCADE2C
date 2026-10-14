@@ -1,3 +1,4 @@
+from typing import Optional
 import copy
 
 from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
@@ -79,6 +80,6 @@ class Operator_PREFIXOP(SyntaxExpr):
         else:
             # python 的抽象语法
             raise UnknownIdentifierException(f"{predefOp}不是一个predefop")
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.predefOp=objects[0]

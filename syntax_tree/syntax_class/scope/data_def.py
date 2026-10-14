@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.graph import Graph
 from syntax_tree.syntax_class.Exceptions import UnknownIdentifierException
 from syntax_tree.syntax_class.expression.expr_common import bool_to_expression
@@ -100,14 +101,14 @@ class SyntaxDataDefScope(SyntaxScope):  # 在data_def下，只有状态机和clo
     def get_equation_by_lhs(self, lhs_name):
         return self.lhs2EquationDict.get(lhs_name)
 
-    def get_localVariable(self, name: str) -> SyntaxVariableSymbol or None:
+    def get_localVariable(self, name: str) -> Optional[SyntaxVariableSymbol]:
         '''在当前作用域找局部变量'''
         if name not in self.localSymbolTable.keys():
             return self.get_tmpSymbol(name)
         else:
             return self.localSymbolTable.get(name)
 
-    def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
+    def get_localVariable_InThisAndPreEnv(self, name: str) -> Optional[SyntaxVariableSymbol]:
         '''递归的找局部变量'''
         local_symbol = self.get_localVariable(name)
         if local_symbol is None:

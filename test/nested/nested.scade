@@ -1,0 +1,5 @@
+
+node nested(x: int32) returns (y: int32)
+let
+  y=x+1;
+tel;

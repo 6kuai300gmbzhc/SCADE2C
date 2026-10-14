@@ -1,0 +1,39 @@
+node re_activate(a:int32;b:int32;n:bool) returns(o:int32;p:int32;r:bool)
+var
+	u,v:bool;
+let
+	o,p,u=(restart restart_test every n)(a,b);
+	v=(restart t1 every n)(a);
+	r=u and v;
+tel
+
+function t1(a:int32) returns(b:bool)
+let
+	b=a>1;
+tel
+
+node restart_test(a:int32 last =1;b:int32 last=a) returns(o:int32 last=a;p:int32 last=o;r:bool last=false)
+var
+	v:int32 last=2;
+let
+	o=a->b;
+	p=last'a;
+	automaton A
+	initial state State1
+	let
+		v=last'v;
+	tel
+	until if t(v) restart State2;
+	state State2
+	let
+		v=1;
+	tel
+	until if 2 times (a>b) resume State1;
+	returns ..;
+	r=2 times v=1;
+tel
+
+node t(a:int32 last=3) returns(b:bool)
+let
+	b=(last'a -a)<1;
+tel

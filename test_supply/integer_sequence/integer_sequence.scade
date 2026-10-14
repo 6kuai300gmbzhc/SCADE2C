@@ -1,0 +1,25 @@
+node integer_sequence(step: int32; enable, reset: bool) returns(sequence: int32)
+let
+	automaton counter
+	initial state Paused
+	unless if enable resume Counting;
+	let
+		sequence = 0 -> pre sequence;
+	tel
+	state Counting
+	let
+		sequence = 0 -> if reset then 0 else pre sequence + next_step(step);
+	tel
+	until if not enable resume Paused;
+	returns ..;
+tel
+
+function next_step(value: int32) returns(result: int32)
+let
+	result = if value > 0 then value else 1;
+tel
+
+function reached_target(value, target: int32) returns(result: bool)
+let
+	result = value >= target;
+tel

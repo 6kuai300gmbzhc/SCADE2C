@@ -1,0 +1,20 @@
+node relation_operators(a, b: int32) returns(equal, different, less, greater, at_most, at_least, same_sign: bool)
+let
+	equal = a = b;
+	different = a <> b;
+	less = a < b;
+	greater = a > b;
+	at_most = compare_min(a, b);
+	at_least = compare_max(a, b);
+	same_sign = (a < 0) = (b < 0);
+tel
+
+function compare_min(left, right: int32) returns(result: bool)
+let
+	result = left <= right;
+tel
+
+function compare_max(left, right: int32) returns(result: bool)
+let
+	result = left >= right;
+tel

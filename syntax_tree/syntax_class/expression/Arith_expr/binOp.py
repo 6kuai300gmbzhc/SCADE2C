@@ -3,7 +3,7 @@ from syntax_tree.scade_type_inference import type_inference_on_binop
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression.const_value import ConstValue
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr, expression_factory
-from typing import TYPE_CHECKING
+from typing import Optional, TYPE_CHECKING
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 if TYPE_CHECKING:
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
@@ -59,7 +59,7 @@ class Arith_expr_binOp(SyntaxExpr):
     def set_params(self,params:list['SyntaxExpr']):
 
         self.subExpr.objects[0]=[params[0],params[1]]
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type, subtype, scope, objects, returnNum)
         self.subExpr=expression_factory("List_expr","List_expr",scope,[self.objects[0]])
         ...

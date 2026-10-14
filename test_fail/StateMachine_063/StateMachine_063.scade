@@ -1,0 +1,17 @@
+node StateMachine_063(iI1: int16)
+ returns (iO1: int16)
+ let
+automaton SM1
+ initial state ST1
+ let
+iO1 = iI1 * 2;
+ tel
+until if bV1 do
+ var bV1: bool;
+ let
+bV1 = iI1 > 10;
+ tel
+restart ST2;
+ state ST2
+ returns ..;
+ tel

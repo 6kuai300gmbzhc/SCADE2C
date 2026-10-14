@@ -1,0 +1,4 @@
+node assign_array(x: uint64) returns (z, t: uint64)
+let
+    z,t = [x,x];
+tel

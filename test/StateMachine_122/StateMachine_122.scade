@@ -1,0 +1,17 @@
+node StateMachine_122 (iI1: int32; bI2: bool)
+	returns (iO1: int32; iO2: int32)
+let
+automaton
+initial state ST1
+let
+	iO1 = iI1;
+ 	iO2 = iI1 * 2;
+tel
+until if bI2 restart ST2;
+state ST2
+let
+	iO1 = 1 -> - iI1;
+tel
+until if true restart ST1;
+returns ..;
+tel

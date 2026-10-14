@@ -1,0 +1,10 @@
+type
+	Tstr = {l1: int32,l2: float64};
+ 	Tarr = int32^3;
+function mix_construct(sI1: Tstr; sI2:{l1:int32})
+	returns (sO1: Tstr; aO2: Tarr; sO3:{l1: int32})
+let
+	sO1 = (sI1 with .l2 = 3.0);
+ 	aO2 = (sI2.l1^3 with [0] = 0);
+ 	sO3 = ((sI2 with .l1 = 1) with .l1 = 3);
+tel

@@ -1,0 +1,5 @@
+node mapinf (t1, t2: int32^10) returns (res :  bool^10)
+let
+  res = (map $<$ <<10>>)(t1, t2);
+tel
+

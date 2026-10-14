@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_postprocess import flatten_list
 from syntax_tree.scade_type_inference import type_inference_on_groups, clock_inference_sync
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr, bool_to_expression
@@ -54,7 +55,7 @@ class Tempo_expr_ARROW(SyntaxExpr):
         # for elem in syntaxUserOp.tmpParams:
         #     print("===", elem.name)
         return tmp_name_list[0] if len(tmp_name_list)==1 else tmp_name_list
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
 

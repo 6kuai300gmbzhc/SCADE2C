@@ -1,0 +1,11 @@
+const i:int32 = 3;
+const j:int32 = 3;
+const k:int32 = 3;
+
+node cst(x:int32) returns (y:int32)
+var z,t: int32;
+let
+  z = i+j;
+  t = j-k;
+  y = x + 2*z + 3*t;
+tel

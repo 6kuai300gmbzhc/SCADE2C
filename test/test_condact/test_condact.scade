@@ -1,0 +1,7 @@
+
+node test_condact(a,b: int32) returns (x,y,z: int32)
+let
+  x = a + b;
+  y = fby(0;1;a + 1);
+  z = fby(x;1;b + a);
+tel

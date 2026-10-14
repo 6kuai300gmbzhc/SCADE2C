@@ -1,0 +1,23 @@
+type Entry = {value: int32, valid: bool};
+
+node array_of_records(entries: Entry^2) returns(first_value: int32; second_valid: bool; valid_count: int32)
+let
+	first_value = scale_value(entries[0].value);
+	second_valid = entries[1].valid and is_positive(entries[1].value);
+	valid_count = count_valid(entries);
+tel
+
+function scale_value(value: int32) returns(result: int32)
+let
+	result = value * 10;
+tel
+
+function is_positive(value: int32) returns(result: bool)
+let
+	result = value > 0;
+tel
+
+function count_valid(entries: Entry^2) returns(result: int32)
+let
+	result = (if entries[0].valid then 1 else 0) + (if entries[1].valid then 1 else 0);
+tel

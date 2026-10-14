@@ -1,0 +1,4 @@
+node yyy(i1:int32; i2:int32) returns (o:int32)
+let
+    o=i1+i2;
+tel

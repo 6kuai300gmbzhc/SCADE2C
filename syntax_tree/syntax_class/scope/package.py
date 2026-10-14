@@ -1,3 +1,4 @@
+from typing import Optional
 from .scope import SyntaxScope
 from ..Exceptions import UnknownIdentifierException
 
@@ -19,7 +20,7 @@ class SyntaxPackageScope(SyntaxScope):
     '''为package'''
     name: str
     '''名字'''
-    prevScope: 'SyntaxPackageScope' or None
+    prevScope: Optional['SyntaxPackageScope']
     '''父作用域'''
     childScopeTable: dict
     '''子作用域,这里只保存了子package'''
@@ -96,7 +97,7 @@ class SyntaxPackageScope(SyntaxScope):
     def __repr__(self):
         return self.scope2str()
 
-    def get_localVariable_InThisAndPreEnv(self, name) -> 'SyntaxVariableSymbol' or None:
+    def get_localVariable_InThisAndPreEnv(self, name) -> Optional['SyntaxVariableSymbol']:
         raise Exception(f"{self.get_global_name()}是package")
 
     def add_typeSymbol(self, typeSymbol: SyntaxTypeSymbol) -> None:

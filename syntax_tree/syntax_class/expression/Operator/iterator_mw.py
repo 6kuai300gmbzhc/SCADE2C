@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_generate import generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr, \
     symbol2expr, GenEqu
 from syntax_tree.scade_type_inference import type_inference_on_groups
@@ -225,7 +226,7 @@ class Operator_iterator_mw(SyntaxExpr):
         else:
             out_symbols = [idx_out_symbol] + fold_symbols + map_out_symbols
         return [symbol.name for symbol in out_symbols]
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type, subtype, scope, objects, returnNum)
         self.iterator_op=objects[0]
         self.sub_operator=objects[2]

@@ -1,0 +1,4 @@
+function f<<n>>(a: int32^n) returns (o: int32)
+  o = if n < 3 then -1 else a[n -3];
+function N_correct (a1: int32^10) returns (o1: int32)
+ o1 = (f <<(10:int8)>>)(a1);

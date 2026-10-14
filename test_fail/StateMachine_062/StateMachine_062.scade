@@ -1,0 +1,18 @@
+node StateMachine_062 (iI1: int32)
+	returns (iO1: int32)
+var bV1: bool;
+let
+  automaton SM1
+  initial state ST1
+  var bV2: bool;
+  let
+    bV2 = false -> not pre bV2;
+    bV1 = iI1 <> 0;
+    iO1 = iI1 * 2;
+  tel
+  until if bV1 and bV2 restart ST2;
+
+  state ST2
+  unless if bV1 resume ST1;
+  returns ..;
+tel

@@ -1,0 +1,49 @@
+node Automaton3(Alarm:bool;t:int32) returns(out:int32;t3:int32 default=3 last=5;init1:int32)
+    let
+	automaton SM1
+	initial state State1
+	let
+			init1=4;
+			automaton SM2
+			initial state State1
+			unless if Alarm do
+			let
+				t3=5->1;
+			tel
+			resume State2;
+			let
+				out=3->2;
+			tel
+			until if not Alarm do
+			let
+				t3=4->3;
+			tel
+			restart State3;
+
+			state State2
+			var
+			let
+				out=2;
+			tel
+			until if not Alarm do
+			let
+			tel
+			resume State1;
+
+			state State3
+			let
+				out=8;
+			tel
+			until if Alarm do restart State2;
+			returns ..;
+	tel
+	until if t=3 restart State2;
+
+	state State2
+	let
+		out=4;
+		init1=0;
+	tel
+	until if t=4 restart State1;
+	returns ..;
+    tel

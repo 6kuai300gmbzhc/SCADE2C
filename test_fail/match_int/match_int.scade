@@ -1,0 +1,8 @@
+node match_int(x: int16)
+	returns (y: int16)
+let
+	activate when x match
+	|1:y=1;
+	|_:y=0;
+	returns ..;
+tel

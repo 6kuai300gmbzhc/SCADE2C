@@ -1,0 +1,20 @@
+const N: int32 = 3;
+
+node iterator_map(left, right: int32^N) returns(output: int32^N; checksum: int32; nonnegative, equal_totals, balanced: bool)
+let
+	output = (map $+$ <<N>>)(left, right);
+	checksum = checked_sum(sum_pair(left), sum_pair(right));
+	nonnegative = checksum >= 0;
+	equal_totals = sum_pair(left) = sum_pair(right);
+	balanced = checksum = sum_pair(output);
+tel
+
+function sum_pair(values: int32^N) returns(result: int32)
+let
+	result = values[0] + values[1] + values[2];
+tel
+
+function checked_sum(left, right: int32) returns(result: int32)
+let
+	result = if left + right < 0 then 0 else left + right;
+tel

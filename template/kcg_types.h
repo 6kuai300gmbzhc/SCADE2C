@@ -12,10 +12,16 @@
 typedef char kcg_char;
 #endif /* kcg_char */
 
-#ifndef kcg_bool
-#define kcg_bool kcg_bool
-typedef unsigned char kcg_bool;
-#endif /* kcg_bool */
+#include <stdbool.h>
+
+typedef _Bool kcg_bool;
+
+#ifndef kcg_false
+#define kcg_false false
+#endif
+#ifndef kcg_true
+#define kcg_true true
+#endif
 
 #ifndef kcg_float32
 #define kcg_float32 kcg_float32

@@ -1,0 +1,9 @@
+node test_relation(in1,in2:bool;in3,in4:int64) returns(o1,o2,o3,o4,o5,o6:bool)
+let
+	o1 = (in3 = in4) = (in3 < in4);
+	o2 = in3 <> in4;
+	o3= in3 < in4;
+	o4=in3 > in4;
+	o5=in3 <= in4;
+	o6=in3 >= in4;
+tel

@@ -2,8 +2,9 @@ from syntax_tree.scade_postprocess import flatten_list
 from syntax_tree.scade_type_inference import type_inference_on_groups, clock_inference_sync
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr, expression_factory
 from syntax_tree.syntax_class.syntaxType import SyntaxType
-from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register
-from typing import TYPE_CHECKING
+from syntax_tree.scade_generate import GenEqu, generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr
+from typing import TYPE_CHECKING, Optional
+
 if TYPE_CHECKING:
 
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
@@ -53,20 +54,23 @@ class Tempo_expr_FBY(SyntaxExpr):
         depth = genEqu.depth
         preCode = f"{'    ' * depth}if({syntaxUserOp.var_change_name(initVar.name)}){{\n" \
                   f"{'    ' * (depth + 1)}for(int idx=0;idx<{arrSyntaxType.get_size()};idx++){{\n" \
-                  f"{'    ' * (depth + 2)}{syntaxUserOp.var_change_name(tmp_arr_var_name)}[idx] = {self.objects[2].generate_code(syntaxUserOp, genEqu)};\n" \
+                  f"{assign_lhs_to_rhs_expr(f'{syntaxUserOp.var_change_name(tmp_arr_var_name)}[idx]',self.objects[2].generate_code(syntaxUserOp, genEqu),self.lhsTypeList[0],depth+2,syntaxUserOp)}"\
                   f"{'    ' * (depth + 1)}}}\n" \
                   f"{'    ' * (depth + 1)}{syntaxUserOp.var_change_name(tmp_idx_var_name)} = 0;\n" \
                   f"{'    ' * depth}}}\n"
         postCode = [
-            f"{syntaxUserOp.var_change_name(tmp_arr_var_name)}[{syntaxUserOp.var_change_name(tmp_idx_var_name)}]={self.objects[0].generate_code(syntaxUserOp, genEqu)};\n",
-            f"{syntaxUserOp.var_change_name(tmp_idx_var_name)}=({syntaxUserOp.var_change_name(tmp_idx_var_name)}+1)%({arrSyntaxType.get_size()});\n"]
+            assign_lhs_to_rhs_expr(f"{syntaxUserOp.var_change_name(tmp_arr_var_name)}[{syntaxUserOp.var_change_name(tmp_idx_var_name)}]",
+                                   self.objects[0].generate_code(syntaxUserOp, genEqu),self.lhsTypeList[0],1,syntaxUserOp),
+            assign_lhs_to_rhs_expr(syntaxUserOp.var_change_name(tmp_idx_var_name),f"({syntaxUserOp.var_change_name(tmp_idx_var_name)}+1)%({arrSyntaxType.get_size()})",
+                                   SyntaxType("int32"),1,syntaxUserOp)
+        ]
         arrVar.postExpr = postCode
         genEqu.add_preEquations(preCode)
 
         return f"{syntaxUserOp.var_change_name(tmp_arr_var_name)}[{syntaxUserOp.var_change_name(tmp_idx_var_name)}]"
         #
         # return self.equivalent_expr.generate_code(syntaxUserOp,genEqu)
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
 

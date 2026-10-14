@@ -1,0 +1,24 @@
+node array_transform(left, right: int32^2) returns(reversed: int32^2; joined: int32^4; checksum: int32; first_dominates, equal_sums: bool; largest: int32)
+let
+	reversed = reverse offset_pair(left);
+	joined = offset_pair(left) @ offset_pair(right);
+	checksum = pair_sum(left) + pair_sum(right);
+	first_dominates = pair_sum(left) > pair_sum(right);
+	equal_sums = pair_sum(left) = pair_sum(right);
+	largest = max_pair(left);
+tel
+
+function offset_pair(values: int32^2) returns(result: int32^2)
+let
+	result = [values[0] + 1, values[1] + 1];
+tel
+
+function pair_sum(values: int32^2) returns(result: int32)
+let
+	result = values[0] + values[1];
+tel
+
+function max_pair(values: int32^2) returns(result: int32)
+let
+	result = if values[0] > values[1] then values[0] else values[1];
+tel

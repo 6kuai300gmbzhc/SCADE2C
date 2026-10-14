@@ -1,0 +1,1164 @@
+
+const D_Vdt : float64 = 0.5;
+
+const D_Vdt1 : float64 = 0.15;
+
+const D_Vit1 : float64 = 3;
+
+const D_Vit2 : float64 = 7;
+
+const D_Vit3 : float64 = 2;
+
+const D_Vpt : float64 = 2;
+
+const k : float64 = 1;
+
+const kd : float64 = 5;
+
+const ki1 : float64 = 3;
+
+const ki2 : float64 = 0.01;
+
+const ki3 : float64 = 1.5;
+
+const kp : float64 = 1;
+
+const Ts : float64 = 0.02;
+
+
+node err(vw : float64) returns (err : float64 last = 0.0)
+var
+  _L1 : float64;
+  _L2 : float64;
+  _L3 : float64;
+  _L4 : float64;
+  _L5 : float64;
+  _L6 : bool;
+  _L7 : float64;
+let
+  err= _L4;
+  _L1= vw;
+  _L2= #1 vwtovr(_L1);
+  _L3= _L2 #1 - _L1;
+  _L4= #1 if _L6 then (_L3) else (_L7);
+  _L5= 0;
+  _L6= _L3 #1 > _L5;
+  _L7= 0;
+tel
+
+
+node errtovd(err : float64 last = 0) returns (vd : float64 last = 0)
+var
+  _L1 : float64;
+  _L3 : float64;
+  _L2 : float64;
+  _L4 : float64;
+let
+  _L1= err;
+  _L2, _L3= #1 errtovd0(_L1);
+  _L4= #1 pwlinear::LimiterUnSymmetrical(_L3, 0.0, 1 #1 / 0);
+  _= _L2;
+  vd= _L4;
+tel
+
+
+node errtovd0(err : float64 last = 0)
+  returns (temp3 : float64; vd0 : float64 last = 0)
+var
+  _L2 : float64;
+  _L3 : float64;
+  _L4 : float64;
+  _L5 : bool;
+  _L6 : float64;
+  _L7 : float64;
+  _L8 : float64;
+  _L9 : float64;
+  _L10 : float64;
+  _L11 : float64;
+  _L12 : float64;
+  _L13 : float64;
+let
+  _L2= _L4 #1 - _L3;
+  temp3= _L2;
+  _L3= D_Vdt;
+  _L4= err;
+  _L5= _L2 #1 > _L6;
+  _L6= 0;
+  vd0= _L7;
+  _L7= #1 if _L5 then (_L13) else (_L6);
+  _L8= err;
+  _L9= #1 pre (_L8);
+  _L10= (0) #1 -> (_L9);
+  _L11= _L8 #2 - _L10;
+  _L12= kd;
+  _L13= _L11 #1 * _L12;
+tel
+
+
+node errtovi(err : float64 last = 0)
+  returns (vi : float64 last = 0; vi1 : float64; Num_Abs : float64 last = 0)
+var
+  _L4 : float64;
+  _L3 : float64;
+  _L2 : float64;
+  _L1 : float64;
+  _L5 : float64;
+  _L6 : float64;
+  _L7 : float64;
+  _L8 : bool;
+  _L11 : bool;
+  _L15 : float64;
+  _L25 : float64;
+  _L29 : float64;
+  _L31 : float64;
+  _L39 : float64;
+  _L40 : float64;
+  _L41 : float64;
+  _L42 : float64;
+  _L44 : float64;
+  _L47 : float64;
+  _L48 : float64;
+  _L52 : float64;
+  _L51 : float64;
+  _L54 : float64;
+  _L53 : float64;
+let
+  _L1, _L2, _L3, _L4= #1 errtovi0(_L5, _L48, _L52, _L54);
+  _L5= err;
+  _L6= #1 if _L11 then (_L40) else (_L29);
+  _L7= #2 if _L8 then (_L42) else (_L4);
+  _L8= _L4 #1 > _L31;
+  vi1= _L15;
+  _L11= _L1 #1 < _L39;
+  _L15= #3 if _L11 then (_L44) else (_L7);
+  _L25= #4 if _L11 then (_L41) else (_L3);
+  Num_Abs= _L25;
+  vi= _L6;
+  _L29= #1 pwlinear::LimiterUnSymmetrical(_L1, 0.0, 10.0);
+  _= _L2;
+  _L31= 10.0;
+  _L39= 0;
+  _L40= 0;
+  _L41= 0;
+  _L42= 10.0;
+  _L44= 0.0;
+  _L47= #1 pre (_L25);
+  _L48= (0) #1 -> (_L47);
+  _L51= #2 pre (_L6);
+  _L52= (0) #2 -> (_L51);
+  _L53= #3 pre (_L15);
+  _L54= (0) #3 -> (_L53);
+tel
+
+
+node errtovi0(
+    err : float64 last = 0;
+    Num0 : float64 last = 0;
+    vi0 : float64 last = 0;
+    vi10 : float64 last = 0)
+  returns (
+    vi : float64 last = 0;
+    temp4 : float64 last = 0;
+    Num : float64 default = 0 last = 0;
+    vi1 : float64 last = 0)
+var
+  _L1 : float64;
+  _L2 : float64;
+  _L3 : float64;
+let
+  _L1= err;
+  _L2= D_Vit1;
+  _L3= _L1 #1 - _L2;
+  temp4= _L3;
+  activate IfBlock1 if temp4 #17 <= 0
+    then let
+      Num= Num0 #3 + 0.02;
+      vi= vi10 #2 - Ts #3 * Ts #3 * Num #3 * Num #3 * ki2;
+    tel
+    else if temp4 #19 > D_Vit2
+    then let
+      Num= 0;
+      vi= vi0 #2 + Ts #2 * ki1;
+      vi1= vi;
+    tel
+    else let
+      Num= 0;
+      vi= vi0 #1 + Ts #1 * ki3 #1 * temp4;
+      vi1= vi;
+    tel
+  returns ..;
+tel
+
+
+node errtovp(err : float64) returns (vp : float64 last = 0; temp2 : float64)
+var
+  _L1 : float64;
+  _L2 : float64;
+  _L4 : float64;
+  _L7 : bool;
+  _L6 : float64;
+  _L9 : float64;
+  _L10 : float64;
+  _L11 : float64;
+  _L12 : float64;
+let
+  temp2= _L4;
+  _L1= err;
+  _L2= D_Vpt;
+  _L4= _L1 #1 - _L2;
+  _L6= #1 if _L7 then (_L11) else (_L12);
+  _L7= _L4 #1 > _L9;
+  _L9= 0;
+  vp= _L6;
+  _L10= kp;
+  _L11= _L4 #1 * _L10;
+  _L12= 0;
+tel
+
+
+node pbm(command : float64; vw : float64; t : float64)
+  returns (
+    brkcmd : float64 last = 0;
+    vref : float64;
+    num : float64;
+    sumerror : float64)
+var
+  _L8 : float64;
+  _L9 : float64;
+  _L10 : float64;
+  _L13 : float64;
+  _L12 : float64;
+  _L11 : float64;
+  _L15 : float64;
+  _L14 : float64;
+  _L17 : bool;
+  _L19 : float64;
+  _L20 : bool;
+  _L21 : float64;
+  _L22 : float64;
+  _L25 : float64;
+  _L26 : float64;
+  _L27 : float64;
+  _L29 : float64;
+  _L32 : float64;
+let
+  _L8= vw;
+  _L9= #1 err(_L8);
+  _L10= _L29 #1 + _L14 #1 + _L11;
+  _L11, _L12, _L13= #1 errtovi(_L9);
+  _L14, _L15= #1 errtovp(_L9);
+  _L17= _L10 #1 < _L32;
+  _L19= #1 if _L17 then (_L32) else (_L22);
+  _L20= _L10 #1 > _L21;
+  _L21= command;
+  _L22= #2 if _L20 then (_L21) else (_L10);
+  _L25= command;
+  _L26= _L25 #1 - _L19;
+  brkcmd= _L26;
+  sumerror= _L11;
+  num= _L13;
+  _L27= #1 vwtovr(_L8);
+  vref= _L27;
+  _= _L15;
+  _= _L12;
+  _L29= #1 errtovd(_L9);
+  _L32= 0;
+tel
+
+
+node vwtovr(vw : float64 last = 70)
+  returns (vr : float64 default = 70 last = 70)
+var
+  _L1 : float64;
+  _L2 : float64;
+  _L3 : float64;
+  _L4 : float64;
+  _L5 : float64;
+  _L6 : float64;
+  _L8 : bool;
+let
+  _L1= (70) #1 -> (_L2);
+  _L2= #1 pre (_L5);
+  _L3= _L1 #1 - _L4;
+  _L4= 0.09;
+  _L5= #1 if _L8 then (_L6) else (_L3);
+  _L6= vw;
+  _L8= _L3 #1 < _L6;
+  vr= _L5;
+tel
+
+
+package aircraft_brake_system
+  const Constant1 : float64 = 0.0;
+
+  node brake_system(brake_pressure : float64; t : float64 last = 0)
+    returns (
+      Kbbm : float64;
+      Tb : float64;
+      wheel_speed_w : float64 default = 70 last = 70;
+      wheel_speed_v : float64;
+      slid_ratio : float64;
+      V_acce : float64;
+      V_plane : float64 last = 70;
+      Ff : float64)
+  var
+    _L1 : float64;
+    _L4 : float64;
+    _L3 : float64;
+    _L2 : float64;
+    _L6 : float64;
+    _L7 : float64;
+    _L9 : float64;
+    _L8 : float64;
+    _L11 : float64;
+    _L12 : float64;
+    _L14 : float64;
+    _L16 : float64;
+    _L19 : float64;
+    _L21 : float64;
+    _L20 : float64;
+    _L24 : float64;
+    _L25 : float64;
+    _L26 : float64;
+    _L18 : float64;
+    _L17 : float64;
+  let
+    _L1= brake_pressure;
+    _L2, _L3, _L4= #1 pbtb::pbtb(_L1, _L24);
+    Kbbm= _L6;
+    _L6= _L3 #1 * _L7;
+    _L7= 1 #1 / 5000;
+    _L8, _L9= #1 wheelmodel::wheelmodel(_L2, _L18, _L26, _L11);
+    wheel_speed_w= _L8;
+    wheel_speed_v= _L9;
+    _L11= #1 lugrerunwaymodel::runwaymodel(_L25, _L14, _L12);
+    _L12= #1 wheelload::wheelload();
+    _L14= #1 slidratio::slidratio(_L20, _L16);
+    _L16= (200) #1 -> (_L19);
+    V_acce= _L17;
+    V_plane= _L18;
+    _L19= #1 pre (_L8);
+    Tb= _L2;
+    slid_ratio= _L14;
+    Ff= _L11;
+    _L20= (70) #2 -> (_L21);
+    _L21= #2 pre (_L18);
+    _L24= #1 aircraft_brake_system::t();
+    _L25= #2 aircraft_brake_system::t();
+    _L26= #3 aircraft_brake_system::t();
+    _L17, _L18= #1 airdynamic::airdynamic(_L11);
+  tel
+
+  node t() returns (t : float64 last = 0)
+  var
+    _L4 : float64;
+    _L5 : float64;
+    _L7 : float64;
+    _L8 : float64;
+  let
+    t= _L5;
+    _L4= 0.001;
+    _L5= _L8 #1 + _L4;
+    _L7= #2 pre (_L5);
+    _L8= (0) #2 -> (_L7);
+  tel
+
+end;
+
+
+package airdynamic
+  package Transfer_Fcn_First_Order
+    const ICPrevOutput : float64 = 0._f64;
+
+    const PoleZ : float64 = 0.135335283237_f64;
+
+    node Transfer_Fcn(U : float64) returns (Y : float64)
+    var
+      _Pole____Y_k_1____U_k___ : float64;
+      __Y_k_1____U_k___ : float64;
+      Y_k_1_ : float64;
+      _L_1 : float64;
+      _L : float64;
+    let
+      _L= U;
+      ()=
+        #Data_Type_Duplicate Data_Type_Duplicate(_L_1, _L, _Pole____Y_k_1____U_k___);
+      __Y_k_1____U_k___= Y_k_1_ #1 - _L;
+      _Pole____Y_k_1____U_k___= #2 libsi::Gain(__Y_k_1____U_k___, PoleZ);
+      _L_1= _Pole____Y_k_1____U_k___ #3 + _L;
+      Y_k_1_= #4 libsi::UnitDelayHelper(_L_1, ICPrevOutput);
+      Y= _L_1;
+    tel
+
+    function #pragma kcg expand #end Data_Type_Duplicate(
+        In1 : float64;
+        In2 : float64;
+        _Pole____Y_k_1____U_k___ : float64)
+      returns ()
+    let
+      _= _Pole____Y_k_1____U_k___;
+      _= In2;
+      _= In1;
+    tel
+
+  end;
+
+  function #pragma kcg expand #end Subtract1(In1 : float64; In2 : float64)
+    returns (Out1 : float64)
+  let
+    Out1= In2 #0 + In1;
+  tel
+
+  node airdynamic(Fwf : float64) returns (dec___ : float64; V_plane : float64)
+  var
+    Y : float64;
+    probe Scope13 : float64;
+    _L_7 : float64;
+    _L_6 : float64;
+    _L_4 : float64;
+    _L_2 : float64;
+    _L_1 : float64;
+    _L : float64;
+    _L1 : float64;
+    _L2 : float64;
+    _L3 : float64;
+    _L4 : float64;
+  let
+    _L_4= Fwf;
+    _L_2= #0 Constant();
+
+    --_L= #1 Integrator1(_L_6);
+    _L= (0._f64) -> (pre (_L  + 1.0_f64 * 0.02_f64 * _L_6));
+
+    Scope13= _L_1;
+    _L_1= #8 Subtract1(_L_2, _L);
+    Y=
+      #Transfer_Fcn_First_Order
+      Transfer_Fcn_First_Order::Transfer_Fcn(_L_7);
+
+    -- _L_6= #6 libsi::UnitDelayHelper(Y, 0._f64);
+    _L_6= fby(Y;1;0._f64);
+
+    _L_7= #7 Discrete::zero_order_hold(_L2);
+    dec___= _L2;
+    V_plane= _L_1;
+    _L1= 1 #1 / 16000;
+    _L2= _L3 #1 * _L1;
+    _L3= _L_4 #2 * _L4;
+    _L4= - 2;
+  tel
+
+  function #pragma kcg expand #end Subtract(
+      In1 : float64;
+      In2 : float64;
+      In3 : float64;
+      In4 : float64;
+      In5 : float64)
+    returns (Out1 : float64)
+  let
+    Out1= #0 sum_pmmmm(In1, In2, In3, In4, In5);
+  tel
+
+  function #pragma kcg expand #end sum_pmmmm(
+      x1 : 't;
+      x2 : 't;
+      x3 : 't;
+      x4 : 't;
+      x5 : 't)
+    returns (y : 't)
+    where 't numeric
+  let
+    y= x1 #0 - x2 #1 - x3 #2 - x4 #3 - x5;
+  tel
+
+  node #pragma kcg expand #end Integrator1(In1 : float64)
+    returns (Out1 : float64)
+  var
+    x : float64;
+    y : float64;
+  let
+    y= (0._f64) -> (pre (x));
+    x= Out1 #3 + 1.0_f64 #2 * 0.02_f64 #2 * In1;
+    Out1= y;
+  tel
+
+  function #pragma kcg expand #end Constant() returns (Out1 : float64)
+  let
+    Out1= 70._f64;
+  tel
+
+end;
+
+
+package antiskidwithoutVp
+  const Constant1 : float64 = 0.0;
+
+  node antiskidwithoutVp()
+    returns (V_plane : float64 last = 70; V_wheel : float64 last = 70)
+  var
+    _L4 : float64;
+    _L3 : float64;
+    _L2 : float64;
+    _L1 : float64;
+    _L6 : float64;
+    _L15 : float64;
+    _L14 : float64;
+    _L13 : float64;
+    _L12 : float64;
+    _L11 : float64;
+    _L10 : float64;
+    _L9 : float64;
+    _L8 : float64;
+    _L19 : float64;
+    _L18 : float64;
+    _L22 : float64;
+    _L27 : float64;
+    _L26 : float64;
+    _L25 : bool;
+    _L24 : bool;
+    _L28 : float64;
+  let
+    _L1, _L2, _L3, _L4= #1 pbm(_L6, _L26, _L27);
+    _L6= 8;
+    _L8, _L9, _L10, _L11, _L12, _L13, _L14, _L15=
+      #1 aircraft_brake_system::brake_system(_L28, _L22);
+    _L18= #1 pre (_L11);
+    _L19= (70) #1 -> (_L18);
+    _L22= #2 t();
+
+    automaton SM1
+      initial state State1
+        unless
+          if V_plane #3 <= 3 restart State2;
+        let
+        tel
+
+      state State2
+        let
+        tel
+    returns ..;
+    V_plane= _L14;
+    _L24, _L25, _L26, _L27= #1 t_to_Tsm(_L19);
+    _L28= #2 Hydraulic_system::Hydraulic(_L1);
+    V_wheel= _L11;
+  tel
+
+  node t() returns (t : float64 last = 0)
+  var
+    _L4 : float64;
+    _L5 : float64;
+    _L7 : float64;
+    _L8 : float64;
+  let
+    t= _L5;
+    _L4= 0.001;
+    _L5= _L8 #1 + _L4;
+    _L7= #1 pre (_L5);
+    _L8= (0) #1 -> (_L7);
+  tel
+
+  node t_to_Tsm(vw0 : float64 last = 70)
+    returns (
+      edge : bool;
+      Return : bool last = false;
+      vw : float64 default = 70 last = 70;
+      a : float64 default = 0 last = 0)
+  var
+    _L1 : float64;
+    _L6 : float64;
+    _L7 : float64;
+    _L8 : bool;
+    _L9 : float64;
+    _L10 : float64;
+  let
+    _L1= #1 t();
+    edge= _L8;
+
+    automaton SM1
+      initial state State1
+        let
+          vw= last 'vw;
+          Return= false;
+          a= last 'a;
+        tel
+        until
+          if 19 #6 times edge do let tel restart State2;
+
+      state State2
+        let
+          vw= vw0;
+          Return= true;
+          a= last 'a #1 + 1;
+        tel
+        until
+          if true do let tel restart State1;
+    returns ..;
+    _L6= #1 pre (_L1);
+    _L7= (0) #1 -> (_L6);
+    _L8= _L9 #2 > _L10;
+    _L9= _L1 #1 - _L7;
+    _L10= 0;
+  tel
+
+end;
+
+
+package Hydraulic_system
+  package Transfer_Fcn_First_Order
+    const ICPrevOutput : float64 = 0._f64;
+
+    const PoleZ : float64 = 0.997010465608_f64;
+
+    node Transfer_Fcn(U : float64) returns (Y : float64)
+    var
+      _Pole____Y_k_1____U_k___ : float64;
+      __Y_k_1____U_k___ : float64;
+      Y_k_1_ : float64;
+      _L_1 : float64;
+      _L : float64;
+    let
+      _L= U;
+      ()=
+        #Data_Type_Duplicate Data_Type_Duplicate(_L_1, _L, _Pole____Y_k_1____U_k___);
+      __Y_k_1____U_k___= Y_k_1_ #1 - _L;
+      _Pole____Y_k_1____U_k___= #2 libsi::Gain(__Y_k_1____U_k___, PoleZ);
+      _L_1= _Pole____Y_k_1____U_k___ #3 + _L;
+      Y_k_1_= #4 libsi::UnitDelayHelper(_L_1, ICPrevOutput);
+      Y= _L_1;
+    tel
+
+    function #pragma kcg expand #end Data_Type_Duplicate(
+        In1 : float64;
+        In2 : float64;
+        _Pole____Y_k_1____U_k___ : float64)
+      returns ()
+    let
+      _= _Pole____Y_k_1____U_k___;
+      _= In2;
+      _= In1;
+    tel
+
+  end;
+
+  node Hydraulic(brake_command : float64) returns (Pb : float64)
+  var
+    Y : float64;
+    _L_4 : float64;
+    _L_3 : float64;
+    _L_2 : float64;
+    _L_1 : float64;
+    _L : float64;
+  let
+    _L= brake_command;
+    _L_1= #1 libsi::Gain(_L_2, 1000000._f64);
+    _L_2= #2 pwlinear::LimiterUnSymmetrical(_L, 0._f64, 21._f64);
+    Y=
+      #Transfer_Fcn_First_Order
+      Transfer_Fcn_First_Order::Transfer_Fcn(_L_3);
+    _L_4= #3 libsi::UnitDelayHelper(Y, 0._f64);
+    _L_3= #4 Discrete::zero_order_hold(_L_1);
+    Pb= _L_4;
+  tel
+
+end;
+
+
+package lugrerunwaymodel
+  function magicequation4(t : float64)
+    returns (b : float64; c : float64; d : float64)
+  let
+    activate IfBlock1 if t #4 < 9
+      then let
+        b= 14.0326;
+        c= 1.5344;
+        d= 0.4;
+      tel
+      else let
+        b= 14.0326;
+        c= 1.5344;
+        d= 0.4;
+      tel
+    returns ..;
+  tel
+
+  function runwaymodel(t : float64; slidratio : float64; wheelload : float64)
+    returns (Flw : float64)
+  var
+    _L1 : float64;
+    _L4 : float64;
+    _L3 : float64;
+    _L2 : float64;
+    _L5 : float64;
+    _L6 : float64;
+    _L7 : float64;
+    _L8 : float64;
+    _L9 : float64;
+    _L10 : float64;
+    _L11 : float64;
+    _L12 : float64;
+    _L13 : float64;
+  let
+    _L1= t;
+    _L2, _L3, _L4= #1 magicequation4(_L1);
+    _L5= slidratio;
+    _L6= _L2 #1 * _L5;
+    _L7= #1 mathext::AtanR(_L6);
+    _L8= _L3 #2 * _L7;
+    _L9= #1 mathext::SinR(_L8);
+    _L10= _L13 #3 * _L9;
+    _L11= wheelload;
+    _L12= _L10 #4 * _L11;
+    Flw= _L12;
+    _L13= #1 pwlinear::LimiterUnSymmetrical(_L4, 0.3_f64, 0.6_f64);
+  tel
+
+end;
+
+
+package pbtb
+  const k1 : float64 = Tsm / Pm;
+
+  const k2 : float64 = Tsm / Px;
+
+  const P0 : float64 = 0.0;
+
+  const Pm : float64 = 21000000.0;
+
+  const Px : float64 = 19000000.0;
+
+  const Tsm : float64 = 20000;
+
+  node pbtb(Pb : float64; t : float64)
+    returns (
+      Tb : float64 default = 7000 last = 7000;
+      Kb : float64 last = Tsm #18 / 21;
+      Pr : float64 default = Pb last = Pb)
+  var
+    _L13 : float64;
+    _L14 : float64;
+    _L15 : float64;
+    _L16 : float64;
+  let
+    activate IfBlock1 if Pb #2 < P0
+      then let
+        Tb= 0.0;
+      tel
+      else if last 'Tb #21 / k2 #9 >= Pb #11 and Pb #9 > P0
+      then var
+        _L6 : float64;
+        _L5 : float64;
+        _L4 : float64;
+        _L2 : float64;
+        _L9 : float64;
+      let
+        Tb= _L5;
+        _L2= P0;
+        _L4= Pb;
+        _L5= _L9 #2 * _L6;
+        _L6= _L4 #2 - _L2;
+        _L9= k2;
+      tel
+      else if last 'Tb #24 / k2 #11 + P0 #16 < Pb #14 and last 'Pr #12 > Pb
+      then let
+        Tb= last 'Tb;
+      tel
+      else if last 'Tb #25 / k1 #12 + P0 #13 > Pb #15 and last 'Pr #17 < Pb
+      then let
+        Tb= last 'Tb;
+      tel
+      else if last 'Tb #26 / k1 #13 + P0 #18 < Pb #16 and Pm #10 >= Pb
+      then let
+        Tb= k1 #1 * (Pb #1 - P0);
+      tel
+      else let
+        Tb= last 'Tb;
+      tel
+    returns ..;
+    Pr= _L13;
+    _L13= Pb;
+    Kb= _L14;
+    _L14= _L15 #1 / _L16;
+    _L15= Tsm;
+    _L16= 21;
+  tel
+
+end;
+
+
+package slidratio
+  function slidratio(V_plane : float64; w : float64)
+    returns (slid_ratio : float64)
+  var
+    probe Scope2 : float64;
+    probe Scope1 : float64^2;
+    _L_6 : float64;
+    _L_5 : float64^2;
+    _L_4 : float64;
+    _L_3 : float64;
+    _L_2 : float64;
+    _L : float64;
+    _L1 : float64;
+  let
+    _L_4= V_plane;
+    _L_6= w;
+    _L_5= [_L_4, _L_6];
+    _L_3= #1 pwlinear::LimiterUnSymmetrical(_L1, 0._f64, 1._f64);
+    Scope1= _L_5;
+    Scope2= _L;
+    _L= _L_4 #2 - _L_2;
+    _L_2= #3 libsi::Gain(_L_6, 0.35_f64);
+    slid_ratio= _L_3;
+    _L1= _L #1 / _L_4;
+  tel
+
+  function #pragma kcg expand #end product_dp(x1 : 't; x2 : 't)
+    returns (y : 't)
+    where 't numeric
+  let
+    y= (1._f64 : 't) #1 / x1 #2 * x2;
+  tel
+
+end;
+
+
+package wheelload
+  const Constant1 : float64 = 0.0;
+
+  function wheelload() returns (wheelload : float64)
+  var
+    _L1 : float64;
+  let
+    wheelload= _L1;
+    _L1= 50000;
+  tel
+
+end;
+
+
+package wheelmodel
+  const Constant1 : float64 = 0.0;
+
+  node fcn1(u : float64; vp : float64; t : float64 last = 0)
+    returns (y : float64; sum : float64 last = 0; lastt : float64 last = 0)
+  var
+    _L4 : float64;
+    _L5 : float64;
+    _L8 : float64;
+    _L9 : float64;
+    _L10 : float64;
+    _L11 : float64;
+    _L12 : float64;
+    _L14 : float64;
+    _L16 : float64;
+    _L17 : float64;
+    _L18 : float64;
+    _L19 : bool;
+    _L20 : float64;
+    _L21 : float64;
+    _L22 : float64;
+    _L23 : float64;
+    _L24 : float64;
+    _L25 : float64;
+    _L26 : float64;
+    _L28 : bool;
+  let
+    sum= _L21;
+    _L4= _L14 #1 + _L11;
+    _L5= #2 pre (_L21);
+    lastt= _L16;
+    _L8= #3 pre (_L17);
+    _L9= t;
+    _L10= _L9 #1 - _L16;
+    _L11= _L10 #1 * _L12;
+    _L12= u;
+    _L14= (0) #2 -> (_L5);
+    _L16= (0) #3 -> (_L8);
+    _L17= t;
+    _L18= - 200;
+    _L19= _L4 #2 < _L18;
+    _L20= #1 if _L19 then (_L18) else (_L4);
+    _L21= #2 if _L28 then (_L22) else (_L20);
+    _L22= _L25 #4 - _L23;
+    _L23= 200;
+    _L24= vp;
+    _L25= _L24 #3 / _L26;
+    _L26= 0.35;
+    _L28= _L20 #2 > _L22;
+    y= _L21;
+  tel
+
+  function fcn2(w : float64; vp : float64) returns (y2 : float64)
+  let
+    activate IfBlock1 if w #1 <= vp then let y2= w; tel else let y2= vp; tel
+    returns ..;
+  tel
+
+  node ytow(y : float64; vp : float64) returns (w : float64)
+  var
+    _L1 : float64;
+    _L3 : float64;
+    _L4 : float64;
+    _L5 : bool;
+    _L6 : float64;
+    _L7 : float64;
+    _L8 : float64;
+    _L9 : float64;
+    _L10 : float64;
+    _L11 : float64;
+  let
+    _L1= #1 if _L5 then (_L7) else (_L9);
+    _L3= 0;
+    _L4= vp;
+    _L5= _L4 #1 > _L3;
+    _L6= y;
+    _L7= _L6 #1 + _L8;
+    _L8= 200;
+    _L9= 0;
+    _L10= _L1 #1 * _L11;
+    _L11= 0.35;
+    w= _L10;
+  tel
+
+  function tbffw_u(Tb : float64; Ffw : float64) returns (u : float64)
+  var
+    _L1 : float64;
+    _L2 : float64;
+    _L3 : float64;
+    _L4 : float64;
+    _L5 : float64;
+    _L6 : float64;
+    _L7 : float64;
+  let
+    _L1= Ffw;
+    _L2= _L1 #1 * _L3;
+    _L3= 0.35;
+    _L4= Tb;
+    _L5= _L2 #1 - _L4;
+    _L6= _L5 #2 * _L7;
+    _L7= 1 #6 / 2;
+    u= _L6;
+  tel
+
+  node wheelmodel(Tb : float64; vp : float64; t : float64; Ffw : float64)
+    returns (w : float64; w_v : float64)
+  var
+    _L1 : float64;
+    _L2 : float64;
+    _L3 : float64;
+    _L6 : float64;
+    _L5 : float64;
+    _L4 : float64;
+    _L7 : float64;
+    _L8 : float64;
+    _L9 : float64;
+    _L10 : float64;
+    _L11 : float64;
+    _L12 : float64;
+    _L13 : float64;
+    _L15 : float64;
+    _L16 : bool;
+    _L18 : float64;
+    _L19 : float64;
+    _L20 : float64;
+    _L22 : float64;
+    _L23 : float64;
+    _L24 : float64;
+  let
+    _L1= #1 tbffw_u(_L2, _L3);
+    _L2= Tb;
+    _L3= Ffw;
+    _L4, _L5, _L6= #1 fcn1(_L1, _L7, _L8);
+    _L7= vp;
+    _L8= t;
+    _L9= #1 fcn2(_L18, _L19);
+    _L10= _L9 #1 * _L11;
+    _L11= 1 #1 / 0.35;
+    w= _L10;
+    w_v= _L9;
+    _L12= 200;
+    _L13= _L12 #1 + _L4;
+    _L15= vp;
+    _L16= _L15 #1 > _L22;
+    _L18= _L24 #2 * _L20;
+    _L19= vp;
+    _L20= 0.35;
+    _L22= 0;
+    _L23= 0;
+    _L24= #2 if _L16 then (_L13) else (_L23);
+  tel
+
+end;
+
+
+package smlk
+  package Transfer_Fcn_First_Order
+    const ICPrevOutput : float64 = 0._f64;
+
+    const PoleZ : float64 = 0.135335283237_f64;
+
+    node Transfer_Fcn(U : float64) returns (Y : float64)
+    var
+      _Pole____Y_k_1____U_k___ : float64;
+      __Y_k_1____U_k___ : float64;
+      Y_k_1_ : float64;
+      _L_1 : float64;
+      _L : float64;
+    let
+      _L= U;
+      ()=
+        #Data_Type_Duplicate Data_Type_Duplicate(_L_1, _L, _Pole____Y_k_1____U_k___);
+      __Y_k_1____U_k___= Y_k_1_ #1 - _L;
+      _Pole____Y_k_1____U_k___= #2 libsi::Gain(__Y_k_1____U_k___, PoleZ);
+      _L_1= _Pole____Y_k_1____U_k___ #3 + _L;
+      Y_k_1_= #4 libsi::UnitDelayHelper(_L_1, ICPrevOutput);
+      Y= _L_1;
+    tel
+
+    function #pragma kcg expand #end Data_Type_Duplicate(
+        In1 : float64;
+        In2 : float64;
+        _Pole____Y_k_1____U_k___ : float64)
+      returns ()
+    let
+      _= _Pole____Y_k_1____U_k___;
+      _= In2;
+      _= In1;
+    tel
+
+  end;
+
+  function #pragma kcg expand #end Subtract1(In1 : float64; In2 : float64)
+    returns (Out1 : float64)
+  let
+    Out1= In2 #0 + In1;
+  tel
+
+  node lugre(Fwf : float64) returns (dec___ : float64; V_plane : float64)
+  var
+    Y : float64;
+    probe Scope1 : float64;
+    _L_7 : float64;
+    _L_6 : float64;
+    _L_5 : float64;
+    _L_4 : float64;
+    _L_3 : float64;
+    _L_2 : float64;
+    _L_1 : float64;
+    _L : float64;
+  let
+    _L_5= Fwf;
+    _L_3= #3 libsi::Gain(_L_2, 1._f64 #4 / 10000._f64);
+    _L_1= #0 Constant();
+    _L= #1 Integrator1(_L_7);
+    Scope1= _L_4;
+    _L_2= #5 sum_mm(_L_5, _L_5);
+    _L_4= #8 Subtract1(_L_1, _L);
+    Y=
+      #Transfer_Fcn_First_Order
+      Transfer_Fcn_First_Order::Transfer_Fcn(_L_6);
+    _L_7= #6 libsi::UnitDelayHelper(Y, 0._f64);
+    _L_6= #7 Discrete::zero_order_hold(_L_3);
+    dec___= _L_3;
+    V_plane= _L_4;
+  tel
+
+  function #pragma kcg expand #end sum_mm(x1 : 't; x2 : 't)
+    returns (y : 't)
+    where 't numeric
+  let
+    y= #0 - x1 #1 - x2;
+  tel
+
+  node #pragma kcg expand #end Integrator1(In1 : float64)
+    returns (Out1 : float64)
+  var
+    x : float64;
+    y : float64;
+  let
+    y= (0._f64) -> (pre (x));
+    x= Out1 #3 + 1.0_f64 #2 * 0.02_f64 #2 * In1;
+    Out1= y;
+  tel
+
+  function #pragma kcg expand #end Constant() returns (Out1 : float64)
+  let
+    Out1= 70._f64;
+  tel
+
+end;
+
+package mathext
+
+  function imported AtanR(Input1 : 'T) returns (Output1 : 'T) where 'T float;
+
+  function imported SinR(Input1 : 'T) returns (Output1 : 'T) where 'T float;
+end;
+
+
+package pwlinear
+  function #pragma kcg expand #end LimiterUnSymmetrical(
+      LUS_Input : 'T;
+      LowLimit : 'T;
+      HighLimit : 'T)
+    returns (LUS_Output : 'T)
+    where 'T numeric
+  var
+    _L1 : bool;
+    _L11 : 'T;
+    _L13 : 'T;
+    _L15 : 'T;
+    _L2 : bool;
+    _L3 : 'T;
+    _L9 : 'T;
+  let
+    _L1= _L3 #1 >= _L15;
+    _L2= _L3 #2 <= _L13;
+    _L3= LUS_Input;
+    _L9= #3 if _L1 then (_L15) else (_L11);
+    _L11= #6 if _L2 then (_L13) else (_L3);
+    _L13= LowLimit;
+    _L15= HighLimit;
+    LUS_Output= _L9;
+    assume A1 : LowLimit #3 <= HighLimit;
+  tel
+
+end;
+
+
+package libsi
+
+  function Gain(u : 'T; K : 'T) returns (y : 'T) where 'T numeric
+  var
+    _L1 : 'T;
+    _L2 : 'T;
+    _L3 : 'T;
+  let
+    _L1= u;
+    _L2= K;
+    _L3= _L1 #1 * _L2;
+    y= _L3;
+  tel
+
+  node #pragma kcg expand #end UnitDelayHelper(Input : 'T; x0 : 'T)
+    returns (Output : 'T) where 'T numeric
+  var
+    _L1 : 'T;
+    _L2 : 'T;
+    _L3 : 'T;
+  let
+    _L1= Input;
+    Output= _L3;
+    _L2= x0;
+    _L3= #1 fby(_L1; 1; _L2);
+  tel
+
+end;
+
+package Discrete
+
+  function
+    #pragma kcg expand #end
+    zero_order_hold (x: 't) returns (y: 't) where 't numeric
+    y = x;
+end;
+

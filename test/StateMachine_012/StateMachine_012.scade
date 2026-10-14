@@ -1,0 +1,17 @@
+type SM1 = uint16;
+node StateMachine_012(iI1: int32)
+	returns (iO1: int32)
+let
+	automaton SM1
+ 	initial final state ST1
+ 	sig
+	SM1;
+ 	var
+	ST1: int32;
+ 	let
+		ST1 = iI1;
+ 		emit 'SM1;
+ 		iO1 = ST1 + 1;
+ 	tel
+	returns ..;
+tel

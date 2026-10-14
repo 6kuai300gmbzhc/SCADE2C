@@ -1,0 +1,50 @@
+type T={a:int32,b:bool};
+const N:int32=3;
+function test_iterator_mw(exp:int32;A:int32^N;initCond:bool) returns(
+idx:int32;cond:bool;acc:int32;v:int32^N;
+idx1:int32;cond1:bool;acc1:int32;v1:int32^N;
+idx2:int32;v2:int32^N;
+idx3:int32;v3:int32^N;
+idx4:int32;acc4:int32;
+idx5:int32;acc5:int32
+)
+let
+	idx,cond,acc,v=(mapfoldwi 1 f<<N>> if initCond default (5))(exp,A);
+	idx1,cond1,acc1,v1=(mapfoldw 1 f1<<N>> if initCond default (5))(exp,A);
+	idx2,v2=(mapwi f2<<N>> if initCond default (5))(A);
+	idx3,v3=(mapw f3<<N>> if initCond default (5))(A);
+	idx4,acc4=(foldwi f4<<N>> if initCond)(exp);
+	idx5,acc5=(foldw f5<<N>> if initCond)(exp);
+tel
+function f(i:int32;exp:int32;a:int32) returns(cond:bool;acc:int32;v:int32)
+let
+	cond=i<4;
+	acc=exp+a;
+	v=a*2;
+tel
+function f1(exp:int32;a:int32) returns(cond:bool;acc:int32;v:int32)
+let
+	cond=a>exp;
+	acc=exp+a;
+	v=a*2;
+tel
+function f2(i:int32;a:int32) returns(cond:bool;v:int32)
+let
+	cond=a>i;
+	v=a*2;
+tel
+function f3(a:int32) returns(cond:bool;v:int32)
+let
+	cond=a>5;
+	v=a*2;
+tel
+function f4(i:int32;exp:int32) returns(cond:bool;acc:int32)
+let
+	cond=i<4;
+	acc=exp+i;
+tel
+function f5(exp:int32) returns(cond:bool;acc:int32)
+let
+	cond=exp<4;
+	acc=exp+1;
+tel

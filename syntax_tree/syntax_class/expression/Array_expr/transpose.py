@@ -1,3 +1,4 @@
+from typing import Optional
 import copy
 
 from syntax_tree.scade_postprocess import set_rhs_default
@@ -82,5 +83,5 @@ class Array_expr_transpose(SyntaxExpr):
         pre_code = generate_pre_code_recursive(depth, src_type, 1)
         genEqu.add_preEquations(pre_code)
         return dst_name
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)

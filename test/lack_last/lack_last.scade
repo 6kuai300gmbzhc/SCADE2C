@@ -1,0 +1,8 @@
+node lack_last(i: int32)
+	returns (o: int32 last = 0)
+let
+	activate if i > 0
+ 	then o = i;
+ 	else o=i-1;
+	returns o;
+tel

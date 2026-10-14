@@ -1,3 +1,4 @@
+from typing import Optional
 import copy
 
 from syntax_tree.scade_postprocess import flatten_list
@@ -52,7 +53,7 @@ class Switch_expr_IF(SyntaxExpr):
                 if cond_code == "kcg_true":
                     pre_code = f"{assign_lhs_to_rhs_expr(tmp_name,ele_1,[lhs_type],depth,syntaxUserOp)}"
                 else:
-                    pre_code=f"{'    '*depth}if({cond_code}){{\n" \
+                    pre_code=f"{'    '*depth}if(({cond_code})!=kcg_false){{\n" \
                              f"{assign_lhs_to_rhs_expr(tmp_name,ele_1,[lhs_type],depth+1,syntaxUserOp)}" \
                              f"{'    '*depth}}}else{{\n" \
                              f"{assign_lhs_to_rhs_expr(tmp_name,ele_2,[lhs_type],depth+1,syntaxUserOp)}" \
@@ -70,7 +71,7 @@ class Switch_expr_IF(SyntaxExpr):
         return out_code
     def set_params(self,params:list['SyntaxExpr']):
         self.objects[0]=[params[0],params[1],params[2]]
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
     def cal_const_value(self,required_type:'SyntaxType',scope:'SyntaxScope') -> 'ConstValue':...

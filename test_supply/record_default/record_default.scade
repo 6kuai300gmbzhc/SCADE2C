@@ -1,0 +1,20 @@
+type Status = {code: int32, active: bool};
+
+node record_default(input: Status) returns(output: Status; code: int32; active, previously_active, valid_code: bool)
+let
+	output = toggle_status(input);
+	code = output.code;
+	active = classify_code(code) and output.active;
+	previously_active = input.active;
+	valid_code = classify_code(code);
+tel
+
+function toggle_status(input: Status) returns(result: Status)
+let
+	result = (input with.active = not input.active);
+tel
+
+function classify_code(code: int32) returns(result: bool)
+let
+	result = code > 0;
+tel

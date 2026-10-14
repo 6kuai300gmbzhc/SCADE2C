@@ -1,0 +1,29 @@
+node temporal_pair(input: int32; enable: bool) returns(current: int32; previous: int32; initialized: bool)
+let
+	automaton sampler
+	initial state Idle
+	unless if enable resume Sampling;
+	let
+		current = 0 -> pre current;
+		previous = 0;
+		initialized = false;
+	tel
+	state Sampling
+	let
+		current = update_sample(input);
+		previous = 0 -> pre current;
+		initialized = true;
+	tel
+	until if not enable resume Idle;
+	returns ..;
+tel
+
+function update_sample(value: int32) returns(result: int32)
+let
+	result = if value < 0 then 0 else value;
+tel
+
+function is_initialized(value: int32) returns(result: bool)
+let
+	result = value >= 0;
+tel

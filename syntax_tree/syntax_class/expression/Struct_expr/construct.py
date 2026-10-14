@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_type_inference import clock_inference_sync
 from syntax_tree.exclude_from_deepcopy import exclude_from_deepcopy
 from syntax_tree.syntax_class.Exceptions import UnknownIdentifierException, TypeMismatchException
@@ -80,7 +81,7 @@ class Struct_expr_construct(SyntaxExpr):
             sub_code_list.append(f"    .{name}={expr.generate_code_const(scope,genEqu)},\n")
         code=f"{{\n{''.join(sub_code_list)}}}"
         return code
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.callDict=objects[0]
         ...

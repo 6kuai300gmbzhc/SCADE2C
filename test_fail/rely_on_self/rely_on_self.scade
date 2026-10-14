@@ -1,0 +1,9 @@
+type T = enum {a, b, c};
+node rely_on_self(x: T) returns (y: T last = b)
+let
+	activate when y match
+ 	| a: y = a -> pre(y);
+ 	| b: y = x;
+ 	| c:
+ 	returns ..;
+tel s

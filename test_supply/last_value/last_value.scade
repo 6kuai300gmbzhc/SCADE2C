@@ -1,0 +1,22 @@
+node last_value(input: int32 last = 0) returns(previous: int32; changed: bool; delta: int32; increasing: bool)
+let
+	previous = validate_previous(last'input);
+	changed = differs(input, previous);
+	delta = input - previous;
+	increasing = is_increasing(input, previous);
+tel
+
+function validate_previous(value: int32) returns(result: int32)
+let
+	result = if value < 0 then 0 else value;
+tel
+
+function differs(current, previous: int32) returns(result: bool)
+let
+	result = current <> previous;
+tel
+
+function is_increasing(current, previous: int32) returns(result: bool)
+let
+	result = current > previous;
+tel

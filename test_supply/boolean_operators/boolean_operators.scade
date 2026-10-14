@@ -1,0 +1,20 @@
+node boolean_operators(a, b, c: bool) returns(negated, conjunction, disjunction, exclusive_or, combined, at_least_two, unanimous: bool)
+let
+	negated = not a;
+	conjunction = a and b;
+	disjunction = a or b;
+	exclusive_or = parity(a, b);
+	combined = majority(a, b, not c);
+	at_least_two = majority(a, b, c);
+	unanimous = a and b and c;
+tel
+
+function parity(left, right: bool) returns(result: bool)
+let
+	result = left xor right;
+tel
+
+function majority(a, b, c: bool) returns(result: bool)
+let
+	result = (a and b) or (a and c) or (b and c);
+tel

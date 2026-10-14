@@ -1,0 +1,9 @@
+function N(i: int32) returns (b: bool)
+let
+	b=i>3;
+tel
+node activate_merge(iI1: int32; clock clk1: bool)
+returns (iO1: bool)
+let
+	iO1 = merge (clk1; (activate N every clk1)(iI1 + 1);(activate N every not clk1)(fby(iI1; 1; 0)));
+tel

@@ -1,0 +1,13 @@
+node StateMachine_078(iI1: int32; bI2: bool)
+returns (iO1, iO2: int32)
+let
+	automaton
+	initial state ST1
+ 	unless if bI2 do iO1 = iI1 + 1; restart ST2;
+ 	until if true do iO1 = 10; restart ST2;
+ 	state ST2
+ 	unless if bI2 do iO2 = 0; restart ST1;
+ 		iO1 = 0;
+ 	until if true do iO2 = -10; restart ST1;
+ 	returns ..;
+tel

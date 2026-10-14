@@ -1,3 +1,4 @@
+from typing import Optional
 import os
 
 from syntax_tree.graph import Graph
@@ -34,7 +35,7 @@ class SyntaxArrow:
     '''
     ifExprList: list
     '''type为if时有效，保存了存有(SyntaxExpr,SyntaxArrow)的列表，对应语法的if和elsif部分'''
-    elseExpr: 'SyntaxArrow' or None = None
+    elseExpr: Optional['SyntaxArrow'] = None
     '''type为if时可能有效，不一定会有else语句，若不为None则存储了else对应的arrow'''
     state:'SyntaxState'
     '''自身所处的state'''

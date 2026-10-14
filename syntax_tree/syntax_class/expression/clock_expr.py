@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.Exceptions import UnknownIdentifierException, TypeMismatchException
 from typing import TYPE_CHECKING
 

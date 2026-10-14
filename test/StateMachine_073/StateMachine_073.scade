@@ -1,0 +1,17 @@
+node StateMachine_073(iI1: int16; bI2: bool)
+	returns (iO1: int16 default = 10; iO2: int16 default = 5 * iO1)
+let
+	automaton SM1
+ 	initial state ST1
+ 	unless if bI2 resume ST2;
+ 	let
+		iO1 = iI1;
+ 	tel
+	until if true restart ST2;
+ 	state ST2
+ 	let
+		iO2 = 0 -> pre iO1 + iI1;
+ 	tel
+	until if true restart ST1;
+ 	returns ..;
+tel

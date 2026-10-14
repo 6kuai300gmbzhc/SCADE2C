@@ -1,0 +1,7 @@
+const n : int32 = 3;
+type bk_color = {a:int32,b:bool};
+function test_mix(in1:int32^n;in2:bk_color) returns(out1:int32^n;out2:bk_color)
+let
+	out1=(in1 with[0]=1);
+	out2=(in2 with.a=3);
+tel

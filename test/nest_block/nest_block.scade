@@ -1,0 +1,22 @@
+type Tenum = enum {red, blue, pink, purple};
+node nest_block(eI1: Tenum; iI2: int32)
+	returns (iO1: int32 last = 0)
+let
+	activate when eI1 match
+ 	| red:
+	var iV1: int32;
+ 	let
+		iV1 = 10 + last 'iO1;
+ 		iO1 = iV1 + iI2;
+ 	tel
+	| blue:
+ 	let
+		activate if iI2 > 0
+ 		then iO1 = iI2 * iI2;
+ 		else iO1 = -iI2 + last'iO1;
+ 		returns iO1;
+	tel
+	| pink: iO1 = 100 -> pre iO1 - 1;
+ 	| purple: iO1 = 100 -> pre iO1 +1;
+ 	returns iO1;
+tel

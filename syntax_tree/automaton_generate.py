@@ -1,3 +1,4 @@
+from typing import Optional
 import syntax_tree.scade_generate as scade_generate
 from syntax_tree.syntax_class.equation import LeftItemId
 from syntax_tree.syntax_class.expression import SyntaxExpr
@@ -5,6 +6,7 @@ from syntax_tree.syntax_class.expression import SyntaxExpr
 from syntax_tree.syntax_class.scope.automaton import SyntaxAutomaton, SyntaxState, SyntaxArrow
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 
+import hashlib
 
 def is_nest_automaton(automaton: SyntaxAutomaton) -> bool:
     """查看此状态机是否嵌套在其他状态机内，嵌套与非嵌套的状态机生成的代码存在区别"""
@@ -46,17 +48,17 @@ def get_state_nxt(automaton: SyntaxAutomaton) -> str:
 
 def get_state_act(automaton: SyntaxAutomaton) -> str:
     """这个状态机在这个周期所处的状态"""
-    return f"{get_automaton_full_name(automaton)}_state_act"
+    return f"state_act_{get_automaton_full_name(automaton)}"
 
 
 def get_state_sel(automaton: SyntaxAutomaton) -> str:
     """嵌套状态机在此周期开始时所处的状态，若有初始化则为init状态，否则为上一周期的状态"""
-    return f"{get_automaton_full_name(automaton)}_state_sel"
+    return f"state_sel_{get_automaton_full_name(automaton)}"
 
 
 def get_fired_strong(automaton: SyntaxAutomaton) -> str:
     """这个状态机所经历的强转换"""
-    return f"{get_automaton_full_name(automaton)}_fired_strong"
+    return f"fired_strong_{get_automaton_full_name(automaton)}"
 
 
 def get_state_enum_name(state: SyntaxState) -> str:
@@ -139,9 +141,9 @@ def generate_arrow_strong(arrow: SyntaxArrow, from_state: SyntaxState, automaton
                 break
             else:
                 if i == 0:
-                    code += f"{'    ' * depth}if({tmp_name}){{\n"
+                    code += f"{'    ' * depth}if({tmp_name} != kcg_false){{\n"
                 else:
-                    code += f"{'    ' * depth}else if({tmp_name}){{\n"
+                    code += f"{'    ' * depth}else if({tmp_name} != kcg_false){{\n"
                 code_arrow,_=generate_arrow_strong(sub_arrow, from_state, automaton, code_generator, depth + 1)
                 code += code_arrow
                 code += f"{'    ' * depth}}}\n"
@@ -201,9 +203,9 @@ def generate_arrow_weak(arrow: SyntaxArrow, from_state: SyntaxState, automaton: 
             else:
                 tmp_decls += tmp_decl
                 if i == 0:
-                    code += f"{'    ' * depth}if({tmp_name}){{\n"
+                    code += f"{'    ' * depth}if({tmp_name}!= kcg_false){{\n"
                 else:
-                    code += f"{'    ' * depth}else if({tmp_name}){{\n"
+                    code += f"{'    ' * depth}else if({tmp_name}!= kcg_false){{\n"
                 code_arrow,_=generate_arrow_weak(sub_arrow, from_state, automaton, code_generator, depth + 1)
                 code += code_arrow
                 code += f"{'    ' * depth}}}\n"
@@ -322,7 +324,7 @@ def generate_body_nest(automaton: SyntaxAutomaton, code_generator: scade_generat
     decls += f"{'    ' * depth}kcg_bool {get_reset_act(automaton)};\n"
     decls += f"{'    ' * depth}{get_automaton_state_type_name(automaton)} {get_state_sel(automaton)};\n"
 
-    decls += f"{'    ' * depth}if (outC->{initSymbol_name}) {{\n" \
+    decls += f"{'    ' * depth}if (outC->{initSymbol_name}!= kcg_false) {{\n" \
              f"{'    ' * (depth + 1)}{get_state_sel(automaton)} = {get_state_enum_name(automaton.get_init_state())};\n" \
              f"{'    ' * depth}}}\n" \
              f"{'    ' * depth}else{{\n" \
@@ -361,17 +363,20 @@ def generate_switch_state(automaton: SyntaxAutomaton, code_generator: scade_gene
     act_code=f"{'    ' * (depth)}switch ({get_state_act(automaton)}){{\n"
     body_code=""
     for state in automaton.stateTable.values():
-        act_code+=generate_switch_act(state,automaton, code_generator, depth)
         body_code+=generate_switch_state_body(state,automaton, code_generator, depth)
+        act_code+=generate_switch_act(state,automaton, code_generator, depth)
     body_code+=f"{'    ' * (depth + 1)}default:break;\n{'    ' * depth}}}\n"
     act_code+=f"{'    ' * (depth + 1)}default:break;\n{'    ' * depth}}}\n"
     return body_code,act_code
 
 def generate_switch_state_body(state:SyntaxState,automaton: SyntaxAutomaton, code_generator: scade_generate.GenerateCode, depth) -> str:
     """生成状态机body中，强转移部分的主体部分，此部分对嵌套与非嵌套的状态机逻辑是一样的"""
+    strong_transitions_code = generate_state_strong_transitions(automaton, state, code_generator, depth + 2)
+    declarations = code_generator.generate_data_def_decl(state, depth + 2)
     body = ""
     body += f"{'    ' * (depth + 1)}case {get_state_enum_name(state)}: {{\n"
-    body += generate_state_strong_transitions(automaton, state, code_generator, depth + 2)
+    body += declarations
+    body += strong_transitions_code
     body += f"{'    ' * (depth + 2)}break;}}\n"
     return body
 
@@ -406,7 +411,7 @@ def generate_switch_act(state:SyntaxState,automaton: SyntaxAutomaton, code_gener
 def generate_init_code(state:SyntaxState,init_cond:str,depth)->str:
     code=""
     # 如果此状态有内存，则加上一个重置操作,即如果rest_act，则设置init为true，然后重置操作，然后将init为false
-    code += f"{'    ' * (depth)}if({init_cond}){{\n"
+    code += f"{'    ' * (depth)}if({init_cond}!= kcg_false){{\n"
     # 这里接如果为init则进行的初始化操作
     for applied_expr in state.apply_exprs:
         if not applied_expr.get_applied_op().hasInternalState: continue

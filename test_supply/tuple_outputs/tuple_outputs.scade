@@ -1,0 +1,20 @@
+node tuple_outputs(left, right: int32) returns(sum, difference, span: int32; ordered, equal, nonnegative: bool; selected: int32)
+let
+	sum, difference = minmax_delta(left, right);
+	span = range_width(left, right);
+	ordered = left <= right;
+	equal = left = right;
+	selected = if ordered then left else right;
+	nonnegative = selected >= 0;
+tel
+
+function minmax_delta(left, right: int32) returns(total, difference: int32)
+let
+	total = left + right;
+	difference = if left >= right then left - right else right - left;
+tel
+
+function range_width(minimum, maximum: int32) returns(result: int32)
+let
+	result = maximum - minimum;
+tel

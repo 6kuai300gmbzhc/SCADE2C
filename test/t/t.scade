@@ -1,0 +1,6 @@
+package t4
+        node t() returns(b:float64)
+        let
+			b=3.4e-7_f64;
+        tel
+end;

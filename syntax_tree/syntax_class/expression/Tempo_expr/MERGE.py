@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_type_inference import type_inference_on_groups
 from syntax_tree.syntax_class.Exceptions import UnknownIdentifierException, TypeMismatchException
 from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
@@ -67,25 +68,34 @@ class Tempo_expr_MERGE(SyntaxExpr):
         for lhs_type in self.lhsTypeList:
             tmp_symbol,tmp_name=generate_tmp_symbol_and_register(syntaxUserOp,lhs_type)
             tmp_name_list.append(tmp_name)
-
         depth=genEqu.depth
-        pre_code=f"{'    '*depth}switch({syntaxUserOp.var_change_name(self.clk_symbol.name)}){{\n"
-        for cond,case in zip(self.allowed_clk_cases,self.merge_case_list):
-            if cond in {'true','false'}:
-                case_code=f"{'    '*depth}case kcg_{cond}:\n"
-            else:
-                case_code = f"{'    ' * depth}case {syntaxUserOp.var_change_name(cond)}:\n"
-            sub_gen_equ=GenEqu(depth+1)
-            sub_expr_code=case.generate_code(syntaxUserOp,sub_gen_equ)
+        if self.allowed_clk_cases==["true","false"]:
+            pre_code = f""
+            for case in self.merge_case_list:
 
-            case_code+="".join(sub_gen_equ.preEquations)
-            case_code+=assign_lhs_to_rhs_expr(tmp_name_list,sub_expr_code,self.lhsTypeList,depth+1,syntaxUserOp)
-            case_code+=f"{'    '*(depth+1)}break;\n"
-            pre_code+=case_code
-        pre_code+=f"{'    '*depth}}}\n"
+                sub_gen_equ = GenEqu(depth)
+                sub_expr_code = case.generate_code(syntaxUserOp, sub_gen_equ)
+
+                case_code = "".join(sub_gen_equ.preEquations)
+                case_code += assign_lhs_to_rhs_expr(tmp_name_list, sub_expr_code, self.lhsTypeList, depth,
+                                                    syntaxUserOp)
+                pre_code += case_code
+        else:
+            pre_code=f"{'    '*depth}switch({syntaxUserOp.var_change_name(self.clk_symbol.name)}){{\n"
+            for cond,case in zip(self.allowed_clk_cases,self.merge_case_list):
+                case_code = f"{'    ' * depth}case {syntaxUserOp.var_change_name(cond)}:\n"
+                sub_gen_equ=GenEqu(depth+1)
+                sub_expr_code=case.generate_code(syntaxUserOp,sub_gen_equ)
+
+                case_code+="".join(sub_gen_equ.preEquations)
+                case_code+=assign_lhs_to_rhs_expr(tmp_name_list,sub_expr_code,self.lhsTypeList,depth+1,syntaxUserOp)
+                case_code+=f"{'    '*(depth+1)}break;\n"
+                pre_code+=case_code
+            pre_code += f"{'    ' * (depth + 1)}default: break;\n"
+            pre_code+=f"{'    '*depth}}}\n"
         genEqu.add_preEquations(pre_code)
         return tmp_name_list if len(tmp_name_list)>1 else tmp_name_list[0]
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.merge_case_list=self.objects[1]
         ...

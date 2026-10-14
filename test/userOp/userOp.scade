@@ -1,0 +1,31 @@
+
+package t1
+    package t2
+        function a1(b:bool) returns(a:bool)
+        let
+            a=b;
+        tel
+    end;
+    package t3
+        function a2(b:bool) returns(a:bool)
+        let
+
+            a=b;
+        tel
+    end;
+end;
+package t4
+        function a3(c,d:bool) returns(o1:bool)
+        var
+            a,b:bool;
+        let
+            a=b or d;
+            b=t1::t3::a2(c);
+            o1=a and b;
+
+        tel
+end;
+function userOp(c,d:bool) returns(o1:bool)
+let
+    o1=t4::a3(c,d);
+tel

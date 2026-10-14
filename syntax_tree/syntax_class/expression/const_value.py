@@ -1,3 +1,4 @@
+from typing import Optional
 class ConstValue:
     """在expr间传递值的类，封装类型与值"""
     type: 'SyntaxType' = None

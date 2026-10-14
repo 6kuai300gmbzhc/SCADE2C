@@ -1,3 +1,4 @@
+from typing import Optional
 import copy
 
 from .data_def import SyntaxDataDefScope
@@ -125,7 +126,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         for para in self.inParams:
             para.isInput=True
 
-    def get_localVariable(self, name: str) -> 'SyntaxVariableSymbol' or None:
+    def get_localVariable(self, name: str) -> Optional['SyntaxVariableSymbol']:
         '''在当前作用域找局部变量，包括输入输出参数'''
         if name not in self.localSymbolTable.keys():
             for symbol in self.inParams:
@@ -141,7 +142,7 @@ class SyntaxUserOp(SyntaxDataDefScope):
         else:
             return self.localSymbolTable[name]
 
-    def get_localVariable_InThisAndPreEnv(self, name: str) -> SyntaxVariableSymbol or None:
+    def get_localVariable_InThisAndPreEnv(self, name: str) -> Optional['SyntaxVariableSymbol']:
         '''递归的找局部变量，包括输入输出参数'''
         return self.get_localVariable(name)  # 上层不可能有变量了
 

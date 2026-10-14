@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.Exceptions import NotStaticExprException, TypeMismatchException
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
 from syntax_tree.scade_postprocess import set_rhs_default, flatten_list
@@ -55,7 +56,7 @@ class List_expr_List_expr(SyntaxExpr):
             return out_list[0]
         else:
             return out_list
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
     def cal_const_value(self,required_type:'SyntaxType',scope:'SyntaxScope') -> 'ConstValue':

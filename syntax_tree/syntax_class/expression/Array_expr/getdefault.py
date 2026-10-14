@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_postprocess import set_rhs_default, flatten_list
 from syntax_tree.scade_type_inference import clock_inference_sync
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
@@ -79,7 +80,7 @@ class Array_expr_getdefault(SyntaxExpr):
             # 构建校验是否超出数组上限的表达式
             cur_size = cur_type.get_size()
             cur_type = cur_type.arrayType
-            cmp_code_list.append(f"((kcg_lit_int32(0) <= {idx_code})&({idx_code} < kcg_lit_int32({cur_size})))")
+            cmp_code_list.append(f"((kcg_lit_int32(0) <= {idx_code})&&({idx_code} < kcg_lit_int32({cur_size})))")
         cmp_code = '&'.join(cmp_code_list)
 
         get_normal_code = assign_lhs_to_rhs_expr(tmp_name, normal_code, self.lhsTypeList, depth + 1, data_def)
@@ -96,5 +97,5 @@ class Array_expr_getdefault(SyntaxExpr):
                    f"{'    ' * depth}}}\n"
         genEqu.add_preEquations(pre_code)
         return tmp_name
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)

@@ -1,0 +1,17 @@
+node SWITCH( init, on, off: bool) returns (state_:bool)
+let
+  state_ = if on then true
+          else if off then false 
+          else (init -> pre(state_));
+tel
+
+
+node flo (i1, i2, on1, on2, off1, off2: bool ) returns (flow:bool)
+let
+  flow = SWITCH(i1,on1,off1) and SWITCH (i2,on2,off2);
+tel
+
+
+
+
+

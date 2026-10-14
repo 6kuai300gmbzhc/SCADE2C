@@ -1,0 +1,15 @@
+type s =  { f1: int32 , f2: int32^2 };
+
+
+
+node simple(a:int32) returns (oo: int32)
+let 
+  oo = a+4;
+tel
+
+
+
+node titi(x:int32) returns (o: int32)
+let 
+  o = simple(x);
+tel

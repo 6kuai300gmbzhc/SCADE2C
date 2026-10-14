@@ -1,0 +1,5 @@
+node consensus2(T: bool^3)
+returns (a: bool) 
+let
+  a = (fold $and$ <<3>>)(true,T);
+tel

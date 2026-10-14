@@ -1,8 +1,9 @@
+from __future__ import annotations
 
 from syntax_tree.scade_type_inference import type_inference_on_groups, check_and_get_pattern_type
-from syntax_tree.syntax_class.expression import SyntaxExpr
+from syntax_tree.syntax_class.expression import SyntaxExpr, expression_factory
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 from syntax_tree.syntax_class.expression.pattern import SyntaxPattern
 from syntax_tree.syntax_class.hasRhs import union_rhsLists, add_rhs_to_each
@@ -18,10 +19,12 @@ if TYPE_CHECKING:
 class Switch_expr_CASE(SyntaxExpr):
     cond_expr:SyntaxExpr
     case_expr_list:list[[SyntaxPattern,SyntaxExpr]]
+    pattern_type:Optional[SyntaxType]
     def post_process(self, userOp:'SyntaxUserOp'):
         self.returnNum = self.case_expr_list[0][1].returnNum # 太逆天了,其实就是拿第一个case的expr
         self.rhsList = union_rhsLists([case[1].rhsList for case in self.case_expr_list])
         self.rhsList=add_rhs_to_each(self.cond_expr.rhsList,self.rhsList)
+
     def type_inference(self, lhs_type_list: list['SyntaxType'], data_def:'SyntaxUserOp'):
         # switch case情况需要提取判断表达式的类型，校验所有pattern的类型
         # case必须涵盖所有可能情况，如果非枚举类型，则一定需要有_pattern作为默认，枚举类型则不一定需要
@@ -36,8 +39,46 @@ class Switch_expr_CASE(SyntaxExpr):
         # 然后是具体的表达式推导
         actual_types = type_inference_on_groups([l[1] for l in self.case_expr_list], lhs_type_list, data_def)
         self.set_lhs_type(actual_types)
+        self.pattern_type=pattern_type
         return self.lhsTypeList
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
+        if self.pattern_type==SyntaxType('bool'):
+            # 如果类型是布尔则转换为if else表达式
+            # 那么只有两个pattern，否则前置的判断会报错
+            # 但是可能有填_作为通配符的可能
+            if self.case_expr_list[0][0].constExpr is not None:
+                const_value=self.case_expr_list[0][0].constExpr.generate_code(syntaxUserOp,genEqu)
+                if const_value=="kcg_true":
+                    if_objects=[
+                        self.cond_expr,
+                        self.case_expr_list[0][1],
+                        self.case_expr_list[1][1]
+                    ]
+                else:
+                    if_objects=[
+                        self.cond_expr,
+                        self.case_expr_list[1][1],
+                        self.case_expr_list[0][1]
+                    ]
+            else:
+                const_value=self.case_expr_list[1][0].constExpr.generate_code(syntaxUserOp,genEqu)
+                if const_value=="kcg_true":
+                    if_objects=[
+                        self.cond_expr,
+                        self.case_expr_list[1][1],
+                        self.case_expr_list[0][1]
+                    ]
+                else:
+                    if_objects=[
+                        self.cond_expr,
+                        self.case_expr_list[0][1],
+                        self.case_expr_list[1][1]
+                    ]
+            equivalent_expr=expression_factory("Switch_expr","IF",self.scope,if_objects,self.returnNum)
+            equivalent_expr.post_process(syntaxUserOp)
+            equivalent_expr.type_inference(self.lhsTypeList,syntaxUserOp)
+            return equivalent_expr.generate_code(syntaxUserOp,genEqu)
+
         tmp_names=list()
         for lhs_type in self.lhsTypeList:
             tmp_var_symbol, tmp_var_name = generate_tmp_symbol_and_register(syntaxUserOp, lhs_type)
@@ -64,7 +105,8 @@ class Switch_expr_CASE(SyntaxExpr):
         pre_equations += f"{'    '*(genEqu.depth)}}}\n"
         genEqu.preEquations.append(pre_equations)
         return tmp_names[0] if len(tmp_names)==1 else tmp_names
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.cond_expr=objects[0]
         self.case_expr_list=objects[1]
+        self.equivalent_expr=None

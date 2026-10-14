@@ -1,3 +1,4 @@
+from typing import Optional
 from ply.yacc import yacc
 import re
 import argparse
@@ -81,7 +82,7 @@ def p_program(p):
 # 可能属于program，或者package，注意作用域
 def p_decls_zero_or_more(p):
     '''Decls_zero_or_more : Decls Decls_zero_or_more
-    | empty'''
+    | Decls'''
     pass
 
 
@@ -97,58 +98,68 @@ def p_decls(p):
 
 
 def p_open_path(p):
-    '''Open_path : OPEN Path_id SEMICOLON
-    '''
+    '''Open_path : OPEN Path_id SEMICOLON'''
     global cur_scope
     cur_scope.add_open_package(p[2].value)
 
 
-# 类型定义,在type_decl阶段就把类型登记到当前的符号表中去。
 def p_type_block(p):
-    'Type_block : TYPE Type_block_1'
+    '''Type_block : TYPE
+                  | TYPE Type_block_1'''
 
 
 def p_type_block_1(p):
-    '''Type_block_1 : Type_decl SEMICOLON Type_block_1
-                    | empty'''
+    '''Type_block_1 : Type_decl SEMICOLON
+                    | Type_block_1 Type_decl SEMICOLON'''
 
 
-# 把类型登记到对应scope的符号表中，有imported和现场声明的两种类型
 def p_Type_decl(p):
-    'Type_decl : Interface_status LV6ID Type_decl_1 Type_decl_2'
-    if not "Visibility" in p[1].keys():
+    '''Type_decl : Type_decl_head
+                 | Type_decl_head EQU Type_def
+                 | Type_decl_head IS Numeric_kind
+                 | Type_decl_head EQU Type_def IS Numeric_kind'''
+    status = p[1]
+    if "Visibility" not in status:
         visibility = "public"
     else:
-        visibility = p[1]["Visibility"]
+        visibility = status["Visibility"]
 
-    if "External" in p[1].keys():
-        p[0] = SyntaxTypeSymbol(name=p[2].value, syntaxType=None, visibility=visibility)
-        p[0].numericKind = p[4]["Numeric_kind"]
+    syntax_type = None
+    numeric_kind = None
+    if len(p) == 4:
+        if p[2].value == "=":
+            syntax_type = p[3]
+        else:
+            numeric_kind = p[3]
+    elif len(p) == 6:
+        syntax_type = p[3]
+        numeric_kind = p[5]
+
+    if "External" in status:
+        p[0] = SyntaxTypeSymbol(name=status["Name"], syntaxType=syntax_type, visibility=visibility)
+        if numeric_kind is not None:
+            p[0].numericKind = numeric_kind["Numeric_kind"]
         p[0].isImported = True
     else:
-        p[0] = SyntaxTypeSymbol(name=p[2].value, syntaxType=p[3], visibility=visibility)
+        p[0] = SyntaxTypeSymbol(name=status["Name"], syntaxType=syntax_type, visibility=visibility)
         p[0].isImported = False
     global cur_scope
     cur_scope.add_typeSymbol(p[0])
 
 
-def p_Type_decl_1(p):
-    '''Type_decl_1 : EQU Type_def
-                    | empty'''
-    if len(p) != 2:
-        p[0] = p[2]
-        return
-    p[0] = None
-
-
-def p_type_decl_2(p):
-    '''Type_decl_2 : IS Numeric_kind
-                   | empty'''
-    if len(p) != 2:
-        p[0] = p[2]
-        return
-    p[0] = None
-
+def p_type_decl_head(p):
+    '''Type_decl_head : LV6ID
+                      | Visibility LV6ID
+                      | IMPORTED LV6ID
+                      | Visibility IMPORTED LV6ID'''
+    p[0] = {"Name": p[len(p) - 1].value}
+    for item in p[1:-1]:
+        if isinstance(item, dict):
+            p[0].update(item)
+        elif item.strs in ("public", "private"):
+            p[0]["Visibility"] = item.value
+        elif item.strs == "imported":
+            p[0]["External"] = item.value
 
 def p_numeric_kind(p):
     '''Numeric_kind : NUMERIC
@@ -195,13 +206,15 @@ def p_type_expr(p):
     | CHAR
     | Path_id
     | Typevar
+    | LBPARENTHESE Field_decl RBPARENTHESE
     | LBPARENTHESE Field_decl Type_expr_1 RBPARENTHESE
     | Type_expr EXPONENT Expr'''
     if p[1].value == "{":
         p[0] = SyntaxType(tar_type="field_decl",scope=cur_scope)
         p[0].fields = list()
         p[0].fields.append(p[2].value)
-        p[0].fields.extend(p[3].value)
+        if len(p) == 5:
+            p[0].fields.extend(p[3].value)
         return
     if len(p) == 4:
         p[0] = SyntaxType(tar_type="array",scope=cur_scope)
@@ -228,51 +241,70 @@ def p_field_decl(p):
 
 def p_type_expr_1(p):
     '''Type_expr_1 : COMMA Field_decl Type_expr_1
-    | empty'''
+    | COMMA Field_decl'''
     p[0] = lex_value("type_expr_1")
     p[0].type = "type_expr_1"
     p[0].value = list()
-    if len(p) != 2:
-        p[0].value.append(p[2].value)
+    p[0].value.append(p[2].value)
+    if len(p) == 4:
         p[0].value.extend(p[3].value)
 
 
 # 常数声明，在const_decl中加入到对应scope中
 def p_const_block(p):
-    'Const_block : CONST Const_block_1'
+    '''Const_block : CONST
+                   | CONST Const_block_1'''
 
 
 def p_const_block_1(p):
-    '''Const_block_1 : Const_decl SEMICOLON Const_block_1
-    | empty'''
+    '''Const_block_1 : Const_decl SEMICOLON
+                     | Const_block_1 Const_decl SEMICOLON'''
 
 
 def p_const_decl(p):
-    '''Const_decl : Interface_status LV6ID COLON Type_expr
-    | Interface_status LV6ID COLON Type_expr EQU Expr'''
+    '''Const_decl : Const_decl_head COLON Type_expr
+                  | Const_decl_head COLON Type_expr EQU Expr'''
     global cur_scope
-    if not "Visibility" in p[1].keys():
+    status = p[1]
+    if "Visibility" not in status:
         visibility = "public"
     else:
-        visibility = p[1]["Visibility"]
-    p[0] = SyntaxConstSymbol(name=p[2].value,scope=cur_scope, visibility=visibility)
-    p[0].syntaxType = p[4]
-    if "External" in p[1].keys():
+        visibility = status["Visibility"]
+    p[0] = SyntaxConstSymbol(name=status["Name"],scope=cur_scope, visibility=visibility)
+    p[0].syntaxType = p[3]
+    if "External" in status:
         p[0].isImported = True
     else:
         p[0].isImported = False
-        p[0].valueExpr = p[6]
+        if len(p) == 6:
+            p[0].valueExpr = p[5]
     cur_scope.add_constSymbol(p[0])
+
+
+def p_const_decl_head(p):
+    '''Const_decl_head : LV6ID
+                       | Visibility LV6ID
+                       | IMPORTED LV6ID
+                       | Visibility IMPORTED LV6ID'''
+    p[0] = {"Name": p[len(p) - 1].value}
+    for item in p[1:-1]:
+        if isinstance(item, dict):
+            p[0].update(item)
+        elif item.strs in ("public", "private"):
+            p[0]["Visibility"] = item.value
+        elif item.strs == "imported":
+            p[0]["External"] = item.value
 
 
 # sensor声明，在sensor_decl中加入对应scope中
 def p_sensor_block(p):
-    'Sensor_block : SENSOR Sensor_block_1'
+    '''Sensor_block : SENSOR
+                    | SENSOR Sensor_block_1'''
 
 
 def p_sensor_block_1(p):
-    '''Sensor_block_1 : Sensor_decl SEMICOLON Sensor_block_1
-    | empty'''
+    '''Sensor_block_1 : Sensor_decl SEMICOLON
+                      | Sensor_block_1 Sensor_decl SEMICOLON'''
 
 
 def p_sensor_decl(p):
@@ -286,60 +318,74 @@ def p_sensor_decl(p):
 # group声明，在group_decl部分加入scope
 # group是一个只有一层的type数组
 def p_group_block(p):
-    '''Group_block : GROUP Group_block_1'''
+    '''Group_block : GROUP
+                   | GROUP Group_block_1'''
 
 
 def p_group_block_1(p):
-    '''Group_block_1 : Group_decl SEMICOLON Group_block_1
-                     | empty'''
+    '''Group_block_1 : Group_decl SEMICOLON
+                     | Group_block_1 Group_decl SEMICOLON'''
 
 
 def p_group_decl(p):
-    '''Group_decl : Visibility_zero_or_one LV6ID EQU Group_expr'''
+    '''Group_decl : LV6ID EQU Group_expr
+                  | Visibility LV6ID EQU Group_expr'''
 
-    if p[1] and "Visibility" in p[1].keys():
+    if len(p) == 5:
         visibility = p[1]["Visibility"]
+        name = p[2].value
+        group_expr = p[4]
     else:
         visibility = "public"
-    p[0] = SyntaxGroupSymbol(name=p[2].value, visibility=visibility)
-    p[0].groupExpr = p[4]
+        name = p[1].value
+        group_expr = p[3]
+    p[0] = SyntaxGroupSymbol(name=name, visibility=visibility)
+    p[0].groupExpr = group_expr
     global cur_scope
     cur_scope.add_groupSymbol(p[0])
 
 
 def p_group_expr(p):
-    '''Group_expr : LPARENTHESE Type_expr Group_expr_1 RPARENTHESE'''
+    '''Group_expr : LPARENTHESE Type_expr RPARENTHESE
+                  | LPARENTHESE Type_expr Group_expr_1 RPARENTHESE'''
     p[0] = list()
     p[0].append(p[2])
-    p[0] += p[3]
+    if len(p) == 5:
+        p[0] += p[3]
 
 
 def p_group_expr_1(p):
-    '''Group_expr_1 : COMMA Type_expr Group_expr_1
-                    | empty'''
+    '''Group_expr_1 : COMMA Type_expr
+                    | Group_expr_1 COMMA Type_expr'''
     p[0] = list()
-    if len(p) != 2:
+    if len(p) == 3:
         p[0].append(p[2])
-        p[0] += p[3]
+    else:
+        p[0] += p[1]
+        p[0].append(p[3])
 
 
 # package声明，注意修改当前作用域，并添加其到子作用域之中
 def p_package_decl(p):
-    'Package_decl : PACKAGE Package_decl_1 Decls_zero_or_more END SEMICOLON'
+    '''Package_decl : PACKAGE Package_decl_1 END SEMICOLON
+                    | PACKAGE Package_decl_1 Decls_zero_or_more END SEMICOLON'''
     # 遍历完成，恢复作用域
     global cur_scope
     cur_scope = cur_scope.prevScope
 
 
 def p_package_decl_1(p):
-    'Package_decl_1 : Visibility_zero_or_one Pack_Lv6id'
+    '''Package_decl_1 : Pack_Lv6id
+                      | Visibility Pack_Lv6id'''
     # 在这里修改作用域
-    if p[1] and "Visibility" in p[1].keys():
+    if len(p) == 3:
         visibility = p[1]["Visibility"]
+        name = p[2].value
     else:
         visibility = "public"
+        name = p[1].value
     global cur_scope
-    scope = SyntaxPackageScope(type="package", name=p[2].value, prevscope=cur_scope, visibility=visibility)
+    scope = SyntaxPackageScope(type="package", name=name, prevscope=cur_scope, visibility=visibility)
     cur_scope.add_childScope(scope)
     cur_scope = scope
 
@@ -351,21 +397,38 @@ def p_pack_lv6id(p):
 
 # user_op_decl部分，这里是连接上下层scope的通道，注意修改作用域并添加符号表
 def p_user_op_decl(p):
-    'User_op_decl : User_op_name User_op_decl_1 In_Params RETURNS Out_Params User_op_decl_2 User_op_decl_3 Opt_body'
+    '''User_op_decl : User_op_name In_Params RETURNS Out_Params Opt_body
+                    | User_op_name Size_decl In_Params RETURNS Out_Params Opt_body
+                    | User_op_name In_Params RETURNS Out_Params Where_decl Opt_body
+                    | User_op_name In_Params RETURNS Out_Params Spec_decl Opt_body
+                    | User_op_name Size_decl In_Params RETURNS Out_Params Where_decl Opt_body
+                    | User_op_name Size_decl In_Params RETURNS Out_Params Spec_decl Opt_body
+                    | User_op_name In_Params RETURNS Out_Params Where_decl Spec_decl Opt_body
+                    | User_op_name Size_decl In_Params RETURNS Out_Params Where_decl Spec_decl Opt_body'''
     # 遍历结束，换回作用域
     global cur_scope
     cur_scope = cur_scope.prevScope
 
 def p_user_op_name(p):
-    '''User_op_name : Op_kind Interface_status User_op_decl_Lv6id'''
+    '''User_op_name : Op_kind User_op_decl_Lv6id
+                    | Op_kind Visibility User_op_decl_Lv6id
+                    | Op_kind IMPORTED User_op_decl_Lv6id
+                    | Op_kind Visibility IMPORTED User_op_decl_Lv6id'''
     # 切换作用域
     global cur_scope
-    if "Visibility" in p[2].keys():
-        visibility = p[2]["Visibility"]
-    else:
-        visibility = "public"
-    imported = "External" in p[2].keys()
-    user_op_scope = SyntaxUserOp(type=p[1]["Op_kind"], name=p[3].value, prevscope=cur_scope,
+    visibility = "public"
+    imported = False
+    for item in p[2:-1]:
+        if isinstance(item, dict):
+            if "Visibility" in item:
+                visibility = item["Visibility"]
+            if "External" in item:
+                imported = True
+        elif item.strs in ("public", "private"):
+            visibility = item.value
+        elif item.strs == "imported":
+            imported = True
+    user_op_scope = SyntaxUserOp(type=p[1]["Op_kind"], name=p[len(p) - 1].value, prevscope=cur_scope,
                                  visibility=visibility,isImported=imported)
     cur_scope.add_userOp(user_op_scope)
     cur_scope = user_op_scope
@@ -381,11 +444,6 @@ def p_op_kind(p):
 def p_user_op_decl_Lv6id(p):
     'User_op_decl_Lv6id : LV6ID'
     p[0] = p[1]
-
-
-def p_user_op_decl_1(p):
-    '''User_op_decl_1 : Size_decl
-                      | empty'''
 
 
 def p_size_decl(p):
@@ -411,40 +469,40 @@ def p_out_params(p):
 
 
 def p_params(p):
-    'Params : LPARENTHESE Params_1 RPARENTHESE'
-    p[0] = p[2]  # SyntaxVariableSymbol的列表
-
-
-def p_params_1(p):
-    '''Params_1 : Var_decls Params_2
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
-        p[0] += p[1]
-        p[0] += p[2]
-
-
-def p_params_2(p):
-    '''Params_2 : SEMICOLON Var_decls Params_2
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
-        p[0] += p[2]
+    '''Params : LPARENTHESE RPARENTHESE
+              | LPARENTHESE Var_decls RPARENTHESE
+              | LPARENTHESE Var_decls Params_tail RPARENTHESE'''
+    if len(p) == 3:
+        p[0] = []
+    elif len(p) == 4:
+        p[0] = list(p[2])
+    else:
+        p[0] = list(p[2])
         p[0] += p[3]
 
 
-def p_user_op_decl_2(p):
-    '''User_op_decl_2 : Where_decl
-                        | empty'''
+def p_params_tail(p):
+    '''Params_tail : SEMICOLON Var_decls
+                   | Params_tail SEMICOLON Var_decls'''
+    if len(p) == 3:
+        p[0] = list(p[2])
+    else:
+        p[0] = list(p[1])
+        p[0] += p[3]
 
 
 def p_where_decl(p):
-    '''Where_decl : WHERE Typevar Where_decl_1 Numeric_kind'''
+    '''Where_decl : WHERE Typevar Numeric_kind
+                  | WHERE Typevar Where_decl_1 Numeric_kind'''
     p[0] = dict()
     typevars = list()
     typevars.append(p[2].value)
-    typevars += p[3]
-    cur_scope.numericKind = p[4]["Numeric_kind"]
+    if len(p) == 5:
+        typevars += p[3]
+        numeric_kind = p[4]
+    else:
+        numeric_kind = p[3]
+    cur_scope.numericKind = numeric_kind["Numeric_kind"]
     for typevar in typevars:
         cur_scope.add_type_var(typevar)
     # 更新whereDecl
@@ -452,16 +510,11 @@ def p_where_decl(p):
 
 def p_where_decl_1(p):
     '''Where_decl_1 : COMMA Typevar Where_decl_1
-                    | empty'''
+                    | COMMA Typevar'''
     p[0] = list()
-    if len(p) != 2:
-        p[0].append(p[2].value)
+    p[0].append(p[2].value)
+    if len(p) == 4:
         p[0] += p[3]
-
-
-def p_user_op_decl_3(p):
-    '''User_op_decl_3 : Spec_decl
-                        | empty'''
 
 
 def p_spec_decl(p):
@@ -473,13 +526,11 @@ def p_spec_decl(p):
 def p_opt_body(p):
     '''Opt_body : SEMICOLON
     | Equation SEMICOLON
-    | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL SEMICOLON
-    | Signal_block_zero_or_one Local_block_zero_or_one LET Equation_zero_or_more_with_semicolon TEL'''
-
-
-def p_signal_block_zero_or_one(p):
-    '''Signal_block_zero_or_one : Signal_block
-    | empty'''
+    | LET Equation TEL
+    | LET Equation_zero_or_more_with_semicolon TEL SEMICOLON
+    | LET Equation_zero_or_more_with_semicolon TEL
+    | Signal_block_local_block LET Equation_zero_or_more_with_semicolon TEL SEMICOLON
+    | Signal_block_local_block LET Equation_zero_or_more_with_semicolon TEL'''
 
 
 def p_signal_block(p):
@@ -489,35 +540,38 @@ def p_signal_block(p):
     cur_scope.set_signalSymbolList(p[2])
 
 
-def p_local_block_zero_or_one(p):
-    '''Local_block_zero_or_one : Local_block
-    | empty'''
+def p_signal_block_local_block(p):
+    '''Signal_block_local_block : Signal_block
+                                | Local_block
+                                | Signal_block Local_block'''
 
 
 def p_local_block(p):
-    '''Local_block : VAR Local_block_1'''
+    '''Local_block : VAR
+                   | VAR Local_block_1'''
 
 
 def p_local_block_1(p):
-    '''Local_block_1 : Var_decls SEMICOLON Local_block_1
-    | empty'''
-    if len(p) == 2: return
+    '''Local_block_1 : Var_decls SEMICOLON
+                     | Local_block_1 Var_decls SEMICOLON'''
     global cur_scope
-    for symbol in p[1]:
+    symbols = p[1] if len(p) == 3 else p[2]
+    for symbol in symbols:
         cur_scope.add_localSymbol(symbol)
 
 
 # equation部分，描述各种scade语句，每个语句都要添加到对应scope之中
 # 从这里往下只会有SyntaxDataDefScope了
 def p_equation_zero_or_more_with_semicolon(p):
-    '''Equation_zero_or_more_with_semicolon : Equation SEMICOLON Equation_zero_or_more_with_semicolon
-    | empty'''
+    '''Equation_zero_or_more_with_semicolon : Equation SEMICOLON
+                                            | Equation_zero_or_more_with_semicolon Equation SEMICOLON'''
 
 
 def p_equation(p):  # 把return 挪到control_block里面了方便声明作用域
     '''Equation : Simple_equation
                 | Assert
                 | Emission
+                | Clocked_equation
                 | Control_block
                 '''
     global cur_scope
@@ -545,12 +599,26 @@ def p_emission(p):
 
 
 def p_emission_body(p):
-    '''Emission_body : SINGLEQUOTE LV6ID Emission_body_1
-                    | LPARENTHESE SINGLEQUOTE LV6ID Emission_body_2 RPARENTHESE Emission_body_1'''
+    '''Emission_body : SINGLEQUOTE LV6ID
+                    | SINGLEQUOTE LV6ID IF Expr
+                    | LPARENTHESE SINGLEQUOTE LV6ID RPARENTHESE
+                    | LPARENTHESE SINGLEQUOTE LV6ID Emission_body_2 RPARENTHESE
+                    | LPARENTHESE SINGLEQUOTE LV6ID Emission_body_2 RPARENTHESE IF Expr'''
     lhs = list()
-    if len(p) == 4:
+    if len(p) == 3:
         lhs.append(LeftItemId(cur_scope,p[2].value))
-        expr = p[3]
+        expr = expression_factory(type="Atom",sub_type="bool_atom",scope=cur_scope,objects=["true"])
+    elif len(p) == 5:
+        if p[1].value == "(":
+            lhs.append(LeftItemId(cur_scope,p[3].value))
+            expr = expression_factory(type="Atom",sub_type="bool_atom",scope=cur_scope,objects=["true"])
+        else:
+            lhs.append(LeftItemId(cur_scope,p[2].value))
+            expr = p[4]
+    elif len(p) == 6:
+        lhs.append(LeftItemId(cur_scope,p[3].value))
+        lhs += p[4]
+        expr = expression_factory(type="Atom",sub_type="bool_atom",scope=cur_scope,objects=["true"])
     else:
         lhs.append(LeftItemId(cur_scope,p[3].value))
         lhs += p[4]
@@ -559,39 +627,34 @@ def p_emission_body(p):
     p[0].set_expr(expr)
 
 
-def p_emission_body_1(p):
-    '''Emission_body_1 : IF Expr
-                        | empty'''
-    if len(p) != 2:
-        p[0] = p[2]
-    else:
-        p[0] = expression_factory(type="Atom",sub_type="bool_atom",scope=cur_scope,objects=["true"])
-
-
 def p_emission_body_2(p):
-    '''Emission_body_2 : COMMA SINGLEQUOTE LV6ID Emission_body_2
-                        | empty'''
+    '''Emission_body_2 : COMMA SINGLEQUOTE LV6ID
+                        | Emission_body_2 COMMA SINGLEQUOTE LV6ID'''
     p[0] = list()
-    if len(p) != 2:
+    if len(p) == 4:
         p[0].append(LeftItemId(cur_scope,p[3].value))
-        p[0] += p[4]
+    else:
+        p[0] += p[1]
+        p[0].append(LeftItemId(cur_scope,p[4].value))
 
 
 # 左值
 def p_lhs(p):
-    '''Lhs : Lhs_id Lhs_1'''
+    '''Lhs : Lhs_id
+           | Lhs_id Lhs_1'''
     p[0] = list()
     p[0].append(p[1])
-    p[0] += p[2]
+    if len(p) == 3:
+        p[0] += p[2]
 def p_lhs_empty(p):
     '''Lhs : LPARENTHESE RPARENTHESE'''
     p[0]=list()
 def p_lhs_1(p):
     '''Lhs_1 : COMMA Lhs_id Lhs_1
-    | empty'''
+    | COMMA Lhs_id'''
     p[0] = list()
-    if len(p) != 2:
-        p[0].append(p[2])
+    p[0].append(p[2])
+    if len(p) == 4:
         p[0] += p[3]
 
 
@@ -606,42 +669,54 @@ def p_lhs_id(p):
 # return 返回列表。这里要根据情况返回一个equation
 # p[1]会返回一个对应的名字
 def p_control_block(p):
-    '''Control_block : Clocked_block Return
-     | State_machine Return'''
+    'Control_block : State_machine Return'
     global cur_scope
     lhs = cur_scope.get_childScope(p[1]).get_return_symbolTable()
+    returned_names = p[2]
     # 检查ruturn的变量是否符合要求，即显示返回的变量里面有没有lhs以外的东西
-    for symbol_name in p[2]:
+    for symbol_name in returned_names:
         if symbol_name == "..":  # 遇到这个说明完成了..只会在最后面
             break
         if symbol_name not in lhs.keys():
             # 没有就报错
             raise UnknownIdentifierException(f"{symbol_name}在returned变量中却没有被修改")
     lhs_items=[LeftItemId(cur_scope,id) for id in lhs.keys()]
-    p[0] = SyntaxEquation(type="control_block", lhs=lhs_items, lineno=p.lineno(1),scope=cur_scope)
+    p[0] = SyntaxEquation(type="control_block", lhs=lhs_items, lineno=p.lineno(1), scope=cur_scope)
     p[0].controlBlockID = p[1]
 
 
-def p_id_zero_or_one(p):
-    '''Id_zero_or_one : LV6ID
-    | empty'''
-    if p[1].strs == "Empty":
-        p[0] = None
-    else:
-        p[0] = p[1].value
+def p_clocked_equation(p):
+    'Clocked_equation : Clocked_block Return'
+    global cur_scope
+    lhs = cur_scope.get_childScope(p[1]).get_return_symbolTable()
+    returned_names = p[2]
+    # 检查ruturn的变量是否符合要求，即显示返回的变量里面有没有lhs以外的东西
+    for symbol_name in returned_names:
+        if symbol_name == "..":  # 遇到这个说明完成了..只会在最后面
+            break
+        if symbol_name not in lhs.keys():
+            # 没有就报错
+            raise UnknownIdentifierException(f"{symbol_name}在returned变量中却没有被修改")
+    lhs_items = [LeftItemId(cur_scope, name) for name in lhs.keys()]
+    p[0] = SyntaxEquation(type="control_block", lhs=lhs_items, lineno=p.lineno(1), scope=cur_scope)
+    p[0].controlBlockID = p[1]
 
 
 def p_state_machine(p):  # 返回此状态机的名字
-    '''State_machine : State_machine_decl State_machine_1 State_machine_end'''
+    '''State_machine : State_machine_decl
+                     | State_machine_decl State_machine_1'''
+    global cur_scope
     p[0] = p[1]
+    cur_scope = cur_scope.prevScope
     p.set_lineno(0, p.lineno(1))
 
 
 def p_state_machine_decl(p):  # 切换作用域
-    '''State_machine_decl : AUTOMATON Id_zero_or_one'''
+    '''State_machine_decl : AUTOMATON
+                          | AUTOMATON LV6ID'''
     global cur_scope
-    if p[2]:
-        name = p[2]
+    if len(p) == 3:
+        name = p[2].value
     else:
         name = cur_scope.generate_name_for_subScope()
     p[0] = name
@@ -651,30 +726,57 @@ def p_state_machine_decl(p):  # 切换作用域
     p.set_lineno(0, p.lineno(1))
 
 
-def p_state_machine_end(p):  # 切换回来
-    '''State_machine_end : empty'''
-    global cur_scope
-    cur_scope = cur_scope.prevScope
-
-
 def p_state_machine_1(p):
-    '''State_machine_1 : State_decl State_machine_1
-                       | empty'''
+    '''State_machine_1 : State_decl
+                       | State_machine_1 State_decl'''
 
 
 def p_state_decl(p):  # 一个state就是一个子作用域，注意切换作用域
-    '''State_decl : Before_state_data_def State_decl_3 State_data_def State_decl_4'''
+    '''State_decl : State_decl_core
+                  | State_decl_core UNTIL State_decl_6
+                  | State_decl_core UNTIL State_decl_6 SYNCHRO Fork SEMICOLON
+                  | State_decl_core UNTIL State_decl_6 SYNCHRO Actions Fork SEMICOLON'''
+    global cur_scope
+    if len(p) == 2:
+        cur_scope = cur_scope.prevScope
+    elif len(p) == 4:
+        cur_scope.set_untilTransitions(p[3])
+        cur_scope = cur_scope.prevScope
+    elif len(p) == 7:
+        cur_scope.set_untilTransitions(p[3])
+        cur_scope.set_synchroArrow(p[5])
+        cur_scope = cur_scope.prevScope
+    else:
+        p[6].set_action(p[5])
+        cur_scope.set_untilTransitions(p[3])
+        cur_scope.set_synchroArrow(p[6])
+        cur_scope = cur_scope.prevScope
 
 
 def p_before_state_data_def(p):  # 切换作用域
-    '''Before_state_data_def : State_decl_1 State_decl_2 STATE State_Lv6id'''
+    '''Before_state_data_def : STATE State_Lv6id
+                             | INITIAL STATE State_Lv6id
+                             | FINAL STATE State_Lv6id
+                             | INITIAL FINAL STATE State_Lv6id'''
     global cur_scope
-    state = SyntaxState(type="automaton_state", name=p[4].value, prevscope=cur_scope, visibility="public")
-    state.isInitial = p[1] is not None
-    state.isFinal = p[2] is not None
+    state_name = p[len(p) - 1].value
+    state = SyntaxState(type="automaton_state", name=state_name, prevscope=cur_scope, visibility="public")
+    state.isInitial = p[1].strs == "initial"
+    state.isFinal = any(item.strs == "final" for item in p[1:-1])
     cur_scope.add_childScope(state)
     cur_scope.add_state(state)
     cur_scope = state
+
+
+def p_state_decl_core(p):
+    '''State_decl_core : Before_state_data_def
+                       | Before_state_data_def State_data_def
+                       | Before_state_data_def UNLESS State_decl_5
+                       | Before_state_data_def UNLESS State_decl_5 State_data_def'''
+    if len(p) == 4 or len(p) == 5:
+        global cur_scope
+        transition_index = 3
+        cur_scope.set_unlessTransitions(p[transition_index])
 
 
 def p_state_data_def(p):  # 重写一个data_def，让当前作用域为SyntaxState
@@ -682,59 +784,24 @@ def p_state_data_def(p):  # 重写一个data_def，让当前作用域为SyntaxSt
                      | Scope'''
 
 
-def p_state_decl_1(p):
-    '''State_decl_1 : INITIAL
-                    | empty'''
-    if p[1].strs == "Empty":
-        p[0] = None
-    else:
-        p[0] = p[1].value
-
-
-def p_state_decl_2(p):
-    '''State_decl_2 : FINAL
-                    | empty'''
-    if p[1].strs == "Empty":
-        p[0] = None
-    else:
-        p[0] = p[1].value
-
-
-def p_state_decl_3(p):
-    '''State_decl_3 : UNLESS State_decl_5
-    | empty'''
-    if len(p) != 2:
-        p[0] = p[2]
-        global cur_scope
-        cur_scope.set_unlessTransitions(p[2])
-    else:
-        p[0] = None
-
-
-def p_state_decl_4(p):  # 在这里恢复作用域到automaton
-    '''State_decl_4 : UNTIL State_decl_6 State_decl_7
-                    | empty '''
-    global cur_scope
-    if len(p) != 2:
-        if p[2] and len(p[2]) > 0: cur_scope.set_untilTransitions(p[2])
-        if p[3]: cur_scope.set_synchroArrow(p[3])
-    cur_scope = cur_scope.prevScope
-
-
 def p_state_decl_5(p):
-    '''State_decl_5 : Transition SEMICOLON State_decl_6'''
+    '''State_decl_5 : Transition SEMICOLON
+                    | Transition SEMICOLON State_decl_6'''
     p[0] = list()
     p[0].append(p[1])
-    p[0] += p[3]
+    if len(p) == 4:
+        p[0] += p[3]
 
 
 def p_state_decl_6(p):
-    '''State_decl_6 : Transition SEMICOLON State_decl_6
-    | empty'''
+    '''State_decl_6 : Transition SEMICOLON
+                    | State_decl_6 Transition SEMICOLON'''
     p[0] = list()
-    if len(p) != 2:
+    if len(p) == 3:
         p[0].append(p[1])
-        p[0] += p[3]
+    else:
+        p[0] += p[1]
+        p[0].append(p[2])
 
 
 def p_transition(p):
@@ -742,26 +809,6 @@ def p_transition(p):
     p[0] = list()
     p[0].append(p[2])
     p[0].append(p[3])
-
-
-def p_state_decl_7(p):  # 返回一个arrow对象，没有就返回None
-    '''State_decl_7 : SYNCHRO State_decl_8 Fork SEMICOLON
-    | empty'''
-    if len(p) != 2:
-        if p[2]:
-            p[3].set_action(p[2])
-        p[0] = p[3]
-    else:
-        p[0] = None
-
-
-def p_state_decl_8(p):
-    '''State_decl_8 : Actions
-    | empty'''
-    if not isinstance(p[1], lex_value):
-        p[0] = p[1]
-    else:
-        p[0] = None
 
 
 def p_state_lv6id(p):
@@ -773,19 +820,29 @@ def p_state_lv6id(p):
 # 若为data_def则已经生成好了作用域不用处理
 # 若不为则需要自己生成一个作用域
 def p_actions(p):
-    '''Actions : DO LBPARENTHESE Actions_1 Emission_body Actions_2 RBPARENTHESE
-    | DO Data_def'''
+    '''Actions : DO LBPARENTHESE EMIT Emission_body RPARENTHESE
+    | DO LBPARENTHESE Emission_body RPARENTHESE
+    | DO LBPARENTHESE EMIT Emission_body Action_tail RPARENTHESE
+    | DO LBPARENTHESE Emission_body Action_tail RPARENTHESE
+    | Action_data_def'''
     global cur_scope
-    if len(p) == 3:
+    if len(p) == 2:
+        p[0] = p[1]
+    elif len(p) == 3:
         p[0] = p[2]
     else:
         scope = SyntaxDataDefScope(type="data_def", name=cur_scope.generate_name_for_subScope(), prevscope=cur_scope,
                                    visibility="public")
         cur_scope.add_childScope(scope)
-        if not p[3]:
-            p[4].emit = False
-        scope.add_equation(p[4])
-        for equation in p[5]:
+        if p[3].strs == "emit":
+            emission_index = 4
+            tail_index = 5 if len(p) == 8 else None
+        else:
+            emission_index = 3
+            tail_index = 4 if len(p) == 7 else None
+            p[emission_index].emit = False
+        scope.add_equation(p[emission_index])
+        for equation in p[tail_index] if tail_index is not None else []:
             scope.add_equation(equation)
         p[0] = scope.name
         # 不切换作用域，直接新建一个作用域塞到当前作用域里就可以了
@@ -797,35 +854,38 @@ def p_actions(p):
     cur_scope.returnSymbolsTable.update(action_scope.returnSymbolsTable)
 
 
-def p_actions_1(p):
-    '''Actions_1 : EMIT
-    | empty'''
-    if p[1].strs == "Empty":
-        p[0] = None
-    else:
-        p[0] = p[1].value
-
-
-def p_actions_2(p):
-    '''Actions_2 : SEMICOLON Actions_1 Emission_body Actions_2
-    | empty'''
+def p_action_tail(p):
+    '''Action_tail : SEMICOLON EMIT Emission_body
+                   | SEMICOLON Emission_body
+                   | Action_tail SEMICOLON EMIT Emission_body
+                   | Action_tail SEMICOLON Emission_body'''
     p[0] = list()
-    if len(p) != 2:
-        if not p[2]:
-            p[3].emit = False
+    if len(p) == 4:
         p[0].append(p[3])
-        p[0] += p[4]
+    elif len(p) == 3:
+        p[2].emit = False
+        p[0].append(p[2])
+    elif p[3].strs == "emit":
+        p[0] += p[1]
+        p[0].append(p[4])
+    else:
+        p[3].emit = False
+        p[0] += p[1]
+        p[0].append(p[3])
 
 
 def p_arrow(p):  # 给arrow添加actions并返回
-    '''Arrow : Actions Fork
+    '''Arrow : DO Target
+    | Actions Fork
     | Fork'''
-    if len(p) != 2:
+    global cur_scope
+    if isinstance(p[1], lex_value) and p[1].strs == "do":
+        p[0] = SyntaxArrow(type=p[2]["type"], state=cur_scope, target=p[2]["target"])
+    elif len(p) != 2:
         p[2].set_action(p[1])
         p[0] = p[2]
     else:
         # 这里生成一个空data_def
-        global cur_scope
         scope = SyntaxDataDefScope(type="data_def", name=cur_scope.generate_name_for_subScope(),
                                    prevscope=cur_scope,
                                    visibility="public")
@@ -840,32 +900,37 @@ def p_arrow(p):  # 给arrow添加actions并返回
 
 def p_fork(p):  # 在这里就创建一个arrow对象
     '''Fork : Target
-    | IF Expr Arrow Fork_1 Fork_2 END'''
+    | IF Expr Arrow END
+    | IF Expr Arrow ELSE Arrow END
+    | IF Expr Arrow Fork_1 END
+    | IF Expr Arrow Fork_1 ELSE Arrow END'''
     if len(p) == 2:
         p[0] = SyntaxArrow(type=p[1]["type"], state=cur_scope, target=p[1]["target"])
     else:
         ifList = list()
         ifList.append([p[2], p[3]])
-        ifList += p[4]
-        p[0] = SyntaxArrow(type="if", state=cur_scope,ifExpr=ifList, elseExpr=p[5])
+        if len(p) == 5:
+            else_expr = None
+        elif len(p) == 6:
+            ifList += p[4]
+            else_expr = None
+        elif len(p) == 7:
+            else_expr = p[5]
+        else:
+            ifList += p[4]
+            else_expr = p[6]
+        p[0] = SyntaxArrow(type="if", state=cur_scope,ifExpr=ifList, elseExpr=else_expr)
 
 
 def p_fork_1(p):
-    '''Fork_1 : Elsif_fork Fork_1
-    | empty'''
+    '''Fork_1 : Elsif_fork
+              | Fork_1 Elsif_fork'''
     p[0] = list()
-    if len(p) != 2:
+    if len(p) == 2:
         p[0].append(p[1])
-        p[0] += p[2]
-
-
-def p_fork_2(p):
-    '''Fork_2 : Else_fork
-    | empty'''
-    if isinstance(p[1], lex_value):
-        p[0] = None
     else:
-        p[0] = p[1]
+        p[0] += p[1]
+        p[0].append(p[2])
 
 
 def p_elsif_fork(p):
@@ -889,67 +954,62 @@ def p_target(p):
 
 
 def p_clocked_block(p):
-    '''Clocked_block : ACTIVATE Id_zero_or_one Before_match_block Match_block After_clocked_block
-     | ACTIVATE Id_zero_or_one Before_if_block If_block After_clocked_block'''
-    p[0] = p[3]
+    '''Clocked_block : Match_clocked_header Match_block
+     | If_clocked_header If_block'''
+    global cur_scope
+    cur_scope.block = p[2]
+    cur_scope = cur_scope.prevScope
+    p[0] = p[1]
     p.set_lineno(0, p.lineno(1))
 
 
-def p_before_match_block(p):  # 切换作用域
-    '''Before_match_block : empty'''
+def p_match_clocked_header(p):
+    '''Match_clocked_header : ACTIVATE
+                            | ACTIVATE LV6ID'''
     global cur_scope
-    if p[-1]:
-        name = p[-1]
-    else:
+    if len(p) == 2:
         name = cur_scope.generate_name_for_subScope()
+    else:
+        name = p[2].value
     scope = SyntaxClockedScope(type="match_block", name=name, prevscope=cur_scope, visibility="public")
     cur_scope.add_childScope(scope)
     cur_scope = scope
     p[0] = name
-
-
-def p_after_clocked_block(p):
-    '''After_clocked_block : empty'''
-    # 这里切换回作用域，并将读取到的block添加到作用域之中
-    global cur_scope
-    cur_scope.block = p[-1]
-    cur_scope = cur_scope.prevScope
-
-
 def p_match_block(p):
     '''Match_block : WHEN Expr MATCH Match_block_1'''
     p[0] = SyntaxMatchBlock(expr=p[2], matchList=p[4],scope=cur_scope)
 
 
 def p_match_block_1(p):
-    ' Match_block_1 : VERTICALBAR Pattern COLON Data_def Match_block_2 '
+    '''Match_block_1 : VERTICALBAR Pattern Match_data_def
+                     | Match_block_1 VERTICALBAR Pattern Match_data_def'''
     p[0] = list()
-    tmp = list()
-    tmp.append(p[2])
-    tmp.append(p[4])
-    p[0].append(tmp)
-    p[0] += p[5]
-
-
-def p_match_block_2(p):
-    '''Match_block_2 : VERTICALBAR Pattern COLON Data_def Match_block_2
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
-        tmp = list()
-        tmp.append(p[2])
-        tmp.append(p[4])
-        p[0].append(tmp)
-        p[0] += p[5]
-
-
-def p_before_if_block(p):  # 切换作用域
-    '''Before_if_block : empty'''
-    global cur_scope
-    if p[-1]:
-        name = p[-1]
+    if len(p) == 4:
+        tmp = [p[2], p[3]]
     else:
+        p[0] += p[1]
+        tmp = [p[3], p[4]]
+    p[0].append(tmp)
+
+
+def p_match_data_def(p):
+    '''Match_data_def : Match_data_def_start Data_def_body'''
+    p[0] = leave_data_def_scope(p[1])
+
+
+def p_match_data_def_start(p):
+    'Match_data_def_start : COLON'
+    p[0] = enter_data_def_scope()
+
+
+def p_if_clocked_header(p):
+    '''If_clocked_header : ACTIVATE
+                         | ACTIVATE LV6ID'''
+    global cur_scope
+    if len(p) == 2:
         name = cur_scope.generate_name_for_subScope()
+    else:
+        name = p[2].value
     scope = SyntaxClockedScope(type="if_block", name=name, prevscope=cur_scope, visibility="public")
     cur_scope.add_childScope(scope)
     cur_scope = scope
@@ -957,14 +1017,40 @@ def p_before_if_block(p):  # 切换作用域
 
 
 def p_if_block(p):
-    'If_block : IF Expr THEN If_block_1 ELSE If_block_1'
-    p[0] = SyntaxIfBlock(expr=p[2], thenBlock=p[4], elseBlock=p[6],scope=cur_scope)
+    'If_block : IF Expr Then_clause Else_clause'
+    p[0] = SyntaxIfBlock(expr=p[2], thenBlock=p[3], elseBlock=p[4],scope=cur_scope)
 
 
-def p_if_block_1(p):
-    '''If_block_1 : Data_def
-    | If_block'''
-    p[0] = p[1]
+def p_then_clause(p):
+    '''Then_clause : Then_data_def
+                   | THEN If_block'''
+    p[0] = p[1] if len(p) == 2 else p[2]
+
+
+def p_then_data_def(p):
+    '''Then_data_def : Then_data_def_start Data_def_body'''
+    p[0] = leave_data_def_scope(p[1])
+
+
+def p_then_data_def_start(p):
+    'Then_data_def_start : THEN'
+    p[0] = enter_data_def_scope()
+
+
+def p_else_clause(p):
+    '''Else_clause : Else_data_def
+                   | ELSE If_block'''
+    p[0] = p[1] if len(p) == 2 else p[2]
+
+
+def p_else_data_def(p):
+    '''Else_data_def : Else_data_def_start Data_def_body'''
+    p[0] = leave_data_def_scope(p[1])
+
+
+def p_else_data_def_start(p):
+    'Else_data_def_start : ELSE'
+    p[0] = enter_data_def_scope()
 
 
 # return返回值，返回ID列表,包括..的情况，在equation层进行处理
@@ -974,8 +1060,12 @@ def p_return(p):
 
 
 def p_returns_var(p):
-    '''Returns_var : Returns_var_1 Returns_var_2'''
+    '''Returns_var : Returns_var_2
+                   | Returns_var_1 Returns_var_2'''
     p[0] = list()
+    if len(p) == 2:
+        p[0].append(p[1])
+        return
     p[0] += p[1]
     if p[2] in p[1]:
         # 重复定义，报错
@@ -985,16 +1075,16 @@ def p_returns_var(p):
 
 
 def p_returns_var_1(p):
-    '''Returns_var_1 : Returns_var_1 LV6ID COMMA
-    | empty'''
+    '''Returns_var_1 : LV6ID COMMA
+                      | Returns_var_1 LV6ID COMMA'''
     p[0] = list()
-    if len(p) != 2:
+    if len(p) == 3:
+        p[0].append(p[1].value)
+    else:
         p[0] += p[1]
         if p[2].value in p[1]:
-            # 重复定义，报错
             raise MultipleFlowDefinitionException(p[2].value)
-        else:
-            p[0].append(p[2].value)
+        p[0].append(p[2].value)
 
 
 def p_returns_var_2(p):
@@ -1003,39 +1093,56 @@ def p_returns_var_2(p):
     p[0] = p[1].value
 
 
-# data_def部分，注意切换作用域，不在scope里切换
-# 没有名字，注意给他生成一个名字,返回一个指向此作用域的ID
-def p_data_def(p):
-    '''Data_def : BeforeDataDef Equation SEMICOLON AfterDataDef
-                | BeforeDataDef Scope AfterDataDef'''
-    p[0] = p[1]
-
-
-def p_beforeDataDef(p):
-    '''BeforeDataDef : empty'''
+def enter_data_def_scope():
     global cur_scope
     name = cur_scope.generate_name_for_subScope()
     scope = SyntaxDataDefScope(type="data_def", name=name, prevscope=cur_scope, visibility="public")
     cur_scope.add_childScope(scope)
     cur_scope = scope
-    p[0] = name
+    return name
 
 
-def p_afterDataDef(p):
-    '''AfterDataDef : empty'''
+def leave_data_def_scope(name):
     global cur_scope
     cur_scope = cur_scope.prevScope
+    return name
+
+
+def p_action_data_def(p):
+    '''Action_data_def : Action_data_def_start Data_def_body'''
+    p[0] = leave_data_def_scope(p[1])
+
+
+def p_action_data_def_start(p):
+    'Action_data_def_start : DO'
+    p[0] = enter_data_def_scope()
+
+
+def p_data_def_body(p):
+    '''Data_def_body : Equation SEMICOLON
+                     | Scope'''
 
 
 def p_scope(p):
-    '''Scope : Signal_block_zero_or_one Local_block_zero_or_one Eqs
-    | Signal_block_zero_or_one Local_block_zero_or_one'''
+    '''Scope : Eqs
+             | Signal_block_local_block Eqs
+             | Signal_block_local_block'''
 
 
 def p_eqs(p):
-    'Eqs : LET Equation_zero_or_more_with_semicolon TEL'
+    '''Eqs : LET TEL
+           | LET Eqs_item_list TEL
+           | LET Clocked_equation TEL'''
+
+
+def p_eqs_item_list(p):
+    '''Eqs_item_list : Equation SEMICOLON
+                     | Eqs_item_list Equation SEMICOLON'''
 
 d=dict()
+def make_list_expr(values):
+    return expression_factory(type="List_expr", sub_type="List_expr", scope=cur_scope, objects=[values])
+
 # expr，表达式的右值，返回Syntaxexpr
 def p_expr(p):
     '''Expr : Id_expr
@@ -1086,10 +1193,13 @@ def p_atom(p):
 def p_tempo_expr(p):
     '''Tempo_expr : Expr ARROW Expr
     | PRE Expr
-    | FBY LPARENTHESE List SEMICOLON Expr SEMICOLON List RPARENTHESE
+    | FBY LPARENTHESE Nonempty_expr_list SEMICOLON Expr SEMICOLON Nonempty_expr_list RPARENTHESE
+    | FBY LPARENTHESE SEMICOLON Expr SEMICOLON Nonempty_expr_list RPARENTHESE
+    | FBY LPARENTHESE Nonempty_expr_list SEMICOLON Expr SEMICOLON RPARENTHESE
+    | FBY LPARENTHESE SEMICOLON Expr SEMICOLON RPARENTHESE
     | Expr TIMES Expr
     | Expr WHEN Clock_expr
-    | MERGE LPARENTHESE Expr SEMICOLON List Tempo_expr_1 RPARENTHESE'''
+    | MERGE LPARENTHESE Expr SEMICOLON Merge_case_list RPARENTHESE'''
     global cur_scope
     if len(p) == 3:
         p[0] = expression_factory(type="Tempo_expr", sub_type="PRE",scope=cur_scope,objects=[p[2]])
@@ -1102,18 +1212,35 @@ def p_tempo_expr(p):
         elif p[2].strs == "when":
             p[0] = expression_factory(type="Tempo_expr", sub_type="WHEN",scope=cur_scope,objects=[p[1],p[3]])
     elif p[1].strs == "fby":
-        p[0] = expression_factory(type="Tempo_expr", sub_type="FBY",scope=cur_scope,objects=[p[3],p[5],p[7]])
+        if p.slice[3].type == "SEMICOLON":
+            left = make_list_expr([])
+            expr = p[4]
+            right = make_list_expr(p[6])
+        elif len(p) == 8:
+            left = make_list_expr(p[3])
+            expr = p[5]
+            right = make_list_expr([])
+        else:
+            left = make_list_expr(p[3])
+            expr = p[5]
+            right = make_list_expr(p[7])
+        p[0] = expression_factory(type="Tempo_expr", sub_type="FBY",scope=cur_scope,objects=[left,expr,right])
     elif p[1].strs == "merge":
-        p[0] = expression_factory(type="Tempo_expr", sub_type="MERGE",scope=cur_scope,objects=[p[3],[p[5]]+p[6]])
+        p[0] = expression_factory(type="Tempo_expr", sub_type="MERGE",scope=cur_scope,objects=[p[3],p[5]])
 
 
-def p_tempo_expr_1(p):
-    '''Tempo_expr_1 : SEMICOLON List Tempo_expr_1
-                    | empty'''
-    p[0] = list()
-    if len(p) != 2:
-        p[0].append(p[2])
-        p[0] += p[3]
+def p_merge_case_list(p):
+    '''Merge_case_list : Merge_case
+                       | Merge_case_list SEMICOLON Merge_case'''
+    if len(p) == 2:
+        p[0] = [p[1]]
+    else:
+        p[0] = p[1] + [p[3]]
+
+
+def p_merge_case(p):
+    'Merge_case : Nonempty_expr_list'
+    p[0] = make_list_expr(p[1])
 
 
 def p_arith_expr(p):
@@ -1151,34 +1278,21 @@ def p_relation_expr(p):
     p[0] = expression_factory(type="Relation_expr", sub_type="Relation_expr",scope=cur_scope,objects=[[p[1],p[3]],p[2].value])
 
 def p_list_expr(p):
-    '''List_expr : LPARENTHESE List RPARENTHESE'''
-    p[0] = p[2]
+    '''List_expr : LPARENTHESE RPARENTHESE
+                 | LPARENTHESE Nonempty_expr_list RPARENTHESE'''
+    values = [] if len(p) == 3 else p[2]
+    p[0] = expression_factory(type="List_expr", sub_type="List_expr", scope=cur_scope, objects=[values])
 
 
-def p_list(p):
-    '''List : List_1
-            | empty'''
-
-    if isinstance(p[1], list):
-        p[0] = expression_factory(type="List_expr", sub_type="List_expr", scope=cur_scope,objects=[p[1]])
+def p_nonempty_expr_list(p):
+    '''Nonempty_expr_list : Expr
+                          | Nonempty_expr_list COMMA Expr'''
+    p[0] = list()
+    if len(p) == 2:
+        p[0].append(p[1])
     else:
-        p[0] = expression_factory(type="List_expr", sub_type="List_expr", scope=cur_scope,objects=[[]])
-
-
-def p_list_1(p):
-    '''List_1 : Expr List_2'''
-    p[0] = list()
-    p[0].append(p[1])
-    p[0] += p[2]
-
-
-def p_list_2(p):
-    '''List_2 : COMMA Expr List_2
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
-        p[0].append(p[2])
-        p[0] += p[3]
+        p[0] += p[1]
+        p[0].append(p[3])
 
 
 def p_switch_expr(p):
@@ -1192,19 +1306,14 @@ def p_switch_expr(p):
 
 
 def p_switch_expr_1(p):
-    'Switch_expr_1 : Case_expr Switch_expr_2'
+    '''Switch_expr_1 : Case_expr
+                     | Switch_expr_1 Case_expr'''
     p[0] = list()
-    p[0].append(p[1])
-    p[0] += p[2]
-
-
-def p_switch_expr_2(p):
-    '''Switch_expr_2 : Case_expr Switch_expr_2
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
+    if len(p) == 2:
         p[0].append(p[1])
-        p[0] += p[2]
+    else:
+        p[0] += p[1]
+        p[0].append(p[2])
 
 
 def p_case_expr(p):
@@ -1216,35 +1325,13 @@ def p_case_expr(p):
 
 def p_bool_expr(p):
     '''Bool_expr : NOT Expr
-    | HASHTAG LPARENTHESE Hashtag_List RPARENTHESE'''
+    | HASHTAG LPARENTHESE RPARENTHESE
+    | HASHTAG LPARENTHESE Nonempty_expr_list RPARENTHESE'''
     if len(p) == 3:
         p[0] = expression_factory(type="Bool_expr", sub_type="NOT",scope=cur_scope,objects=[p[2]])
     else:
-        p[0] = expression_factory(type="Bool_expr", sub_type="HASHTAG",scope=cur_scope,objects=[p[3]])
-
-
-def p_hashtag_list(p):
-    '''Hashtag_List : Hashtag_List_1
-    | empty'''
-    p[0] = list()
-    if isinstance(p[1], list):
-        p[0] += p[1]
-
-
-def p_hashtag_list_1(p):
-    '''Hashtag_List_1 : Expr Hashtag_List_2'''
-    p[0] = list()
-    p[0].append(p[1])
-    p[0] += p[2]
-
-
-def p_hashtag_list_2(p):
-    '''Hashtag_List_2 : COMMA Expr Hashtag_List_2
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
-        p[0].append(p[2])
-        p[0] += p[3]
+        values = [] if len(p) == 4 else p[3]
+        p[0] = expression_factory(type="Bool_expr", sub_type="HASHTAG",scope=cur_scope,objects=[values])
 
 
 def p_bool_expr_bin(p):
@@ -1255,9 +1342,14 @@ def p_bool_expr_bin(p):
 
 def p_struct_expr(p):
     '''Struct_expr : Expr POINT LV6ID
+    | LBPARENTHESE Label_expr RBPARENTHESE
     | LBPARENTHESE Label_expr Struct_expr_1 RBPARENTHESE'''
     if len(p) == 4:
-        p[0] = expression_factory(type="Struct_expr", sub_type="get",scope=cur_scope,objects=[p[1],p[3].value])
+        if isinstance(p[1], lex_value):
+            labels = {p[2][0]: p[2][1]}
+            p[0] = expression_factory(type="Struct_expr", sub_type="construct",scope=cur_scope,objects=[labels])
+        else:
+            p[0] = expression_factory(type="Struct_expr", sub_type="get",scope=cur_scope,objects=[p[1],p[3].value])
     else:
         labels = dict()
         labels[p[2][0]]=p[2][1]
@@ -1267,12 +1359,14 @@ def p_struct_expr(p):
 
 
 def p_struct_expr_1(p):
-    '''Struct_expr_1 : COMMA Label_expr Struct_expr_1
-    | empty'''
+    '''Struct_expr_1 : COMMA Label_expr
+                     | Struct_expr_1 COMMA Label_expr'''
     p[0] = list()
-    if len(p) != 2:
+    if len(p) == 3:
         p[0].append(p[2])
-        p[0] += p[3]
+    else:
+        p[0] += p[1]
+        p[0].append(p[3])
 
 
 def p_label_expr(p):
@@ -1283,10 +1377,13 @@ def p_label_expr(p):
 
 
 def p_array_expr(p):
-    '''Array_expr : LBRACKET List RBRACKET
+    '''Array_expr : LBRACKET RBRACKET
+    | LBRACKET Nonempty_expr_list RBRACKET
     | Expr Index'''
-    if len(p) == 4:
-        p[0] = expression_factory(type="Array_expr", sub_type="list",scope=cur_scope,objects=[p[2]])
+    if p.slice[1].type == "LBRACKET" and len(p) == 3:
+        p[0] = expression_factory(type="Array_expr", sub_type="list",scope=cur_scope,objects=[make_list_expr([])])
+    elif p.slice[1].type == "LBRACKET":
+        p[0] = expression_factory(type="Array_expr", sub_type="list",scope=cur_scope,objects=[make_list_expr(p[2])])
     else:
         p[0] = expression_factory(type="Array_expr", sub_type="get",scope=cur_scope,objects=[p[1],p[2]])
 
@@ -1319,19 +1416,14 @@ def p_array_expr4(p):
 
 
 def p_array_expr_1(p):
-    '''Array_expr_1 : Index Array_expr_2'''
+    '''Array_expr_1 : Index
+                    | Array_expr_1 Index'''
     p[0] = list()
-    p[0].append(p[1])
-    p[0] += p[2]
-
-
-def p_array_expr_2(p):
-    '''Array_expr_2 : Index Array_expr_2
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
+    if len(p) == 2:
         p[0].append(p[1])
-        p[0] += p[2]
+    else:
+        p[0] += p[1]
+        p[0].append(p[2])
 
 
 def p_label_or_index(p):
@@ -1348,8 +1440,10 @@ def p_index(p):
 
 
 def p_apply_expr(p):
-    '''Apply_expr : Operator LPARENTHESE List RPARENTHESE'''
-    p[0] = expression_factory("Operator","Apply_expr",cur_scope,[p[1],p[3]])
+    '''Apply_expr : Operator LPARENTHESE RPARENTHESE
+                  | Operator LPARENTHESE Nonempty_expr_list RPARENTHESE'''
+    values = [] if len(p) == 4 else p[3]
+    p[0] = expression_factory("Operator","Apply_expr",cur_scope,[p[1],make_list_expr(values)])
 
     cur_scope.get_my_op_or_state().add_apply_expr(p[0])
 
@@ -1357,6 +1451,7 @@ op_d=dict()
 it_d=dict()
 def p_operator(p):
     '''Operator : Prefix
+    | LPARENTHESE Prefix LSHIFT RSHIFT RPARENTHESE
     | LPARENTHESE Prefix LSHIFT Operator_1 RSHIFT RPARENTHESE
     | LPARENTHESE MAKE Path_id RPARENTHESE
     | LPARENTHESE FLATTEN Path_id RPARENTHESE
@@ -1375,6 +1470,9 @@ def p_operator(p):
             p[0] = expression_factory(type="Operator",sub_type="Path_id",scope=cur_scope,objects=objects)
         else:
             p[0] = expression_factory(type="Operator",sub_type="PREFIXOP",scope=cur_scope,objects=objects)
+    elif length == 6:
+        p[0] = expression_factory(type="Operator",sub_type="PREFIXOP",scope=cur_scope,
+                                  objects=[p[2].value,[]])
     elif length == 5:
         if p[2].strs == "make":
             p[0] = expression_factory(type="Operator",sub_type="make",scope=cur_scope,objects=[p[3].value])
@@ -1432,21 +1530,14 @@ def p_prefix(p):
 
 
 def p_operator_1(p):
-    '''Operator_1 : Expr Operator_2
-    | empty'''
+    '''Operator_1 : Expr
+                  | Operator_1 COMMA Expr'''
     p[0] = list()
-    if len(p) != 2:
+    if len(p) == 2:
         p[0].append(p[1])
-        p[0] += p[2]
-
-
-def p_operator_2(p):
-    '''Operator_2 : COMMA Expr Operator_2
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
-        p[0].append(p[2])
-        p[0] += p[3]
+    else:
+        p[0] += p[1]
+        p[0].append(p[3])
 
 
 def p_iterator(p):
@@ -1483,72 +1574,68 @@ def p_mixed_constructor(p):
 
 
 def p_mixed_constructor_1(p):
-    '''Mixed_constructor_1 : Label_or_index Mixed_constructor_2'''
+    '''Mixed_constructor_1 : Label_or_index
+                           | Mixed_constructor_1 Label_or_index'''
     p[0] = list()
-    p[0].append(p[1])
-    p[0] += p[2]
-
-
-def p_mixed_constructor_2(p):
-    '''Mixed_constructor_2 : Label_or_index Mixed_constructor_2
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
+    if len(p) == 2:
         p[0].append(p[1])
-        p[0] += p[2]
+    else:
+        p[0] += p[1]
+        p[0].append(p[2])
 
 
 # 变量声明
 # 返回一个SyntaxVariableSymbol的列表，不更新到符号表之中
 def p_var_decls(p):
-    'Var_decls : Var_id Var_decls_1 COLON Type_expr Var_decls_2 Var_decls_3 Var_decls_4'
-    var_id_list = list()
-    var_id_list.append(p[1])
-    var_id_list += p[2]
+    '''Var_decls : Var_id COLON Type_expr
+                 | Var_id Var_decls_1 COLON Type_expr
+                 | Var_id COLON Type_expr Var_decl_suffix
+                 | Var_id Var_decls_1 COLON Type_expr Var_decl_suffix'''
+    var_id_list = [p[1]]
+    if isinstance(p[2], list):
+        var_id_list += p[2]
+        type_index = 4 if len(p) == 6 else 4
+        suffix = p[5] if len(p) == 6 else None
+    else:
+        type_index = 3
+        suffix = p[4] if len(p) == 5 else None
     for var_id in var_id_list:
-        var_id.syntaxType = p[4]
-        if p[5]:
-            var_id.whenExpr = p[5]
-        if p[6]:  # default
-            var_id.defaultExpr = p[6]
-        if p[7]:  # last
-            var_id.lastExpr = p[7]
+        var_id.syntaxType = p[type_index]
+        if suffix is not None:
+            if suffix["when"] is not None:
+                var_id.whenExpr = suffix["when"]
+            if suffix["default"] is not None:
+                var_id.defaultExpr = suffix["default"]
+            if suffix["last"] is not None:
+                var_id.lastExpr = suffix["last"]
     p[0] = var_id_list
 
 
 def p_var_decls_1(p):
     '''Var_decls_1 : COMMA Var_id Var_decls_1
-    | empty'''
+    | COMMA Var_id'''
     p[0] = list()
-    if len(p) != 2:
-        p[0].append(p[2])
+    p[0].append(p[2])
+    if len(p) == 4:
         p[0] += p[3]
 
 
 def p_var_id(p):
-    'Var_id : Var_id_1 Var_id_2 LV6ID'
-    p[0] = SyntaxVariableSymbol(name=p[3].value, isClock=p[1].strs == "clock", isProbe=p[2].strs == "probe",scope=cur_scope)
-
-
-def p_var_id_1(p):
-    '''Var_id_1 : CLOCK
-    | empty'''
-    p[0] = p[1]
-
-
-def p_var_id_2(p):
-    '''Var_id_2 : PROBE
-    | empty'''
-    p[0] = p[1]
-
-
-def p_var_decls_2(p):
-    '''Var_decls_2 : When_decl
-                    | empty'''
-    if isinstance(p[1], SyntaxClockExpr):
-        p[0] = p[1]
+    '''Var_id : LV6ID
+              | CLOCK LV6ID
+              | PROBE LV6ID
+              | CLOCK PROBE LV6ID
+              | PROBE CLOCK LV6ID'''
+    if len(p) == 2:
+        is_clock = False
+        is_probe = False
+        name = p[1].value
     else:
-        p[0] = None
+        modifiers = [item.strs for item in p[1:-1]]
+        is_clock = "clock" in modifiers
+        is_probe = "probe" in modifiers
+        name = p[len(p) - 1].value
+    p[0] = SyntaxVariableSymbol(name=name, isClock=is_clock, isProbe=is_probe,scope=cur_scope)
 
 
 def p_when_decl(p):
@@ -1579,8 +1666,10 @@ def p_clock_expr(p):
 def p_pattern(p):
     '''Pattern : Path_id
     | CHARACTER
-    | Pattern_1 INTEGERNUM
-    | Pattern_1 TYPED_INTEGER
+    | INTEGERNUM
+    | MINUS INTEGERNUM
+    | TYPED_INTEGER
+    | MINUS TYPED_INTEGER
     | Bool_atom
     | UNDERLINE'''
     if len(p) == 3:
@@ -1592,34 +1681,29 @@ def p_pattern(p):
     p[0] = SyntaxPattern(_type=_type, value=value,scope=cur_scope)
 
 
-def p_pattern_1(p):
-    '''Pattern_1 : MINUS
-    | empty'''
-    p[0] = p[1]
-
-
 def p_bool_atom(p):
     '''Bool_atom : TRUE
     | FALSE'''
     p[0] = p[1]
 
 
-def p_var_decls_3(p):
-    '''Var_decls_3 : Default_decl
-    | empty'''
-    if not isinstance(p[1], lex_value):
-        p[0] = p[1]
-    else:
-        p[0] = None
-
-
-def p_var_decls_4(p):
-    '''Var_decls_4 : Last_decl
-    | empty'''
-    if not isinstance(p[1], lex_value):
-        p[0] = p[1]
-    else:
-        p[0] = None
+def p_var_decl_suffix(p):
+    '''Var_decl_suffix : When_decl
+                       | Default_decl
+                       | Last_decl
+                       | When_decl Default_decl
+                       | When_decl Last_decl
+                       | Default_decl Last_decl
+                       | When_decl Default_decl Last_decl'''
+    p[0] = {"when": None, "default": None, "last": None}
+    for index in range(1, len(p)):
+        option_type = p.slice[index].type
+        if option_type == "When_decl":
+            p[0]["when"] = p[index]
+        elif option_type == "Default_decl":
+            p[0]["default"] = p[index]
+        elif option_type == "Last_decl":
+            p[0]["last"] = p[index]
 
 
 def p_default_decl(p):
@@ -1634,58 +1718,39 @@ def p_last_decl(p):
 
 # ID 返回列表，存储每个ID
 def p_id_one_or_more_with_comma(p):
-    'Id_one_or_more_with_comma : LV6ID Id_one_or_more_with_comma_1'
+    '''Id_one_or_more_with_comma : LV6ID
+                                 | Id_one_or_more_with_comma COMMA LV6ID'''
     p[0] = list()
-    p[0].append(p[1].value)
-    p[0] += p[2]
-
-
-def p_id_one_or_more_with_comma_1(p):
-    '''Id_one_or_more_with_comma_1 : COMMA LV6ID Id_one_or_more_with_comma_1
-    | empty'''
-    p[0] = list()
-    if len(p) != 2:
-        p[0].append(p[2].value)
-        p[0] += p[3]
+    if len(p) == 2:
+        p[0].append(p[1].value)
+    else:
+        p[0] += p[1]
+        p[0].append(p[3].value)
 
 
 # path_id，返回lex_value，path只搜索package！
 def p_path_id(p):
-    '''Path_id : LV6ID Path_1'''
+    '''Path_id : LV6ID
+               | LV6ID Path_1'''
     p[0] = lex_value("path_id", "")
-    p[0].value += p[1].value + p[2].value
+    p[0].value += p[1].value
+    if len(p) == 3:
+        p[0].value += p[2].value
 
 
 def p_path_1(p):
     '''Path_1 : DOUBLECOLON LV6ID Path_1
-    | empty '''
+    | DOUBLECOLON LV6ID'''
     p[0] = lex_value("path_1", "")
-    if len(p) != 2:
-        p[0].value += p[1].value + p[2].value + p[3].value
+    p[0].value += p[1].value + p[2].value
+    if len(p) == 4:
+        p[0].value += p[3].value
 
 
 # 模板id 返回lex_value
 def p_typevar(p):
     '''Typevar : SINGLEQUOTE LV6ID'''
     p[0] = lex_value("typevar", p[1].value + p[2].value)
-
-
-# 可见性 返回字典，有key：External，Visibility为对应值，没有就NONE
-def p_interface_status(p):
-    '''Interface_status : Visibility_zero_or_one External
-    | Visibility_zero_or_one'''
-    p[0] = dict()
-    for i in range(1, len(p)):
-        if p[i]: p[0].update(p[i])
-
-
-def p_visibility_zero_or_one(p):
-    '''Visibility_zero_or_one : Visibility
-    | empty'''
-    if not isinstance(p[1], lex_value):
-        p[0] = p[1]
-    else:
-        p[0] = None
 
 
 def p_external(p):
@@ -1699,11 +1764,6 @@ def p_visibility(p):
     | PUBLIC'''
     p[0] = dict()
     p[0]["Visibility"] = p[1].value
-
-
-def p_empty(p):
-    'empty :'
-    p[0] = lex_value('Empty', "")
 
 
 def p_error(p):

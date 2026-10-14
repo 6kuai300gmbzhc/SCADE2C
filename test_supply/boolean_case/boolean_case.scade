@@ -1,0 +1,20 @@
+node boolean_case(first, second: bool) returns(result, permitted: bool)
+let
+	result = if first then choose_enabled(second) else invert(second);
+	permitted = implication(first, second);
+tel
+
+function choose_enabled(value: bool) returns(result: bool)
+let
+	result = value and true;
+tel
+
+function invert(value: bool) returns(result: bool)
+let
+	result = not value;
+tel
+
+function implication(premise, consequence: bool) returns(result: bool)
+let
+	result = not premise or consequence;
+tel

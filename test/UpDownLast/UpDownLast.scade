@@ -1,0 +1,15 @@
+node UpDownLast() returns(x:int16)
+let
+    automaton SSM
+    initial state Up
+    let
+        x = 0 -> last 'x + 1;
+    tel
+    until if (x>=3) resume Down;
+    state Down
+    let
+        x = last 'x - 1;
+    tel
+    until if (x<=-3) resume Up;
+    returns x;
+tel

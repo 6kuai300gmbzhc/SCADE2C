@@ -1,0 +1,21 @@
+node array_default(values: int32^3; index: uint16) returns(selected: int32; fallback: int32; valid_index: bool)
+let
+	selected = add_bias((values.[index] default 0));
+	fallback = add_bias((values.[100] default -1));
+	valid_index = index < 3;
+tel
+
+function add_bias(value: int32) returns(result: int32)
+let
+	result = value + 7;
+tel
+
+function choose_fallback(value, fallback: int32; use_value: bool) returns(result: int32)
+let
+	result = if use_value then value else fallback;
+tel
+
+function safe_index(index: uint16) returns(result: bool)
+let
+	result = index < 3;
+tel

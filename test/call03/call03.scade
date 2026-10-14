@@ -1,0 +1,4 @@
+node call03(x,y : bool^2) returns (z : bool^2)
+let
+	z = ( map $or$ <<2>>)(x,y);
+tel

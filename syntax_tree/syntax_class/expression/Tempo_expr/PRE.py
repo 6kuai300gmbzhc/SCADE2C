@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
 
 from typing import TYPE_CHECKING
@@ -27,7 +28,7 @@ class Tempo_expr_PRE(SyntaxExpr):
             tmp_name_list.append(real_name)
             tmp_var.postExpr = f"{assign_lhs_to_rhs_expr(real_name,post_code,[lhs_type],0,syntaxUserOp)}"
         return tmp_name_list if self.returnNum>1 else tmp_name_list[0]
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
 

@@ -1,0 +1,13 @@
+function f(a,b:int64; c: bool) returns (x, y: int64)
+let
+	x=a+b;
+	y=if c then a else b;
+tel
+function g(a,b: int64) returns (x: int64)
+let
+	x=a+b;
+tel
+node ex(c: bool; a, b: int64) returns (s, t: int64)
+let
+	s, t = if c then f(a+b, a-b, c) else (0, g(f(b, a, not c)));
+tel

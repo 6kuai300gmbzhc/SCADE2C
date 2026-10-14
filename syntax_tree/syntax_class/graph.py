@@ -1,6 +1,6 @@
 # 单向图，支持查询到节点的边和节点出发的边
 from collections import deque
-
+from typing import Optional
 
 class Vertex:
     def __init__(self, value):
@@ -70,7 +70,7 @@ class Graph:
     def getVertex(self, key):
         return self.vertList.get(key)
 
-    def get_all_from_vertexes_from_value(self, value) -> list or None:
+    def get_all_from_vertexes_from_value(self, value) -> Optional[set]:
         """找到连接到有此值的节点的其他所有节点"""
         src_vertex = self.getVertex(value)
         if not src_vertex: return None
@@ -105,7 +105,7 @@ class Graph:
                 out += f"({v.getValue()} , {f.getValue()})"
         return out
 
-    def topological_sort(self) -> list or None:
+    def topological_sort(self) -> Optional[list]:
         """进行拓扑排序，返回排序之后的数组,若无法排序则返回None"""
         # 计算每个节点的入度
         # key就是value，value就是key

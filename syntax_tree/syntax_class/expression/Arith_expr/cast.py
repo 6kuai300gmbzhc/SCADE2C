@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException, NumericConstraintViolateException
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr, int_can_fit_type, float_can_fit_type
 from syntax_tree.scade_postprocess import set_rhs_default
@@ -40,7 +41,7 @@ class Arith_expr_cast(SyntaxExpr):
         syntax_type = self.objects[1]
         expr = self.objects[0]
         return f"{(syntax_type.change_name_cast())}({expr.generate_code(syntaxUserOp, genEqu)})"
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
     def cal_const_value(self,required_type:'SyntaxType',scope:'SyntaxScope') -> 'ConstValue':

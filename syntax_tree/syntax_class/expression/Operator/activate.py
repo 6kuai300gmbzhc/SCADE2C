@@ -1,4 +1,6 @@
-from syntax_tree.scade_generate import generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr, GenEqu
+from typing import Optional
+from syntax_tree.scade_generate import generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr, GenEqu, \
+    generate_init_code
 from syntax_tree.scade_postprocess import flatten_list
 from syntax_tree.scade_type_inference import clock_inference_sync, type_inference_on_groups
 from syntax_tree.syntax_class.Exceptions import UnknownIdentifierException, TypeMismatchException
@@ -31,10 +33,12 @@ class Operator_activate(SyntaxExpr):
         pre_code=f"{'    '*depth}if ({self.clock_expr.generate_code()}){{\n" \
                  f"{''.join(sub_genEqu.preEquations)}" \
                  f"{sub_code}" \
+                 f"{'    '*depth}}}else{{\n" \
+                 f"{''.join(generate_init_code(t,p,depth=depth+1) for t,p in zip(self.lhsTypeList,tmp_names))}"\
                  f"{'    '*depth}}}\n"
         genEqu.add_preEquations(pre_code)
         return tmp_names[0] if len(tmp_names)==1 else tmp_names
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type, subtype, scope, objects, returnNum)
         self.sub_operator=objects[0]
         self.clock_expr=objects[1]

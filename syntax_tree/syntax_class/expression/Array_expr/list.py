@@ -4,7 +4,8 @@ from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
 from syntax_tree.scade_postprocess import set_rhs_default, flatten_list
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 from syntax_tree.scade_generate import  generate_tmp_symbol_and_register,assign_lhs_to_rhs_expr
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
+
 if TYPE_CHECKING:
     from syntax_tree.scade_generate import GenEqu
     from syntax_tree.syntax_class.scope.userOp import SyntaxUserOp
@@ -55,7 +56,7 @@ class Array_expr_list(SyntaxExpr):
         elements: list[SyntaxExpr] = self.objects[0].objects[0]
         sub_codes=[expr.generate_code_const(scope, genEqu) for expr in elements]
         return f"{{{', '.join(sub_codes)}}}"
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
 

@@ -1,3 +1,4 @@
+from typing import Optional
 import ply.lex as lex
 import sys
 import re
@@ -352,10 +353,14 @@ def t_INTEGERNUM(t):
 def t_LV6ID(t):
     r'[a-zA-Z][a-zA-Z0-9_]*|[_][a-zA-Z0-9_]+'
     t.type = reserved.get(t.value, 'LV6ID')
+
     if not reserved.get(t.value):
+        if t.value[-1]=='l':
+            t.value=t.value+'_'
         t.value = lex_value('lv6id', t.value)
     else:
         t.value = lex_value(t.value, t.value)
+
     return t
 
 def t_newline(t):

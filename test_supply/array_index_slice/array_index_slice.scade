@@ -1,0 +1,23 @@
+node array_index_slice(values: int32^4) returns(item, middle_sum: int32; first_half: int32^2; second_half: int32^2; balanced: bool)
+let
+	item = sum_pair(values[0..1]);
+	middle_sum = select_middle(values);
+	first_half = values[0..1];
+	second_half = values[2..3];
+	balanced = halves_match(first_half, second_half);
+tel
+
+function sum_pair(pair: int32^2) returns(result: int32)
+let
+	result = pair[0] + pair[1];
+tel
+
+function select_middle(values: int32^4) returns(result: int32)
+let
+	result = values[1] + values[2];
+tel
+
+function halves_match(left, right: int32^2) returns(result: bool)
+let
+	result = left[0] + left[1] = right[0] + right[1];
+tel

@@ -1,0 +1,5 @@
+node convert(x:int32; y:float32) returns (a:int32; b:float32)
+let
+  b = (x:float32);
+  a = (y:int32);
+tel

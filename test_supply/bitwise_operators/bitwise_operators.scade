@@ -1,0 +1,25 @@
+node bitwise_operators(left, right: uint64) returns(bit_and, bit_or, bit_xor, shifted_left, shifted_right: uint64; odd, power_of_two: bool)
+let
+	bit_and = apply_mask(left, right);
+	bit_or = left lor right;
+	bit_xor = left lxor right;
+	shifted_left = left lsl right;
+	shifted_right = left lsr right;
+	odd = has_low_bit(bit_xor);
+	power_of_two = is_power_of_two(bit_or);
+tel
+
+function apply_mask(value, mask: uint64) returns(result: uint64)
+let
+	result = value land mask;
+tel
+
+function has_low_bit(value: uint64) returns(result: bool)
+let
+	result = (value land 1) = 1;
+tel
+
+function is_power_of_two(value: uint64) returns(result: bool)
+let
+	result = value > 0 and (value land (value - 1)) = 0;
+tel

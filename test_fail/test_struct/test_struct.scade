@@ -1,0 +1,11 @@
+type bk_color = {a:int32,b:bool};
+function test_struct(in2:bk_color) returns(out1:int32;out2:bk_color)
+let
+	out1=in2.a;
+	out2={a:3,b:false};
+tel
+function test_struct_2(in2:bk_color) returns(out1:int32;out2:int32)
+let
+	out1=in2.a;
+	out2={x:5_i64,n:false}.x;
+tel

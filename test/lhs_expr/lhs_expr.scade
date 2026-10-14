@@ -1,0 +1,4 @@
+node lhs_expr(in1,in2:int64) returns(out1:int64)
+let
+	out1= if in1<in2 then in1+in2 else in1-in2;
+tel

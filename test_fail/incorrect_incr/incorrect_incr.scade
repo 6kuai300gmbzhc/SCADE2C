@@ -1,0 +1,4 @@
+function incorrect_incr (i: float64) returns (o: float64)
+let
+  o = i + 0x1;
+tel

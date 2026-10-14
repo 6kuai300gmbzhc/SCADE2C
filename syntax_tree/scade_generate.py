@@ -1,3 +1,4 @@
+from typing import Optional
 import os.path
 import re
 import sys
@@ -24,6 +25,30 @@ else:
     # 开发环境下的路径
     template_path = './template'
 
+
+# 如果是数组情况，就需要加循环
+def generate_init_code(syntax_type: SyntaxType, param_name, depth=1) -> str:
+    syntax_type = syntax_type.get_real_type()
+    if syntax_type.is_basic_type():
+        return f"{'    ' * depth}{param_name} = {syntax_type.generate_init_expr()};\n"
+    if syntax_type.type == "array":
+        _code = ""
+        idx = "idx" if depth == 1 else f"idx_{str(depth)}"
+        _code += f"{'    ' * (depth)}for(kcg_size {idx}=0;{idx}<{syntax_type.get_size()};{idx}++){{\n" \
+                 f"{generate_init_code(syntax_type.get_element_type_for_array(), f'{param_name}[{idx}]', depth + 1)}" \
+                 f"{'    ' * (depth)}}}\n"
+        return _code
+    if syntax_type.type == "field_decl":
+        _code = ""
+        for type_symbol in syntax_type.fields:
+            _code += generate_init_code(type_symbol.syntaxType, f"{param_name}.{type_symbol.name}", depth + 1)
+        return _code
+    if syntax_type.type == "enum":
+        return f"{'    ' * depth}{param_name} = {syntax_type.generate_init_expr()};\n"
+    print(syntax_type)
+    raise Exception("为什么")
+
+
 class GenerateCode:
     def __init__(self, rootNode, mainNode, outputDir):
         self.rootNode = rootNode
@@ -40,9 +65,9 @@ class GenerateCode:
         # 只要写了const_block无论是否使用都会使用,从root_node开始深度遍历
         # 改了，没用到的没有生成进去
         c_content = '''#include "kcg_consts.h"\n'''
-        c_content += '#ifndef _KCG_CONSTS_C_\n' \
-                     '#define _KCG_CONSTS_C_\n'
-        h_content = '''#ifndef _KCG_CONSTS_H_\n#define _KCG_CONSTS_H_\n#include "kcg_types.h"\n'''
+        c_content += '#ifndef KCG_CONSTS_C_\n' \
+                     '#define KCG_CONSTS_C_\n'
+        h_content = '''#ifndef KCG_CONSTS_H_\n#define KCG_CONSTS_H_\n#include "kcg_types.h"\n'''
 
         def set_base_type(param: SyntaxConstSymbol):
             if param.syntaxType.is_basic_type():
@@ -215,7 +240,7 @@ class GenerateCode:
 
     def generate_head_file(self, node):
         global_name = node.get_global_name()
-        head_content = f'#ifndef _{global_name}_H_\n#define _{global_name}_H_\n#include"kcg_types.h"\n'
+        head_content = f'#ifndef KCG_{global_name}_H_\n#define KCG_{global_name}_H_\n#include "kcg_types.h"\n'
         head_content += self.generate_head_include(node)
         head_content += self.generate_head_inC(node)
         head_content += self.generate_head_outC(node)
@@ -359,27 +384,6 @@ class GenerateCode:
                  f"{'    ' * (depth)}}}\n"
         return _code
     def generate_src_init(self, node):
-        # 如果是数组情况，就需要加循环
-        def generate_init_code(syntax_type: SyntaxType, param_name, depth=1) -> str:
-            syntax_type = syntax_type.get_real_type()
-            if syntax_type.is_basic_type():
-                return f"{'    ' * depth}{param_name} = {syntax_type.generate_init_expr()};\n"
-            if syntax_type.type == "array":
-                _code = ""
-                idx = "idx" if depth == 1 else f"idx_{str(depth)}"
-                _code += f"{'    ' * (depth)}for(kcg_size {idx}=0;{idx}<{syntax_type.get_size()};{idx}++){{\n" \
-                         f"{generate_init_code(syntax_type.get_element_type_for_array(), f'{param_name}[{idx}]', depth + 1)}" \
-                         f"{'    ' * (depth)}}}\n"
-                return _code
-            if syntax_type.type == "field_decl":
-                _code = ""
-                for type_symbol in syntax_type.fields:
-                    _code += generate_init_code(type_symbol.syntaxType, f"{param_name}.{type_symbol.name}", depth + 1)
-                return _code
-            if syntax_type.type == "enum":
-                return f"{'    ' * depth}{param_name} = {syntax_type.generate_init_expr()};\n"
-            print(syntax_type)
-            raise Exception("为什么")
 
         global_name = node.get_global_name()
         code = "#ifndef KCG_USER_DEFINED_INIT\n" \
@@ -507,8 +511,6 @@ class GenerateCode:
         test_code = f'#include "stdio.h"\n' \
                     f'#include "kcg_types.h"\n' \
                     f'#include "{main_node.get_global_name()}.h"\n' \
-                    f'#define true kcg_true\n' \
-                    f'#define false kcg_false\n' \
                     f'int main(){{\n' \
                     f'    int length={length};\n' \
                     f'    {main_node.get_inC_name()} input;\n' \
@@ -738,7 +740,7 @@ def assign_lhs_to_rhs_expr(lhs, rhs, types, depth: int, data_def,rhs_need_addres
         if l == '_':
             continue
         if t.get_real_type().type == "array":
-            lines.append(f'{indent}memcpy(&{l}, {f"&({r})" if need_address else r}, sizeof({t.change_name()}));')
+            lines.append(f'{indent}(void)memcpy(&{l}, {f"&({r})" if need_address else r}, sizeof({t.change_name()}));')
         else:
             lines.append(f'{indent}{l} = {r};')
     return '\n'.join(lines) + '\n'
@@ -853,18 +855,23 @@ def generate_automaton(control_block, code_generator, depth) -> str:
 def generate_match_block(match_block, code_generator, depth):
     genEqu = GenEqu(depth)
 
+
     code = f"{'    ' * (depth)}switch({match_block.switchExpr.generate_code(match_block.scope,genEqu)}){{\n"
 
+    has_default=False
     for case in match_block.matchList:
         syntaxPattern = case[0]
         sub_data_def:SyntaxDataDefScope = match_block.scope.get_childScope(case[1])
         pattern_code = syntaxPattern.generate_code(match_block.scope, genEqu)
         if pattern_code != '_':
-            code += f"{'    ' * (depth)}case {pattern_code}:\n"
+            code += f"{'    ' * (depth)}case {pattern_code}:{{\n"
         else:
+            has_default=True
             code += f"{'    ' * (depth)}default:\n"
         code+=code_generator.generate_data_def(sub_data_def, depth + 1)
-        code+= f"{'    ' * (depth)}break;\n"
+        code+= f"{'    ' * (depth)}break;}}\n"
+    if not has_default:
+        code +=f"{'    ' * (depth)}default:break;\n"
     code += f"{'    ' * (depth)}}}\n"
 
     code=f"{''.join(genEqu.preEquations)}"+code
@@ -886,7 +893,7 @@ def generate_if_block(block: 'SyntaxIfBlock', code_generator, depth) -> str:
     else_code = generate_if_sub_block(block.elseBlock)
 
     code = f"{'    ' * depth}{''.join(condition_genEqu.preEquations)}\n" if condition_genEqu.preEquations else ""
-    code += f"{'    ' * depth}if ({condition_genEqu.expr}){{\n"
+    code += f"{'    ' * depth}if ({condition_genEqu.expr} != kcg_false){{\n"
     code += then_code
     code += f"{'    ' * depth}}}\n"
     code += f"{'    ' * depth}else{{\n"

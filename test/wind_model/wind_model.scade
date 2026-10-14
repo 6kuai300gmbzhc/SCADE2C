@@ -1,0 +1,731 @@
+const
+    rangeMax: float32 = 300.0;
+    rangeMin: float32 = 0.0;
+    rangeSetTime: float32 = 5.0;
+    rangeClrTime: float32 = 10.0;
+    procTime: float32 = 1.0;
+    isRange: float32 = 0.0;
+    init : float32 = 0.0;
+    q : float32 = 0.002;
+    r : float32 = 0.05;
+    voteData: float32 = 150.0;
+    slopeWaveLimit: float32 = 1000.0;
+    slopeSetTime: float32 = 5.0;
+    slopeClrTime: float32 = 5.0;
+    warpLimit: float32 = 1000.0;
+    esMode: float32 = 6.0;
+    constant: float32 = 1.0;
+    constant1: float32 = 0.0;
+    constant2: bool = false;
+    constant3: bool = false;
+    constant4: float32 = 1.0;
+    constant5: float32 = 1.0;
+    constant6: float32 = 0.0;
+    AngularSubtract1_sub: float32 = 180.0;
+    SlopeLimit: float32 = 100.0;
+node extreValue1 (
+    rangeIn: float32)
+returns (
+    rangeOut: float32;
+    rangeFlt: bool)
+var
+    rangeInv1,
+    rangeFlt1,
+    rangeInv2: bool;
+    setCyc,
+    clrCyc,
+    cycle1,
+    cycle2: float32;
+let
+    setCyc = rangeSetTime / procTime;
+    clrCyc = rangeClrTime / procTime;
+    cycle1 = if rangeInv2 then (0.0 -> pre(cycle1) + 1.0) else 0.0;
+    cycle2 = if not rangeInv2 then (0.0 -> pre(cycle2) + 1.0) else 0.0;
+    rangeInv1 = if rangeMax<rangeIn or rangeIn < rangeMin then true
+                else false;
+    rangeInv2 = if isRange = 1.0 then true
+                else rangeInv1;
+    rangeFlt1 = if rangeInv1 = true then (if cycle1 >= setCyc then true else false)
+                else (if cycle2 >= clrCyc then false else true);
+    rangeFlt = true -> (if isRange = 1.0 then true
+                else rangeFlt1);
+    rangeOut =  if rangeInv2 and rangeFlt then 0.0
+                else rangeIn;
+tel
+
+node extreValue2 (
+    rangeIn: float32)
+returns (
+    rangeOut: float32;
+    rangeFlt: bool)
+var
+    rangeInv1,
+    rangeFlt1,
+    rangeInv2: bool;
+    setCyc,
+    clrCyc,
+    cycle1,
+    cycle2: float32;
+let
+    setCyc = rangeSetTime / procTime;
+    clrCyc = rangeClrTime / procTime;
+    cycle1 = if rangeInv2 then (0.0 -> pre(cycle1) + 1.0) else 0.0;
+    cycle2 = if not rangeInv2 then (0.0 -> pre(cycle2) + 1.0) else 0.0;
+    rangeInv1 = if rangeMax<rangeIn or rangeIn < rangeMin then true
+                else false;
+    rangeInv2 = if isRange = 1.0 then true
+                else rangeInv1;
+    rangeFlt1 = if rangeInv1 = true then (if cycle1 >= setCyc then true else false)
+                else (if cycle2 >= clrCyc then false else true);
+    rangeFlt = true -> (if isRange = 1.0 then true
+                else rangeFlt1);
+    rangeOut =  if rangeInv2 and rangeFlt then 0.0
+                else rangeIn;
+tel
+
+node extreValue3 (
+    rangeIn: float32)
+returns (
+    rangeOut: float32;
+    rangeFlt: bool)
+var
+    rangeInv1,
+    rangeFlt1,
+    rangeInv2: bool;
+    setCyc,
+    clrCyc,
+    cycle1,
+    cycle2: float32;
+let
+    setCyc = rangeSetTime / procTime;
+    clrCyc = rangeClrTime / procTime;
+    cycle1 = if rangeInv2 then (0.0 -> pre(cycle1) + 1.0) else 0.0;
+    cycle2 = if not rangeInv2 then (0.0 -> pre(cycle2) + 1.0) else 0.0;
+    rangeInv1 = if rangeMax<rangeIn or rangeIn < rangeMin then true
+                else false;
+    rangeInv2 = if isRange = 1.0 then true
+                else rangeInv1;
+    rangeFlt1 = if rangeInv1 = true then (if cycle1 >= setCyc then true else false)
+                else (if cycle2 >= clrCyc then false else true);
+    rangeFlt = true -> (if isRange = 1.0 then true
+                else rangeFlt1);
+    rangeOut =  if rangeInv2 and rangeFlt then 0.0
+                else rangeIn;
+tel
+
+node extreValue4 (
+    rangeIn: float32)
+returns (
+    rangeOut: float32;
+    rangeFlt: bool)
+var
+    rangeInv1,
+    rangeFlt1,
+    rangeInv2: bool;
+    setCyc,
+    clrCyc,
+    cycle1,
+    cycle2: float32;
+let
+    setCyc = rangeSetTime / procTime;
+    clrCyc = rangeClrTime / procTime;
+    cycle1 = if rangeInv2 then (0.0 -> pre(cycle1) + 1.0) else 0.0;
+    cycle2 = if not rangeInv2 then (0.0 -> pre(cycle2) + 1.0) else 0.0;
+    rangeInv1 = if rangeMax<rangeIn or rangeIn < rangeMin then true
+                else false;
+    rangeInv2 = if isRange = 1.0 then true
+                else rangeInv1;
+    rangeFlt1 = if rangeInv1 = true then (if cycle1 >= setCyc then true else false)
+                else (if cycle2 >= clrCyc then false else true);
+    rangeFlt = true -> (if isRange = 1.0 then true
+                else rangeFlt1);
+    rangeOut =  if rangeInv2 and rangeFlt then 0.0
+                else rangeIn;
+tel
+
+node karman1(
+    KFIn: float32)
+returns (
+    KFOut: float32)
+var
+    var1,
+    var2,
+    var3: float32;
+let
+    var2 = q + init + (0.0 -> pre(var1));
+    var3 = var2 / (var2 + r);
+    var1 = var2 - var2 * var3;
+    KFOut = (0.0 -> pre(KFOut)) + var3 * (KFIn - (0.0 -> pre(KFOut)));
+tel
+
+node karman2(
+    KFIn: float32)
+returns (
+    KFOut: float32)
+var
+    var1,
+    var2,
+    var3: float32;
+let
+    var2 = q + init + (0.0 -> pre(var1));
+    var3 = var2 / (var2 + r);
+    var1 = var2 - var2 * var3;
+    KFOut = (0.0 -> pre(KFOut)) + var3 * (KFIn - (0.0 -> pre(KFOut)));
+tel
+
+node karman3(
+    KFIn: float32)
+returns (
+    KFOut: float32)
+var
+    var1,
+    var2,
+    var3: float32;
+let
+    var2 = q + init + (0.0 -> pre(var1));
+    var3 = var2 / (var2 + r);
+    var1 = var2 - var2 * var3;
+    KFOut = (0.0 -> pre(KFOut)) + var3 * (KFIn - (0.0 -> pre(KFOut)));
+tel
+
+node karman4(
+    KFIn: float32)
+returns (
+    KFOut: float32)
+var
+    var1,
+    var2,
+    var3: float32;
+let
+    var2 = q + init + (0.0 -> pre(var1));
+    var3 = var2 / (var2 + r);
+    var1 = var2 - var2 * var3;
+    KFOut = (0.0 -> pre(KFOut)) + var3 * (KFIn - (0.0 -> pre(KFOut)));
+tel
+
+node ifSystem1 (
+    in1,
+    in2: float32;
+    in3: bool)
+returns (
+    entrytime1,
+    entrytime2: float32;
+    slopeFlt: bool)
+let
+    entrytime1 = if ( false->pre(in3) ) = true then 0.0
+                 else in1 + 1.0;
+    entrytime2 = 0.0;
+    slopeFlt = if ( false->pre(in3) ) = true then false->pre(in3)
+               else if in1 + 1.0 >= 2.0 then true
+               else true;
+tel
+
+node ifSystem2 (
+    in1,
+    in2: float32;
+    in3: bool)
+returns (
+    entrytime1,
+    entrytime2: float32;
+    slopeFlt: bool)
+let
+    entrytime1 = 0.0;
+    entrytime2 = if ( false->pre(in3) ) = true then in1+1.0
+                 else 0.0;
+    slopeFlt = if ( false->pre(in3) ) = true then ( if in1 + 1.0 >= 2.0 then true else false )
+               else false->pre(in3);
+tel
+
+node slope1 (
+    Speed: float32;
+    RangeFlt: bool)
+returns (
+    SpeedOut: float32;
+    SlopeFlt: bool)
+var
+    SpeedAbs: float32;
+    Flt: bool;
+    InvBool: bool;
+    Inv: float32;
+    i: int32;
+let
+    SpeedAbs =  if Speed - (0.0 -> pre(Speed)) >= 0.0 then Speed - (0.0 -> pre(Speed))
+                else (0.0 -> pre(Speed)) - Speed;
+    InvBool =  if SpeedAbs > SlopeLimit then true
+                else false;
+    Inv = if InvBool then 1.0
+            else 0.0;
+    Flt =  true ->  if pre(Flt) = true then
+                            (if pre(i) + 1 >= 4 then false else pre(Flt))
+                        else
+                            (if pre(i) + 1 >= 4 then true else pre(Flt));
+    i = 0 ->    if pre(Flt) = true then
+                    if Inv = 0.0 then
+                        if pre(i) + 1 >= 4 then 0
+                        else pre(i) +1
+                    else 0
+                else
+                    if Inv = 1.0 then
+                        if pre(i) + 1 >= 4 then 0
+                        else pre(i) +1
+                    else 0;
+    SpeedOut = if InvBool and Flt then 0.0
+                else Speed;
+    SlopeFlt = Flt or RangeFlt;
+
+
+tel
+
+node slope2 (
+    Speed: float32;
+    RangeFlt: bool)
+returns (
+    SpeedOut: float32;
+    SlopeFlt: bool)
+var
+    SpeedAbs: float32;
+    Flt: bool;
+    InvBool: bool;
+    Inv: float32;
+    i: int32;
+let
+    SpeedAbs =  if Speed - (0.0 -> pre(Speed)) >= 0.0 then Speed - (0.0 -> pre(Speed))
+                else (0.0 -> pre(Speed)) - Speed;
+    InvBool =  if SpeedAbs > SlopeLimit then true
+                else false;
+    Inv = if InvBool then 1.0
+            else 0.0;
+    Flt =  true ->  if pre(Flt) = true then
+                            (if pre(i) + 1 >= 4 then false else pre(Flt))
+                        else
+                            (if pre(i) + 1 >= 4 then true else pre(Flt));
+    i = 0 ->    if pre(Flt) = true then
+                    if Inv = 0.0 then
+                        if pre(i) + 1 >= 4 then 0
+                        else pre(i) +1
+                    else 0
+                else
+                    if Inv = 1.0 then
+                        if pre(i) + 1 >= 4 then 0
+                        else pre(i) +1
+                    else 0;
+    SpeedOut = if InvBool and Flt then 0.0
+                else Speed;
+    SlopeFlt = Flt or RangeFlt;
+tel
+
+node slope3 (
+    Speed: float32;
+    RangeFlt: bool)
+returns (
+    DirectionOut: float32;
+    SlopeFlt: bool)
+var
+    SpeedAbs: float32;
+    Flt: bool;
+    InvBool: bool;
+    Inv: float32;
+    i: int32;
+let
+    SpeedAbs =  if Speed - (0.0 -> pre(Speed)) >= 0.0 then Speed - (0.0 -> pre(Speed))
+                else (0.0 -> pre(Speed)) - Speed;
+    InvBool =  if SpeedAbs > SlopeLimit then true
+                else false;
+    Inv = if InvBool then 1.0
+            else 0.0;
+    Flt =  true ->  if pre(Flt) = true then
+                            (if pre(i) + 1 >= 4 then false else pre(Flt))
+                        else
+                            (if pre(i) + 1 >= 4 then true else pre(Flt));
+    i = 0 ->    if pre(Flt) = true then
+                    if Inv = 0.0 then
+                        if pre(i) + 1 >= 4 then 0
+                        else pre(i) +1
+                    else 0
+                else
+                    if Inv = 1.0 then
+                        if pre(i) + 1 >= 4 then 0
+                        else pre(i) +1
+                    else 0;
+    DirectionOut = if InvBool and Flt then 0.0
+                    else Speed;
+    SlopeFlt = Flt or RangeFlt;
+tel
+
+node slope4 (
+    Speed: float32;
+    RangeFlt: bool)
+returns (
+    DirectionOut: float32;
+    SlopeFlt: bool)
+var
+    SpeedAbs: float32;
+    Flt: bool;
+    InvBool: bool;
+    Inv: float32;
+    i: int32;
+let
+    SpeedAbs =  if Speed - (0.0 -> pre(Speed)) >= 0.0 then Speed - (0.0 -> pre(Speed))
+                else (0.0 -> pre(Speed)) - Speed;
+    InvBool =  if SpeedAbs > SlopeLimit then true
+                else false;
+    Inv = if InvBool then 1.0
+            else 0.0;
+    Flt =  true ->  if pre(Flt) = true then
+                            (if pre(i) + 1 >= 4 then false else pre(Flt))
+                        else
+                            (if pre(i) + 1 >= 4 then true else pre(Flt));
+    i = 0 ->    if pre(Flt) = true then
+                    if Inv = 0.0 then
+                        if pre(i) + 1 >= 4 then 0
+                        else pre(i) +1
+                    else 0
+                else
+                    if Inv = 1.0 then
+                        if pre(i) + 1 >= 4 then 0
+                        else pre(i) +1
+                    else 0;
+    DirectionOut = if InvBool and Flt then 0.0
+                    else Speed;
+    SlopeFlt = Flt or RangeFlt;
+tel
+
+
+
+node DoubleRedundancy1 (
+    SpeedChannel1,
+    SpeedChannel2 : float32)
+returns (
+    output : float32)
+let
+  output =
+    if SpeedChannel1 > 0.0 then SpeedChannel1
+    else if SpeedChannel2 > 0.0 then SpeedChannel2
+    else 0.0;
+
+tel
+
+node DoubleRedundancy2 (
+    SpeedChannel1,
+    SpeedChannel2 : float32)
+returns (
+    output : float32)
+let
+  output =
+    if SpeedChannel1 > 0.0 then SpeedChannel1
+    else if SpeedChannel2 > 0.0 then SpeedChannel2
+    else 0.0;
+tel
+
+node DataProcessing(
+    karman1_KFIn,
+    karman2_KFIn,
+    karman3_KFIn,
+    karman4_KFIn: float32)
+returns(
+    DoubleRedundancy1_output: float32;
+    DoubleRedundancy2_output: float32;
+    SpeedFlt1: bool;
+    SpeedFlt2: bool;
+    DirectionFlt1: bool;
+    DirectionFlt2: bool)
+var
+    DoubleRedundancy1_SpeedChannel1: float32;
+    slope1_slopeOut: float32;
+    slope1_slopeIn: float32;
+    extreValue1_rangeOut: float32;
+    extreValue1_rangeFlt: bool;
+    extreValue1_rangeIn: float32;
+    karman1_KFOut: float32;
+    DoubleRedundancy1_SpeedChannel2: float32;
+    slope2_slopeOut: float32;
+    slope2_slopeIn: float32;
+    extreValue2_rangeOut: float32;
+    extreValue2_rangeFlt: bool;
+    extreValue2_rangeIn: float32;
+    karman2_KFOut: float32;
+    DoubleRedundancy2_SpeedChannel1: float32;
+    slope3_slopeOut: float32;
+    slope3_slopeIn: float32;
+    extreValue3_rangeOut: float32;
+    extreValue3_rangeFlt: bool;
+    extreValue3_rangeIn: float32;
+    karman3_KFOut: float32;
+    DoubleRedundancy2_SpeedChannel2: float32;
+    slope4_slopeOut: float32;
+    slope4_slopeIn: float32;
+    extreValue4_rangeOut: float32;
+    extreValue4_rangeFlt: bool;
+    extreValue4_rangeIn: float32;
+    karman4_KFOut: float32;
+let
+    karman2_KFOut = karman2(karman2_KFIn);
+    extreValue2_rangeIn = karman2_KFOut;
+    extreValue2_rangeOut, extreValue2_rangeFlt = extreValue2(extreValue2_rangeIn);
+    slope2_slopeIn = extreValue2_rangeOut;
+    slope2_slopeOut, SpeedFlt2 = slope2(slope2_slopeIn, extreValue2_rangeFlt);
+    DoubleRedundancy1_SpeedChannel2 = slope2_slopeOut;
+
+    karman1_KFOut = karman1(karman1_KFIn);
+    extreValue1_rangeIn = karman1_KFOut;
+    extreValue1_rangeOut, extreValue1_rangeFlt = extreValue1(extreValue1_rangeIn);
+    slope1_slopeIn = extreValue1_rangeOut;
+    slope1_slopeOut, SpeedFlt1 = slope1(slope1_slopeIn, extreValue1_rangeFlt);
+    DoubleRedundancy1_SpeedChannel1 = slope1_slopeOut;
+    DoubleRedundancy1_output = DoubleRedundancy1(DoubleRedundancy1_SpeedChannel1, DoubleRedundancy1_SpeedChannel2);
+
+    karman4_KFOut = karman4(karman4_KFIn);
+    extreValue4_rangeIn = karman4_KFOut;
+    extreValue4_rangeOut, extreValue4_rangeFlt = extreValue4(extreValue4_rangeIn);
+    slope4_slopeIn = extreValue4_rangeOut;
+    slope4_slopeOut, DirectionFlt2 = slope4(slope4_slopeIn, extreValue4_rangeFlt);
+    DoubleRedundancy2_SpeedChannel2 = slope4_slopeOut;
+
+    karman3_KFOut = karman3(karman3_KFIn);
+    extreValue3_rangeIn = karman3_KFOut;
+    extreValue3_rangeOut, extreValue3_rangeFlt = extreValue3(extreValue3_rangeIn);
+    slope3_slopeIn = extreValue3_rangeOut;
+    slope3_slopeOut, DirectionFlt1 = slope3(slope3_slopeIn, extreValue3_rangeFlt);
+    DoubleRedundancy2_SpeedChannel1 = slope3_slopeOut;
+    DoubleRedundancy2_output = DoubleRedundancy2(DoubleRedundancy2_SpeedChannel1, DoubleRedundancy2_SpeedChannel2);
+tel
+
+
+
+
+function parseint32ToBool (
+    x: int32)
+returns (
+    y: bool)
+let
+    y = x<>0;
+tel;
+
+function parseBoolToint32 (
+    x: bool)
+returns (
+    y: int32)
+let
+    y = if x then 1 else 0;
+tel;
+
+node SystemParameters ()
+returns (
+    windDirectionRes,
+    windSpeedRes,
+    windSpeedMax,
+    windSpeedMin,
+    windSpeedUpperHyst: float32)
+let
+    windDirectionRes = 1.0;
+    windSpeedRes = 1.0;
+    windSpeedMax = 255.0;
+    windSpeedMin = 5.0;
+    windSpeedUpperHyst = 7.0;
+tel;
+
+node WindSystem_Subsystem (
+    windSpeedFMSSide,
+    windSpeedMin,
+    windSpeedUpperHyst: float32;
+    validWindMode,
+    fmsColor: int32)
+returns (
+    windVisibility: bool;
+    windDisplayColor: int32)
+var
+    condition: bool;
+let
+    condition = false -> pre(condition);
+    windVisibility =    (   if condition then (windSpeedFMSSide >= windSpeedMin)
+                            else (windSpeedFMSSide > windSpeedUpperHyst) )
+                        and parseint32ToBool(validWindMode);
+    windDisplayColor = fmsColor;
+tel;
+
+const
+    PFDMenuType: int32 = 0;
+    AFDConfigurationTypePFD: int32 = 1;
+    MFDMenuType:int32 = 0;
+    MFDModelTypeBLANK:int32 = 0;
+    MFDModelTypePPSN:int32 = 1;
+    MFDModelTypePLAN:int32 = 2;
+    MFDModelTypeTCAS:int32 = 3;
+
+node DetermineWinValidity(
+    trueRefHeadingIsValid,
+    windDirectionTrueFMSSideIsValid,
+    windSpeedFMSSideIsValid,
+    unusualAltitude,
+    pfdActiveMenu,
+    duConfig,
+    mfdAcitveLowerMenu,
+    mfdMode2: int32)
+returns (
+    validWindMode: int32)
+let
+    validWindMode = if duConfig = AFDConfigurationTypePFD
+                    then    parseBoolToint32(
+                            (parseint32ToBool(trueRefHeadingIsValid) and parseint32ToBool(windDirectionTrueFMSSideIsValid))
+                            and parseint32ToBool(windSpeedFMSSideIsValid)
+                            and not parseint32ToBool(unusualAltitude)
+                            and (pfdActiveMenu = PFDMenuType) )
+                    else    parseBoolToint32(
+                            (parseint32ToBool(trueRefHeadingIsValid) and parseint32ToBool(windDirectionTrueFMSSideIsValid))
+                            and parseint32ToBool(windSpeedFMSSideIsValid)
+                            and (mfdAcitveLowerMenu = MFDMenuType)
+                            and ( mfdMode2 = MFDModelTypeBLANK or mfdMode2 = MFDModelTypePPSN or mfdMode2 = MFDModelTypePLAN or mfdMode2 = MFDModelTypeTCAS ) );
+tel;
+
+node DetermineWindSpeed (
+    windSpeedFMSSide,
+    windSpeedRes,
+    windSpeedMax: float32)
+returns (
+    windSpeed: float32)
+let
+    windSpeed = if WindSpeedValue(windSpeedFMSSide, windSpeedRes) >= windSpeedMax then windSpeedMax
+                else WindSpeedValue(windSpeedFMSSide, windSpeedRes);
+tel;
+
+node WindSpeedValue (
+    value,
+    resolution: float32)
+returns (
+    result: float32)
+var
+    num1,
+    num2: float32;
+let
+    num1 = if (value/resolution >= 0.0) then value/resolution else -(value/resolution);
+    num2 = (( (num1+0.5) : int32) : float32)*resolution;
+    result =  if (num2 >= 0.0) then num2
+            else -num2;
+tel;
+
+node DetermineWindArrowAngle_Subsystem (
+    value,
+    resolution: float32)
+returns (
+    result: float32)
+var
+    num1,
+    num2: float32;
+let
+    num1 = if (value/resolution >= 0.0) then value/resolution else -(value/resolution);
+    num2 = (( (num1+0.5) : int32) : float32)*resolution;
+    result =  if (value >= 0.0) then num2
+            else -num2;
+tel;
+
+node AngularSubtract1 (
+    min,
+    sub: float32)
+returns (
+    diff: float32)
+let
+    diff =  if ((if (min-sub >= 0.0) then min-sub else sub-min) <= 180.0) then min-sub
+            else if (min-sub > 0.0) then min-sub-0.0
+            else min-sub+360.0;
+tel;
+
+node AngularSubtract (
+    min,
+    sub: float32)
+returns (
+    diff: float32)
+let
+    diff =  if ((if (min-sub >= 0.0) then min-sub else sub-min) <= 180.0) then min-sub
+            else if (min-sub > 0.0) then min-sub-0.0
+            else min-sub+360.0;
+tel;
+
+node WindModel(
+    AngularSubtract_min,
+    AngularSubtract_sub,
+    WindSpeedFMSSide: float32;
+    DetermineWinValidity_trueRefHeadingIsValid,
+    DetermineWinValidity_windDirectionTrueFMSSideIsValid,
+    DetermineWinValidity_windSpeedFMSSideIsValid,
+    DetermineWinValidity_unusualAltitude,
+    DetermineWinValidity_pfdActiveMenu,
+    DetermineWinValidity_duConfig,
+    DetermineWinValidity_mfdAcitveLowerMenu,
+    DetermineWinValidity_mfdMode2,
+    WindSystem_Subsystem_fmsColor: int32)
+returns(
+    WindSystem_Subsystem_windVisibility: bool;
+    DetermineWindArrowAngle_Subsystem_result,
+    DetermineWindSpeed_windSpeed: float32;
+    WindSystem_Subsystem_windDisplayColor: int32)
+var
+    DetermineWindArrowAngle_Subsystem_value, AngularSubtract1_diff, AngularSubtract1_min, AngularSubtract_diff, DetermineWindArrowAngle_Subsystem_resolution, SystemParameters_windDirectionRes, DetermineWindSpeed_windSpeedRes, SystemParameters_windSpeedRes, DetermineWindSpeed_windSpeedMax, SystemParameters_windSpeedMax, WindSystem_Subsystem_windSpeedMin, SystemParameters_windSpeedMin, WindSystem_Subsystem_windSpeedUpperHyst, SystemParameters_windSpeedUpperHyst: float32;
+    WindSystem_Subsystem_validWindMode, DetermineWinValidity_validWindMode: int32;
+let
+    SystemParameters_windDirectionRes, SystemParameters_windSpeedRes, SystemParameters_windSpeedMax, SystemParameters_windSpeedMin, SystemParameters_windSpeedUpperHyst = SystemParameters();
+    DetermineWindArrowAngle_Subsystem_resolution = SystemParameters_windDirectionRes;
+    AngularSubtract_diff = AngularSubtract(AngularSubtract_min, AngularSubtract_sub);
+    AngularSubtract1_min = AngularSubtract_diff;
+    AngularSubtract1_diff = AngularSubtract1(AngularSubtract1_min, AngularSubtract1_sub);
+    DetermineWindArrowAngle_Subsystem_value = AngularSubtract1_diff;
+    DetermineWindArrowAngle_Subsystem_result = DetermineWindArrowAngle_Subsystem(DetermineWindArrowAngle_Subsystem_value, DetermineWindArrowAngle_Subsystem_resolution);
+    DetermineWindSpeed_windSpeedMax = SystemParameters_windSpeedMax;
+    DetermineWindSpeed_windSpeedRes = SystemParameters_windSpeedRes;
+    DetermineWindSpeed_windSpeed= DetermineWindSpeed(WindSpeedFMSSide, DetermineWindSpeed_windSpeedRes, DetermineWindSpeed_windSpeedMax);
+    DetermineWinValidity_validWindMode= DetermineWinValidity(DetermineWinValidity_trueRefHeadingIsValid, DetermineWinValidity_windDirectionTrueFMSSideIsValid, DetermineWinValidity_windSpeedFMSSideIsValid, DetermineWinValidity_unusualAltitude, DetermineWinValidity_pfdActiveMenu, DetermineWinValidity_duConfig, DetermineWinValidity_mfdAcitveLowerMenu, DetermineWinValidity_mfdMode2);
+    WindSystem_Subsystem_validWindMode = DetermineWinValidity_validWindMode;
+    WindSystem_Subsystem_windSpeedUpperHyst = SystemParameters_windSpeedUpperHyst;
+    WindSystem_Subsystem_windSpeedMin = SystemParameters_windSpeedMin;
+    WindSystem_Subsystem_windVisibility, WindSystem_Subsystem_windDisplayColor = WindSystem_Subsystem(WindSpeedFMSSide, WindSystem_Subsystem_windSpeedMin, WindSystem_Subsystem_windSpeedUpperHyst, WindSystem_Subsystem_validWindMode, WindSystem_Subsystem_fmsColor);
+tel
+
+node main_(
+    WindSpeedFMSSide: float32;
+    WindDirectionTrueFMSSide: float32;
+    AngularSubtract_sub: float32;
+    DetermineWinValidity_trueRefHeadingIsValid,
+    DetermineWinValidity_windDirectionTrueFMSSideIsValid,
+    DetermineWinValidity_windSpeedFMSSideIsValid,
+    DetermineWinValidity_unusualAltitude,
+    DetermineWinValidity_pfdActiveMenu,
+    DetermineWinValidity_duConfig,
+    DetermineWinValidity_mfdAcitveLowerMenu,
+    DetermineWinValidity_mfdMode2, WindSystem_Subsystem_fmsColor: int32)
+returns(
+    WindSystem_Subsystem_windVisibility: bool;
+    DetermineWindArrowAngle_Subsystem_result,
+    DetermineWindSpeed_windSpeed: float32;
+    WindSystem_Subsystem_windDisplayColor: int32;
+    SpeedFlt1: bool;
+    SpeedFlt2: bool;
+    DirectionFlt1: bool;
+    DirectionFlt2: bool)
+var
+    DoubleRedundancy1_output,
+    DoubleRedundancy2_output: float32;
+let
+    DoubleRedundancy1_output,
+    DoubleRedundancy2_output,
+    SpeedFlt1,
+    SpeedFlt2,
+    DirectionFlt1,
+    DirectionFlt2 = DataProcessing(WindSpeedFMSSide,
+                                WindSpeedFMSSide,
+                                WindDirectionTrueFMSSide,
+                                WindDirectionTrueFMSSide);
+       WindSystem_Subsystem_windVisibility,
+        DetermineWindArrowAngle_Subsystem_result,
+        DetermineWindSpeed_windSpeed,
+        WindSystem_Subsystem_windDisplayColor = WindModel( DoubleRedundancy2_output,
+                                                            AngularSubtract_sub,
+                                                            DoubleRedundancy1_output,
+                                                            DetermineWinValidity_trueRefHeadingIsValid,
+                                                            DetermineWinValidity_windDirectionTrueFMSSideIsValid,
+                                                            DetermineWinValidity_windSpeedFMSSideIsValid,
+                                                            DetermineWinValidity_unusualAltitude,
+                                                            DetermineWinValidity_pfdActiveMenu,
+                                                            DetermineWinValidity_duConfig,
+                                                            DetermineWinValidity_mfdAcitveLowerMenu,
+                                                            DetermineWinValidity_mfdMode2,
+                                                            WindSystem_Subsystem_fmsColor);
+tel

@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_postprocess import set_rhs_default
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression import SyntaxExpr
@@ -38,7 +39,7 @@ class Array_expr_reverse(SyntaxExpr):
         return tmp_name
     def generate_code_const(self,scope,genEqu):
         pass
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
     def cal_const_value(self,required_type:'SyntaxType',scope:'SyntaxScope') -> 'ConstValue':
         pass

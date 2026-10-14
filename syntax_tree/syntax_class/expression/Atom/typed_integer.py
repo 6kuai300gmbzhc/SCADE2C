@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException, NumericConstraintViolateException
 from syntax_tree.syntax_class.expression.clock_expr import SyntaxClockExpr
 from syntax_tree.syntax_class.expression.const_value import ConstValue
@@ -35,7 +36,7 @@ class Atom_typed_integer(SyntaxExpr):
     def generate_code(self, syntaxUserOp:'SyntaxUserOp', genEqu:'GenEqu'):
         _type: SyntaxType = self.lhsTypeList[0]
         return f"{_type.change_name_cast()}({self.value})"
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.value=int(objects[0] if "_" not in objects[0] else objects[0].split("_")[0])
         ...

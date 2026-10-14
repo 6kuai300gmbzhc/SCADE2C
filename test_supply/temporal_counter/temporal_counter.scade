@@ -1,0 +1,24 @@
+node temporal_counter(increment: int64; reset: bool) returns(count: int64; alarm: bool; safe, restarted, at_origin, near_limit: bool)
+let
+	count = 0 -> if reset then 0 else pre count + checked_increment(increment);
+	alarm = exceeded_limit(count);
+	safe = not alarm and count >= 0;
+	restarted = reset and count = 0;
+	at_origin = count = 0;
+	near_limit = within_margin(count);
+tel
+
+function checked_increment(value: int64) returns(result: int64)
+let
+	result = if value < 0 then 0 else value;
+tel
+
+function exceeded_limit(value: int64) returns(result: bool)
+let
+	result = value > 100;
+tel
+
+function within_margin(value: int64) returns(result: bool)
+let
+	result = value >= 90 and value <= 100;
+tel

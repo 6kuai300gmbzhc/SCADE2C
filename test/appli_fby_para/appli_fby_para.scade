@@ -1,0 +1,36 @@
+type int=int32;
+node D(x: int) returns (o: int)
+let
+	o = 0 -> (x - pre x) / 2;
+tel
+
+node A(x: int) returns (o: int)
+let
+	o = x + (0->pre o);
+tel
+
+node C(x, y: int) returns (o: int)
+let
+	o = 0 -> pre (x + y);
+tel
+
+node B(x: int) returns (o: int)
+var l, d : int;
+let
+	l = A(5 * x - 12);
+	d =  D(x);
+	o = 3 * d - l;
+tel
+
+node appli_fby_para(
+	z, y : int
+) returns (
+	o : int
+)
+var a, b1, b2: int;
+let
+	a =  A(z);
+	b1 = B(y);
+	b2 = B(b1);
+	o = C(a,b1);
+tel

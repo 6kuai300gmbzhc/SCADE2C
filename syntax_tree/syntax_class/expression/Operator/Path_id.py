@@ -1,3 +1,4 @@
+from typing import Optional
 import copy
 
 from syntax_tree.exclude_from_deepcopy import exclude_from_deepcopy
@@ -34,7 +35,7 @@ def extend_rhs_list(rhs_list_list: list[list[set[str]]]) -> list[set[str]]:
     return output
 # 类型有点太长了
 instantiated_op_dict: dict[SyntaxUserOp, list[list[dict[str, SyntaxType], list[ConstValue], SyntaxUserOp]]] = dict()
-def get_instantiated_op(userOp, instantiate_dict, instantiate_sizes) -> SyntaxUserOp or None:
+def get_instantiated_op(userOp, instantiate_dict, instantiate_sizes) -> Optional[SyntaxUserOp]:
     """找一下是否有已经实例化的op"""
     instantiated_ops = instantiated_op_dict.get(userOp)
     if instantiated_ops is None:
@@ -318,7 +319,7 @@ class Operator_Path_id(SyntaxExpr):
     def set_param_expr(self,param_expr):
         """初始化时使用，设置用于类型推导等环节的参数表达式"""
         self.paramExpr=param_expr
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
     def get_applied_op(self):

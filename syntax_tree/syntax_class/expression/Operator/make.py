@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_generate import generate_tmp_symbol_and_register, assign_lhs_to_rhs_expr
 from syntax_tree.scade_type_inference import clock_inference_sync
 from syntax_tree.syntax_class.Exceptions import UnknownIdentifierException, TypeMismatchException
@@ -43,7 +44,7 @@ class Operator_make(SyntaxExpr):
                                        syntaxUserOp))
 
         return struct_name
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type, subtype, scope, objects, returnNum)
     def set_param_expr(self,param_expr):
         self.paramExpr=param_expr

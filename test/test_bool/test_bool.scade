@@ -1,0 +1,8 @@
+node test_bool(in1,in2,in5:int64;in3,in4,in6:bool) returns(o1,o2,o3,o4,o5:bool)
+let
+	o1= not in3;
+	o2 =#(in3,in4,in6);
+	o3 = in3 and in4;
+	o4 = in3 or in4;
+	o5 = in3 xor in4;
+tel

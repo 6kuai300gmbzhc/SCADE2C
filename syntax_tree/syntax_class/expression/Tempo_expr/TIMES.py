@@ -1,3 +1,4 @@
+from typing import Optional
 from syntax_tree.scade_postprocess import set_rhs_default
 from syntax_tree.syntax_class.Exceptions import TypeMismatchException
 from syntax_tree.syntax_class.expression import SyntaxExpr, expression_factory
@@ -55,9 +56,9 @@ class Tempo_expr_TIMES(SyntaxExpr):
         genEqu.add_preEquations(pre_code)
         # 返回的代码为当前countern是否为0
 
-        out_code = f"({bool_expr_code}&(outC->{counter_name} == kcg_lit_int32(0)))"
+        out_code = f"({bool_expr_code}&&(outC->{counter_name} == kcg_lit_int32(0)))"
         return out_code
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         self.subExpr = expression_factory("List_expr", "List_expr", scope, [self.objects[0]])
     def set_params(self,params:list['SyntaxExpr']):

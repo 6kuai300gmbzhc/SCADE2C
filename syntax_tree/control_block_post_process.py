@@ -1,3 +1,4 @@
+from typing import Optional
 import syntax_tree.scade_postprocess as scade_postproces
 from syntax_tree import scade_postprocess
 from syntax_tree.syntax_class.hasRhs import add_rhs_to_each

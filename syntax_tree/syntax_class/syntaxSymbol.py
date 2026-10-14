@@ -3,7 +3,7 @@ from .expression.clock_expr import SyntaxClockExpr
 from .expression.expr_common import SyntaxExpr
 from .expression.const_value import ConstValue
 from .scope.scope import SyntaxScope
-
+from typing import Optional
 
 
 class SyntaxVariableSymbol:
@@ -121,7 +121,7 @@ class SyntaxConstSymbol:
     此处的表达式必须可在编译时计算出数值！
     '''
 
-    __value: ConstValue or None
+    __value: Optional[ConstValue] = None
     '''具体计算出来的数值，使用get_value方法来访问
     也存储了枚举类型值
     '''

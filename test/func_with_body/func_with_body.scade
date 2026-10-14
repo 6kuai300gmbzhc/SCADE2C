@@ -1,0 +1,7 @@
+-- an intern function
+function func_with_body(x : int32) returns (y : int32)
+let
+	y = 1;
+tel
+
+

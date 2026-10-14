@@ -1,0 +1,8 @@
+node test_id(in1:int32 last=3) returns(out1:int32;out2:bool)
+sig
+	s1;
+let
+	out1=last'in1;
+	emit 's1 if in1>0;
+	out2='s1;
+tel

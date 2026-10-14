@@ -1,0 +1,12 @@
+type T={a:int32,b:bool};
+const N:int32=3;
+function test_iterator_mw(exp:int32;A:int32^N;initCond:bool) returns(idx:int32;cond:bool;acc:int32;v:int32^N)
+let
+	idx,cond,acc,v=(mapfoldwi 1 f<<N>> if initCond default (5))(exp,A);
+tel
+function f(i:int32;exp:int32;a:int32) returns(cond:bool;acc:int32;v:int32)
+let
+	cond=i<4;
+	acc=exp+a;
+	v=a*2;
+tel

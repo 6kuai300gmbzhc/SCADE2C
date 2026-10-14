@@ -1,0 +1,30 @@
+node StateMachine_1(bI1: bool)
+	returns (bO1: bool default = true; iO2: int16 default = 0; bO3: bool default = false)
+let
+	automaton SM1
+ 	initial state ST1
+ 	unless if bI1 resume ST2;
+ 	sig
+		sig1;
+ 	var
+		iV1: int16;
+ 	let
+		iV1 = 10;
+ 		emit 'sig1;
+ 		bO1 = 'sig1;
+ 		iO2 = iV1 -> pre iO2 + 2;
+ 	tel
+	state ST2
+ 	sig
+		sig1;
+ 	until if true do
+	var
+		bV1: bool;
+	let
+		emit 'sig1;
+ 		bV1 = 'sig1;
+ 		bO3 = bV1;
+ 	tel
+	restart ST1;
+ 	returns ..;
+tel

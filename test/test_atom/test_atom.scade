@@ -1,0 +1,7 @@
+node test_atom() returns(o1,o:bool;o2:int32;o3:float32)
+let
+    o1=true;
+    o=false;
+    o2=3334;
+    o3=-.23e5;
+tel

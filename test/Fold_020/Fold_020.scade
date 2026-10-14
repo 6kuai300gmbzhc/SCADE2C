@@ -1,0 +1,7 @@
+function Fold_020 (aI1, aI2:int32^3; aB3:bool^4)
+	returns (iO1:int32; iO2:int32^3; bO3:bool)
+let
+	iO1 = (fold $+$ <<3>>) (0, aI1);
+ 	iO2 = (map $mod$ <<3>>)(aI1, aI2);
+ 	bO3 = (fold $=$ <<4>>) (true, aB3);
+tel

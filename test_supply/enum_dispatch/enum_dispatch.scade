@@ -1,0 +1,31 @@
+type Mode = enum{Idle, Running, Failed};
+
+node enum_dispatch(mode: Mode; idle_value, running_value, failed_value: int32) returns(result: int32; retry: bool)
+let
+	automaton mode_machine
+	initial state Normal
+	unless if mode = Failed resume Failure;
+	let
+		result = select_mode(mode, idle_value, running_value, failed_value);
+		retry = false;
+	tel
+	state Failure
+	let
+		result = failed_value;
+		retry = idle_value > 0;
+	tel
+	returns ..;
+tel
+
+function select_mode(mode: Mode; idle_value, running_value, failed_value: int32) returns(result: int32)
+let
+	result = (case mode of
+		| Idle: idle_value
+		| Running: running_value
+		| Failed: failed_value);
+tel
+
+function is_recoverable(retry: bool; attempts: int32) returns(result: bool)
+let
+	result = retry and attempts < 3;
+tel

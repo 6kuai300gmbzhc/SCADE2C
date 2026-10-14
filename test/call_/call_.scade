@@ -1,0 +1,12 @@
+
+node n(a: int32; b: bool) returns (x, y: int32)
+let
+	x,y = if b then (a,0) else (0,a);
+tel
+
+node call_(a: int32; b: bool) returns (x, y: int32)
+var u,v: int32;
+let
+	u,v = (a,a+1);
+	x,y = n(a,b);
+tel

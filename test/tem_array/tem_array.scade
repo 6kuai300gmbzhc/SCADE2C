@@ -1,0 +1,9 @@
+type T=bool;
+const C:T=false;
+node tem_array(aI1, aI2: int32^2; clock clk1: bool; aI3: T)
+	returns (aO1, aO2: int32^2; aO3: T^2)
+let
+	aO1 = fby(aI1; 1; [aI1[0],aI2[1]]);
+ 	aO2 = merge (clk1; aI1 when clk1; aI2 when not clk1);
+ 	aO3 = reverse (C -> aI3)^2;
+tel

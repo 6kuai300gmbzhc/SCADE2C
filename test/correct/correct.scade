@@ -1,0 +1,2 @@
+function correct (i: float64 ) returns (o: float64 )
+o = if (6: int8 ) > 7 then i else 0.0;

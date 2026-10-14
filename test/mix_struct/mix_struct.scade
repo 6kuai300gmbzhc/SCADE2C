@@ -1,0 +1,12 @@
+type
+	Tstr1 = {l1: int32};
+	Tstr2 = {l1: int32, l2: int32^2};
+function mix_struct(sI1: Tstr2; sI2: Tstr1^2)
+	returns (iO1: int32)
+var
+	iV1, iV2: int32;
+let
+	iV1 = sI1.l2[0];
+	iV2 = sI2[0].l1;
+	iO1 = iV1 + iV2;
+tel

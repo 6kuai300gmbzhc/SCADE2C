@@ -1,3 +1,4 @@
+from typing import Optional
 import copy
 
 from syntax_tree.syntax_class.expression.expr_common import SyntaxExpr
@@ -34,7 +35,7 @@ class Tempo_expr_WHEN(SyntaxExpr):
         pre_code+=f"{'    '*depth}}}\n"
         genEqu.add_preEquations(pre_code)
         return tmp_list if len(tmp_list)>1 else tmp_list[0]
-    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: list or None = None, returnNum=1):
+    def __init__(self, type: str, subtype: str, scope: 'SyntaxScope', objects: Optional[list] = None, returnNum=1):
         super().__init__(type,subtype,scope,objects,returnNum)
         ...
 

@@ -1,0 +1,22 @@
+type Sample = {value: int32, enabled: bool};
+
+node record_access(input: Sample) returns(value: int32; output: Sample)
+let
+	value = scale(input.value);
+	output = set_value(input, increment_value(value));
+tel
+
+function scale(value: int32) returns(result: int32)
+let
+	result = value * 2;
+tel
+
+function increment_value(value: int32) returns(result: int32)
+let
+	result = value + 1;
+tel
+
+function set_value(input: Sample; value: int32) returns(result: Sample)
+let
+	result = (input with.value = value);
+tel

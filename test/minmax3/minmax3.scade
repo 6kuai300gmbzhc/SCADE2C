@@ -1,0 +1,22 @@
+-- Not so simple "tupled" node call
+
+node minmax3(a,b,c:int32)
+	returns (min,midle,MAX:int32)
+var
+	min_ab,MAX_ab:int32;
+	MAX_minab_c:int32;
+let
+	min_ab,	MAX_ab = minmax(a,b);
+
+	min,		MAX_minab_c = minmax(min_ab,c);
+
+	midle,	MAX = minmax(MAX_ab,MAX_minab_c);
+tel
+
+
+node minmax(a,b:int32)
+	returns (min,max:int32)
+
+let
+	min,max = if (a<=b) then (a,b) else (b,a);
+tel

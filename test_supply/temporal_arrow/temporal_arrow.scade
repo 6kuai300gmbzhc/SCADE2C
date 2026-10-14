@@ -1,0 +1,21 @@
+node temporal_arrow(input: int32) returns(output: int32; previous: int32; valid: bool)
+let
+	output = 0 -> clamp_value(preprocess(input));
+	previous = 0 -> pre output;
+	valid = nonzero(output);
+tel
+
+function preprocess(value: int32) returns(result: int32)
+let
+	result = if value < 0 then -value else value;
+tel
+
+function clamp_value(value: int32) returns(result: int32)
+let
+	result = if value > 100 then 100 else value;
+tel
+
+function nonzero(value: int32) returns(result: bool)
+let
+	result = value <> 0;
+tel

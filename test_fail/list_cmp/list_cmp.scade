@@ -1,0 +1,6 @@
+node list_cmp(x, y: int64) returns (z: int64)
+let
+    z = 0 -> if (x, y) = (pre x, pre y)
+             then pre x + last'y
+             else 0;
+tel

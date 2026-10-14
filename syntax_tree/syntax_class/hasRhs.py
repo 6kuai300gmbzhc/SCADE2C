@@ -1,3 +1,4 @@
+from typing import Optional
 
 from syntax_tree.syntax_class.syntaxType import SyntaxType
 from typing import TYPE_CHECKING

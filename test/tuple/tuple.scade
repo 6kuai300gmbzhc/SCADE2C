@@ -1,0 +1,5 @@
+node tuple (x: int32) returns (a, b, c: int32)
+
+let
+  a, b, c = if true then ((x, x), x) else (x, (x, x));
+tel

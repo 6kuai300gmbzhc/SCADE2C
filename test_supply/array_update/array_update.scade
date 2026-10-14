@@ -1,0 +1,20 @@
+node array_update(values: int32^3; replacement: int32) returns(updated: int32^3; checksum: int32)
+let
+	updated = replace_middle(values, replacement);
+	checksum = sum_values(updated);
+tel
+
+function replace_middle(values: int32^3; replacement: int32) returns(result: int32^3)
+let
+	result = (values with[1] = replacement);
+tel
+
+function rotate_values(values: int32^3) returns(result: int32^3)
+let
+	result = [values[1], values[2], values[0]];
+tel
+
+function sum_values(values: int32^3) returns(result: int32)
+let
+	result = values[0] + values[1] + values[2];
+tel

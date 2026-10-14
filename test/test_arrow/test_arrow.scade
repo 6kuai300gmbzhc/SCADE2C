@@ -1,0 +1,4 @@
+node test_arrow(i1,i2:int32) returns (o1:int32)
+let
+  o1 = i1 -> i2;
+tel

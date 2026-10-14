@@ -1,0 +1,23 @@
+type Sample = {value: int32, enabled: bool};
+
+node record_transform(input: Sample; increment: int32) returns(value: int32; output: Sample; changed: bool)
+let
+	value = adjusted(input.value, increment);
+	output = transform_record(input, value);
+	changed = value_changed(input.value, value);
+tel
+
+function adjusted(value, increment: int32) returns(result: int32)
+let
+	result = value + increment;
+tel
+
+function transform_record(input: Sample; value: int32) returns(result: Sample)
+let
+	result = (input with.value = value);
+tel
+
+function value_changed(before, after: int32) returns(result: bool)
+let
+	result = before <> after;
+tel
